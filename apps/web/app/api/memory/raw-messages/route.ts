@@ -1,21 +1,25 @@
 import { auth } from "@/app/(auth)/auth";
+import { upsertRawMessagesToChroma } from "@/lib/memory/chroma-memory-index";
 import {
   getRawMessageManager,
   getRawMessageStorageBackend,
   isRawMessageStorageAvailable,
 } from "@/lib/memory/raw-message-store";
-import { upsertRawMessagesToChroma } from "@/lib/memory/chroma-memory-index";
-import { AppError } from "@openloomi/shared/errors";
-import {
-  queryMemoryWithFallback,
-  runMemoryForgettingCycle,
-} from "@openloomi/indexeddb/forgetting";
-import type { RunMemoryForgettingCycleSerializableShadowDiagnosticsOptions } from "@openloomi/indexeddb/forgetting";
 import type {
   MemorySummaryRecord,
   RawMessage,
   RawMessageQuery,
 } from "@openloomi/indexeddb";
+import {
+  parseRawMessageGraphEvolutionOptions,
+  storeRawMessagesWithGraphEvolution,
+} from "@openloomi/indexeddb";
+import {
+  queryMemoryWithFallback,
+  runMemoryForgettingCycle,
+} from "@openloomi/indexeddb/forgetting";
+import type { RunMemoryForgettingCycleSerializableShadowDiagnosticsOptions } from "@openloomi/indexeddb/forgetting";
+import { AppError } from "@openloomi/shared/errors";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -173,6 +177,7 @@ async function queryRawMessagesWithFallback(
       botId: query.botId,
     },
     minRawResultsWithoutFallback: minRaw,
+    includeDeprecated: query.includeDeprecated,
   });
 
   return result.items
@@ -307,12 +312,19 @@ export async function POST(request: NextRequest) {
           userId,
           createdAt: message.createdAt ?? now,
         })) as RawMessage[];
-        const ids = await manager.storeMessages(normalized);
+        const stored = await storeRawMessagesWithGraphEvolution({
+          storage: manager,
+          messages: normalized,
+          graphEvolution: parseRawMessageGraphEvolutionOptions(
+            body.graphEvolution,
+          ),
+        });
         await upsertRawMessagesToChroma(normalized);
         return Response.json({
           success: true,
-          stored: ids.length,
+          stored: stored.ids.length,
           errors: 0,
+          graphEvolution: stored.graphEvolution,
         });
       }
 

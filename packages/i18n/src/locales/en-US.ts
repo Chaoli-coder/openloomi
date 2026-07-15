@@ -719,6 +719,15 @@ const enUS = {
           "Contact support if the problem persists",
         ],
       },
+      fileNotFoundError: {
+        title: "File Not Found",
+        description: "The specified file could not be found.",
+        suggestions: [
+          "Check if the file path is correct",
+          "Confirm that the file exists",
+          "Use the full file path",
+        ],
+      },
     },
     confirmDeleteTitle: "Confirm Delete",
     confirmDeleteMessage: "Are you sure you want to delete this item?",
@@ -838,6 +847,18 @@ const enUS = {
       "Push calendar events (Google/Outlook; new + upcoming) into openloomi.",
     addPlatform: "Add Platform",
     addConnector: "Add connector",
+    connectMoreViaComposio: "Connect more via Composio",
+    connectMoreViaComposioDesc:
+      "Ask the agent to link GitHub, Linear, Notion, HubSpot, and hundreds more.",
+    composioMoreAppsLabel: "More apps",
+    /**
+     * Prompt sent verbatim to the chat agent when the user clicks
+     * "Connect more via Composio". The agent uses the `composio` skill
+     * to enumerate unconnected platforms and walk the user through
+     * OAuth linking, replying in the user's locale.
+     */
+    composioConnectMorePrompt:
+      "Help me connect more apps via Composio. First, list the available platforms I have not connected yet (e.g. GitHub, Linear, Notion, HubSpot, Asana, etc.), then walk me through authorizing each one step by step.",
     platformCardAriaConnecting: "Connecting",
     platformCardAriaConnect: "Connect {{label}}",
     selectPlatform: "Select a platform to connect",
@@ -5811,6 +5832,9 @@ const enUS = {
       hideDetails: "Hide Details",
       allow: "Allow",
       deny: "Deny",
+      allowed: "Permission granted",
+      denied: "Permission denied",
+      submitError: "Failed to submit permission decision",
     },
     integration: {
       title: "Connect platforms to unlock deeper insight",

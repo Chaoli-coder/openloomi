@@ -9,6 +9,7 @@
  *   - wrap.json           most-recent wrap snapshot
  *   - connectors.json     cached connector status (60s TTL)
  *   - config.json         LoopPreferences
+ *   - mutes.json          key-scoped skip rules (dismiss → "don't show this kind again")
  *   - migrated.json       marker written after legacy data migration
  *
  * Legacy location (read once on first boot): skills/openloomi-loop/data/
@@ -37,11 +38,30 @@ export const LOOP_PATHS = {
   wrap: join(LOOP_HOME, "wrap.json"),
   connectors: join(LOOP_HOME, "connectors.json"),
   config: join(LOOP_HOME, "config.json"),
+  mutes: join(LOOP_HOME, "mutes.json"),
   migrated: join(LOOP_HOME, "migrated.json"),
   log: join(LOOP_HOME, "loop.log"),
   inbox: join(LOOP_HOME, "inbox"),
   /** Per-connector lastSyncAt — read by watcher, written after each pass. */
   syncState: join(LOOP_HOME, "sync-state.json"),
+  /**
+   * User-defined decision types (label / icon / actionKind). Per-user
+   * extension to the closed `DecisionType` union — see `lib/loop/custom-types.ts`.
+   */
+  customTypes: join(LOOP_HOME, "custom-types.json"),
+  /**
+   * User-defined signal channels (Composio-backed pullers). Per-user
+   * extension to the FALLBACK_CONNECTORS list — see `lib/loop/custom-channels.ts`.
+   */
+  customChannels: join(LOOP_HOME, "custom-channels.json"),
+  /**
+   * User-defined deterministic classifier rules. Per-user extension to the
+   * hard-coded rules in `classify.ts` and the agentic prompt's §5
+   * classifier list — see `lib/loop/classifier-rules.ts`. Rules take
+   * priority over the LLM's natural-language classification (server-side
+   * enforcement after the agentic tick).
+   */
+  classifierRules: join(LOOP_HOME, "classifier-rules.json"),
 } as const;
 
 export function ensureDirs(): void {

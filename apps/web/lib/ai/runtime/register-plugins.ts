@@ -8,7 +8,9 @@
 import { getAgentRegistry } from "@openloomi/ai/agent/registry";
 import {
   claudePlugin,
+  codexPlugin,
   hermesPlugin,
+  openclawPlugin,
   opencodePlugin,
 } from "@/lib/ai/extensions";
 
@@ -17,6 +19,8 @@ import {
 export function registerPlugins() {
   const registry = getAgentRegistry();
   registry.register(claudePlugin);
+  registry.register(codexPlugin);
   registry.register(opencodePlugin);
   registry.register(hermesPlugin);
+  registry.register(openclawPlugin);
 }

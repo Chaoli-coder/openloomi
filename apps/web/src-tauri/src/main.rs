@@ -5,6 +5,8 @@
 #![allow(unused)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "macos")]
+use tauri::ActivationPolicy;
 use tauri::Manager;
 use tauri::{Emitter, Listener};
 
@@ -256,7 +258,7 @@ fn main() {
 
     println!("╔══════════════════════════════════════╗");
     println!(
-        "║       openloomi Tauri App v{}        ║",
+        "║       openloomi Tauri App v{}     ║",
         env!("CARGO_PKG_VERSION")
     );
     println!("╚══════════════════════════════════════╝");
@@ -267,6 +269,8 @@ fn main() {
     if let Err(e) = storage::init_data_dirs() {
         eprintln!("⚠️  Warning: Failed to initialize data directories: {}", e);
     }
+
+    let context = tauri::generate_context!();
 
     // Pre-start cleanup (production only)
     #[cfg(not(debug_assertions))]
@@ -283,6 +287,21 @@ fn main() {
             panic_guard::lock_recovered(&node::APP_HANDLE_TX, "store app handle sender");
         *tx_guard = Some(tx);
         drop(tx_guard);
+        // Resolve the resource dir before the Tauri app is built: the Next.js
+        // server starts before an AppHandle exists, and on Linux resources are
+        // installed to /usr/lib/<app>, not next to the executable in /usr/bin.
+        match tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default()) {
+            Ok(dir) => {
+                let mut dir_guard =
+                    panic_guard::lock_recovered(&node::RESOURCE_DIR, "store resource dir");
+                *dir_guard = Some(dir);
+                drop(dir_guard);
+            }
+            Err(e) => eprintln!(
+                "⚠️  Failed to resolve resource dir, falling back to exe dir: {}",
+                e
+            ),
+        }
         node::start_nextjs_server();
     }
 
@@ -376,6 +395,11 @@ fn main() {
             // any side effects beyond emitting to (possibly-absent)
             // PET_LABEL / PET_BUBBLE_LABEL windows.
             pet::emit_dev_state,
+            // Pet theme system — config read/write + right-click
+            // shortcuts. Registered unconditionally so the widget
+            // always has a way to discover its theme on cold boot.
+            pet::get_pet_config,
+            pet::set_active_theme,
         ])
         .setup(|app| {
             // Deliver AppHandle to the background server thread immediately
@@ -389,6 +413,22 @@ fn main() {
             let mut guard = panic_guard::lock_recovered(&node::APP_HANDLE, "store app handle");
             *guard = Some(app_handle.clone());
             drop(guard);
+
+            // Set the activation policy to `Accessory` BEFORE any window is
+            // built. Without this, the `loomi-pet` window would be created
+            // with the default `Regular` policy, causing macOS to register a
+            // Dock icon and treat the process as a full GUI app — which
+            // (a) breaks the `dock::sync_dock_policy` Accessory→Regular
+            // transitions later in setup, and (b) prevents our NSPanel
+            // conversion from working as documented, since Apple's
+            // cross-app-overlay pattern requires an `Accessory` host app.
+            //
+            // We do this *before* `app.get_webview_window("main")` below
+            // so both `main` and `loomi-pet` are created under `Accessory`.
+            // `pet::sync_dock_policy` (called later in setup) then flips
+            // back to `Regular` once the main window is shown.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(ActivationPolicy::Accessory);
 
             // Route window close (traffic light / × / Cmd+W / Alt+F4) through the
             // close-behavior hub. By default this minimizes to the tray instead of
@@ -544,6 +584,13 @@ fn main() {
             // Cheap mtime poll — no extra deps, easy to reason about.
             pet::spawn_decision_watcher(app_handle.clone());
 
+            // Watch `pet-config.json` and the user's custom theme
+            // directory for external edits. Cheap, debounced, and
+            // cross-platform — the user can hand-edit the config or
+            // drop a new theme PNG in `~/.openloomi/pet-custom/` and
+            // the pet reacts without a restart.
+            pet::spawn_config_watcher(app_handle.clone());
+
             // Pet can ask the host to surface the main dashboard. We
             // listen globally (not on a single webview) so the pet is
             // not required to re-emit when its own webview is rebuilt.
@@ -557,10 +604,17 @@ fn main() {
                 // `false`, pick Accessory (no Dock icon), and then never
                 // re-evaluate. A short background-thread sleep lets the
                 // NSWindow settle before we ask the OS about its state.
+                // The actual sync must then hop back to the main thread —
+                // it calls `setApplicationIconImage:`, which is only safe
+                // on the main thread and corrupts the objc selector table
+                // (later SIGSEGV in CALayer init) when invoked off-main.
                 let app_for_deferred = pet_to_main.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(80));
-                    pet::sync_dock_policy(&app_for_deferred);
+                    let app_for_main = app_for_deferred.clone();
+                    let _ = app_for_deferred.run_on_main_thread(move || {
+                        pet::sync_dock_policy(&app_for_main);
+                    });
                 });
             });
 
@@ -598,23 +652,56 @@ fn main() {
                 }
             });
 
+            // The chat UI owns short-lived activity states such as
+            // thinking, working, juggling and completion. The pet state
+            // coordinator restores the latest Loop baseline when the UI
+            // emits `idle`, so queued decisions never pin an active run to
+            // the wrong sprite.
+            let runtime_state_app = app_handle.clone();
+            app_handle.listen("pet:runtime-state", move |event| {
+                if let Err(error) =
+                    pet::handle_runtime_state_event(&runtime_state_app, event.payload())
+                {
+                    eprintln!("[loomi-pet] ignored runtime state: {error}");
+                }
+            });
+
             // B2: bubble click → open the card (which the user can act
             // on). If the card doesn't have a current decision payload
             // (e.g. everything got dismissed in flight), the card
             // window will just show its empty state — the user can still
             // use the × to close.
+            //
+            // `mark_review_seen` flips the `presenting → happy`
+            // transition. Without this stamp, the watcher would keep
+            // the pet on `presenting` until the 60 s grace expired
+            // even though the user has clearly seen the result.
             let open_card_app = app_handle.clone();
             app_handle.listen("pet:open-card", move |_event| {
+                pet::mark_review_seen();
                 pet::hide_bubble_window(&open_card_app);
                 pet::show_card_window(&open_card_app);
+            });
+
+            // Card header drag → let the user manually park the card.
+            // The aux-position poller respects this until the pet moves
+            // again, at which point card following resumes.
+            app_handle.listen("pet:card-drag-start", move |_event| {
+                pet::set_card_manual_position(true);
             });
 
             // B2: card × button → close card, restore bubble only if there's still
             // a pending decision surfacing. Without this gate the bubble
             // pops up empty ("All clear") when the user dismissed the
             // last pending decision inside the card.
+            //
+            // We also stamp `mark_review_seen` so a card that the user
+            // explicitly opened and then closed still counts as
+            // "reviewed" — otherwise closing without clicking the
+            // bubble would leave the pet pinned on `presenting`.
             let close_card_app = app_handle.clone();
             app_handle.listen("pet:close-card", move |_event| {
+                pet::mark_review_seen();
                 pet::hide_card_window(&close_card_app);
                 pet::show_bubble_window_if_pending(&close_card_app);
             });
@@ -790,7 +877,7 @@ authorizing each one. Begin with Gmail if it's not connected.";
 
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // macOS: clicking the Dock icon while the window is hidden to tray

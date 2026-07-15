@@ -22,7 +22,7 @@
 
   Window is 360×420 (matches `card.rs`). Demo font sizes scaled by
   ~0.55×; layouts that were originally multi-column are collapsed to
-  single column to fit (A 方案).
+  single column to fit (Plan A).
 -->
 <html lang="zh-CN">
   <head>
@@ -40,6 +40,10 @@
         --card-h: 420px;
         --ink: #101827;
         --muted: #5b6980;
+        /* 50% gray used for chrome labels (SIGNAL / TYPE / TIMING / CONFIDENCE /
+           RECOMMEND / REASON n). Lighter than --muted so the label stays
+           legible against the panel-soft background without dominating. */
+        --label: #6b7280;
         --blue: #2b8af7;
         --blue-dark: #1467c8;
         --orange: #ffa149;
@@ -66,6 +70,15 @@
       }
       * {
         box-sizing: border-box;
+      }
+      /* Belt-and-suspenders: many element-level rules in this stylesheet
+         set `display: grid` / `display: flex` which silently override
+         the HTML `hidden` attribute (which only sets display:none via
+         the UA stylesheet, lower specificity). Without this override
+         toggling hidden=true on a .confidence-row / .recommendation /
+         .dec-body has no visible effect. */
+      [hidden] {
+        display: none !important;
       }
       html,
       body {
@@ -146,6 +159,15 @@
         align-items: center;
         gap: 6px;
         flex: 0 0 auto;
+        cursor: grab;
+      }
+      .header:active {
+        cursor: grabbing;
+      }
+      .header button,
+      .header [data-action],
+      .header a {
+        cursor: pointer;
       }
       .header .icon {
         font-size: 14px;
@@ -158,12 +180,11 @@
         color: #d9e9ff;
       }
       .type-label {
-        font-family: var(--font-mono);
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10.5px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       .card.dark .type-label {
         color: #d9e9ff;
@@ -175,10 +196,9 @@
         padding: 1px 7px;
         border-radius: 999px;
         font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         background: var(--orange-soft);
         color: var(--orange-text);
       }
@@ -299,8 +319,8 @@
         padding: 6px 10px;
         border-radius: 6px;
         font-size: 10.5px;
-        font-weight: 800;
-        letter-spacing: 0.02em;
+        font-weight: 500;
+        letter-spacing: 0.01em;
         line-height: 1.2;
       }
       .status-banner.show {
@@ -330,7 +350,7 @@
         flex: 0 0 auto;
         font-family: var(--font-mono);
         font-size: 11px;
-        font-weight: 900;
+        font-weight: 600;
       }
       .status-banner .spinner {
         width: 10px;
@@ -355,12 +375,12 @@
         background: #fff;
         color: var(--ink);
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 600;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 3px;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
       }
       button:hover {
         background: rgba(43, 138, 247, 0.04);
@@ -437,12 +457,11 @@
         user-select: text;
       }
       #dec-editor label {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       #dec-editor-subject,
       #dec-editor-body {
@@ -498,6 +517,7 @@
          card root, set/cleared by setEditMode(). */
       .card.editing #dec-recommendation,
       .card.editing #dec-source-chain,
+      .card.editing #dec-body,
       .card.editing #dec-confidence-row,
       .card.editing #dec-dialogue,
       .card.editing #dec-evidence,
@@ -529,9 +549,8 @@
       .brand-text {
         font-family: var(--font-mono);
         font-size: 10px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         color: var(--green);
       }
       .connection-title {
@@ -553,7 +572,7 @@
         display: grid;
         gap: 5px;
         flex: 0 0 auto;
-        max-height: 110px;
+        max-height: 200px;
         overflow: auto;
       }
       .connector-row {
@@ -583,7 +602,7 @@
       .connector-name {
         display: block;
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--ink);
         line-height: 1.1;
       }
@@ -591,13 +610,13 @@
         display: block;
         font-size: 9px;
         color: var(--muted);
-        font-weight: 600;
+        font-weight: 500;
         line-height: 1.2;
       }
       .connector-status {
         font-family: var(--font-mono);
         font-size: 9px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--green);
       }
       .connector-status.off {
@@ -624,12 +643,11 @@
         min-height: 0;
       }
       .queue-label {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       .queue-rows {
         display: flex;
@@ -661,11 +679,11 @@
         color: var(--blue-dark);
         font-family: var(--font-mono);
         font-size: 10px;
-        font-weight: 800;
+        font-weight: 600;
       }
       .queue-row .qtitle {
         font-size: 10px;
-        font-weight: 700;
+        font-weight: 600;
         color: var(--ink);
         line-height: 1.2;
         display: -webkit-box;
@@ -676,7 +694,7 @@
       .queue-row .qpri {
         font-family: var(--font-mono);
         font-size: 9px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--orange-text);
       }
       .queue-row .qpri.p0 {
@@ -699,12 +717,11 @@
         margin: 2px 0 0;
       }
       .pipeline-sub {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       .pipeline-steps {
         display: flex;
@@ -739,7 +756,7 @@
         color: var(--blue-dark);
         font-family: var(--font-mono);
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 600;
       }
       .pipeline-step.active .num {
         background: var(--orange-soft);
@@ -761,13 +778,73 @@
         line-height: 1.3;
       }
       .pipeline-progress {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         color: var(--orange-text);
         text-align: right;
+      }
+      /* Pipeline empty-state block. Shown when there is no connector
+         to pull signals from — the live indicator can't move, and
+         "Step 1 of 4 · see signal" reads as a frozen wizard (see
+         #311). This block replaces the steps + progress with an
+         honest CTA explaining the gap. */
+      .pipeline-empty {
+        padding: 14px 12px;
+        border: 1px dashed rgba(88, 101, 128, 0.24);
+        border-radius: 8px;
+        background: rgba(88, 101, 128, 0.04);
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+      }
+      .pipeline-empty .pipeline-empty-title {
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--ink);
+        line-height: 1.25;
+      }
+      .pipeline-empty .pipeline-empty-sub {
+        font-family: var(--font-body);
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+      .pipeline-empty .footer {
+        margin-top: 8px;
+      }
+      .pipeline-empty .footer button.primary {
+        width: 100%;
+      }
+      /* Steps become hoverable affordances — cursor + subtle border
+         lift signal that they're interactive, addressing the wizard
+         expectation in #311 ("Step 1 of 4") without making the
+         indicator pretend to be navigation. The description stays
+         one line (truncated with ellipsis when needed) so the card
+         never reflows on hover. */
+      .pipeline-step {
+        cursor: pointer;
+        transition:
+          border-color 120ms ease,
+          background 120ms ease;
+      }
+      .pipeline-step:hover {
+        border-color: rgba(88, 101, 128, 0.32);
+      }
+      .pipeline-step .step-desc {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .pipeline-step.active .step-desc {
+        -webkit-line-clamp: unset;
+        display: block;
+        overflow: visible;
       }
 
       /* ============================================================
@@ -791,25 +868,24 @@
       }
       .trash-message .tag-trashed {
         display: inline-block;
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         color: var(--red);
         margin-bottom: 4px;
       }
       .trash-message .msg-from {
         display: block;
         font-size: 10px;
-        font-weight: 700;
+        font-weight: 500;
         color: var(--muted);
         font-family: var(--font-mono);
       }
       .trash-message .msg-subject {
         display: block;
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--ink);
         line-height: 1.25;
         margin-top: 2px;
@@ -830,9 +906,9 @@
         border-radius: 6px;
         background: var(--panel-soft);
         color: rgba(16, 24, 39, 0.72);
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
         line-height: 1.2;
       }
       .context-pill::before {
@@ -853,18 +929,48 @@
       .triage-log .log-title {
         font-family: var(--font-display);
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 600;
         color: var(--green-text);
         line-height: 1.2;
       }
       .triage-log .log-sub {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         color: var(--green-text);
         margin-top: 2px;
+      }
+      /* Empty-state block for the noise layout — replaces the
+         fabricated "Trashed: newsletter@trythis.app" sample when
+         there is no mail source connected or no mail has actually
+         been swept. Fixes #312. */
+      .noise-empty {
+        padding: 12px 10px;
+        border: 1px dashed rgba(88, 101, 128, 0.24);
+        border-radius: 8px;
+        background: rgba(88, 101, 128, 0.04);
+        flex: 0 0 auto;
+      }
+      .noise-empty .noise-empty-title {
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+        line-height: 1.25;
+      }
+      .noise-empty .noise-empty-sub {
+        font-family: var(--font-body);
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.3;
+        margin-top: 4px;
+      }
+      .noise-empty .footer {
+        margin-top: 8px;
+      }
+      .noise-empty .footer button.primary {
+        width: 100%;
       }
 
       /* ============================================================
@@ -888,19 +994,31 @@
         overflow: hidden;
         flex: 0 0 auto;
       }
+      .subtitle {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted);
+        line-height: 1.32;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex: 0 0 auto;
+        margin-top: 1px;
+      }
       .source-chain {
         position: relative;
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 6px;
+        gap: 4px;
         flex: 0 0 auto;
       }
       .source-chain::before {
         content: "";
         position: absolute;
-        left: 14px;
-        right: 14px;
-        top: 14px;
+        left: 12px;
+        right: 12px;
+        top: 12px;
         height: 2px;
         border-radius: 2px;
         background: linear-gradient(
@@ -913,62 +1031,64 @@
       .meta-node {
         position: relative;
         z-index: 1;
-        min-height: 60px;
-        padding: 7px 8px 6px;
+        min-height: 56px;
+        padding: 5px 6px 5px;
         border: 1px solid var(--blue-soft);
         border-radius: 6px;
         background: var(--panel-soft);
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 1px;
         overflow: hidden;
         justify-content: center;
       }
       .meta-node .label {
-        font-family: var(--font-mono);
-        font-size: 8px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       .meta-node .value {
-        font-size: 11px;
-        font-weight: 700;
+        font-size: 10.5px;
+        font-weight: 500;
         color: var(--ink);
-        line-height: 1.25;
+        line-height: 1.2;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        word-break: break-word;
       }
       .recommendation {
-        padding: 8px 10px;
-        border: 1px solid var(--orange-border);
+        /* Now sits one row above the action footer (see HTML order below)
+           so it reads as the button group's subtitle. Background is plain
+           neutral instead of a blue/orange gradient — the previous
+           gradient screamed "system chrome", drawing the eye away from
+           the actual proposal text. */
+        padding: 7px 9px 8px;
+        border: 1px solid var(--line);
         border-radius: 8px;
-        background: linear-gradient(
-          90deg,
-          rgba(43, 138, 247, 0.08),
-          rgba(255, 161, 73, 0.12)
-        );
+        background: var(--panel-soft);
         flex: 0 0 auto;
+        margin-top: 6px;
       }
       .recommendation .label {
         display: block;
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
+        margin-bottom: 2px;
       }
       .recommendation .body {
         display: block;
-        margin-top: 4px;
+        margin-top: 1px;
         color: var(--ink);
         font-size: 12px;
-        font-weight: 700;
-        line-height: 1.32;
+        font-weight: 500;
+        line-height: 1.45;
       }
       .confidence-row {
         display: grid;
@@ -978,12 +1098,11 @@
         flex: 0 0 auto;
       }
       .confidence-row .label {
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
       }
       .confidence-track {
         height: 6px;
@@ -1001,7 +1120,7 @@
       .confidence-row .value {
         font-family: var(--font-mono);
         font-size: 10px;
-        font-weight: 900;
+        font-weight: 600;
         color: var(--ink);
       }
       .dialogue {
@@ -1013,12 +1132,11 @@
       }
       .dialogue .label {
         display: block;
-        font-family: var(--font-mono);
-        font-size: 8px;
-        font-weight: 900;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
         margin-bottom: 2px;
       }
       .dialogue .body {
@@ -1026,13 +1144,119 @@
         line-height: 1.4;
         color: var(--ink);
       }
+      /* ---------- Type-specific body content ----------
+         Renders one of three things based on decision.type:
+           - deadline_reminder: sender + subject + email snippet + countdown
+           - draft_reply: drafted body preview + thread context
+           - anything else: hidden (falls back to evidence pills)
+         Lays out as a stack INSIDE the source-chain area so it never
+         pushes the recommendation/footer off the 360×420 frame. When
+         the body content is shown we hide the evidence-pills grid to
+         avoid the user reading two redundant explanations. */
+      .dec-body {
+        padding: 8px 9px 9px;
+        border: 1px solid var(--blue-soft);
+        border-radius: 8px;
+        background: var(--panel-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        flex: 0 0 auto;
+      }
+      .dec-body .label {
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
+      }
+      .dec-body .sender {
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--muted);
+        font-family: var(--font-mono);
+      }
+      .dec-body .subject {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink);
+        line-height: 1.32;
+      }
+      .dec-body .snippet {
+        font-size: 10.5px;
+        font-weight: 400;
+        color: var(--muted);
+        line-height: 1.45;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+      }
+      .dec-body .countdown {
+        margin-top: 2px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--orange-text);
+        background: var(--orange-soft);
+        padding: 2px 7px;
+        border-radius: 999px;
+        align-self: flex-start;
+      }
+      .dec-body .cluster {
+        margin-top: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .dec-body .cluster-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px;
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.3;
+      }
+      .dec-body .cluster-row::before {
+        content: "•";
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.3;
+      }
+      .dec-body .draft {
+        font-size: 10.5px;
+        font-weight: 400;
+        color: var(--ink);
+        line-height: 1.5;
+        background: #fff;
+        border: 1px solid var(--blue-soft);
+        border-radius: 6px;
+        padding: 6px 8px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      /* When .dec-body is rendered we hide the legacy evidence pills
+         to avoid the user reading two parallel explanations. The body
+         IS the explanation. */
+      .dec.show-body .evidence-pills {
+        display: none;
+      }
+
       .evidence-pills {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-        gap: 6px;
-        flex: 1 1 auto;
-        min-height: 0;
+        gap: 4px;
+        flex: 0 0 auto;
+        max-height: 84px;
         overflow: auto;
+        grid-template-columns: 1fr;
       }
       .evidence-pill {
         padding: 7px 9px 8px;
@@ -1045,12 +1269,11 @@
         min-height: 56px;
       }
       .evidence-pill .label {
-        font-family: var(--font-mono);
-        font-size: 8px;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--blue-dark);
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -1063,7 +1286,7 @@
       }
       .evidence-pill strong {
         font-size: 11px;
-        font-weight: 700;
+        font-weight: 500;
         color: var(--ink);
         line-height: 1.3;
         white-space: pre-wrap;
@@ -1098,15 +1321,71 @@
       .brief-tag {
         display: inline-flex;
         align-self: flex-start;
-        font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         color: var(--orange-text);
         background: var(--orange-soft);
         padding: 2px 7px;
         border-radius: 999px;
+      }
+      /* ---------- Agentic narrative overlay (brief / wrap) ---------- */
+      .brief-narrative {
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.04);
+        margin-bottom: 6px;
+      }
+      .brief-narrative-headline {
+        font-weight: 600;
+        font-size: 12.5px;
+        line-height: 1.25;
+        color: var(--ink);
+      }
+      .brief-narrative-body {
+        font-size: 11.5px;
+        opacity: 0.85;
+        margin-top: 4px;
+        line-height: 1.45;
+        color: var(--ink);
+        white-space: pre-line;
+      }
+      .brief-narrative-body[data-collapsed="true"] {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .brief-narrative-toggle {
+        font-family: var(--font-body);
+        font-size: 10.5px;
+        color: var(--accent, #6366f1);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 0 0;
+      }
+      .brief-narrative-generating {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--muted, #6b7280);
+      }
+      .brief-narrative-spinner {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        animation: brief-spin 0.7s linear infinite;
+      }
+      @keyframes brief-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
       .brief-metrics {
         display: grid;
@@ -1121,23 +1400,22 @@
         background: var(--panel-soft);
         text-align: center;
       }
-      .metric-chip strong {
+      .metric-chip .metric-value {
         display: block;
         color: var(--ink);
         font-family: var(--font-mono);
         font-size: 14px;
-        font-weight: 900;
+        font-weight: 600;
         line-height: 1;
       }
-      .metric-chip span {
+      .metric-chip .metric-label {
         display: block;
         margin-top: 3px;
         color: var(--muted);
-        font-family: var(--font-mono);
-        font-size: 7px;
-        font-weight: 800;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
       }
       .brief-list {
         display: flex;
@@ -1169,7 +1447,7 @@
         color: var(--red);
         font-family: var(--font-mono);
         font-size: 10px;
-        font-weight: 900;
+        font-weight: 600;
       }
       .brief-priority.p1 {
         background: var(--orange-soft);
@@ -1180,8 +1458,8 @@
         color: var(--blue-dark);
       }
       .brief-item .bi-title {
-        font-size: 10px;
-        font-weight: 800;
+        font-size: 10.5px;
+        font-weight: 600;
         color: var(--ink);
         line-height: 1.18;
         display: -webkit-box;
@@ -1192,7 +1470,7 @@
       .brief-item .bi-sub {
         font-size: 9px;
         color: var(--muted);
-        font-weight: 600;
+        font-weight: 500;
         line-height: 1.2;
         display: -webkit-box;
         -webkit-line-clamp: 1;
@@ -1201,8 +1479,8 @@
       }
       .brief-item .bi-time {
         font-family: var(--font-mono);
-        font-size: 9px;
-        font-weight: 800;
+        font-size: 9.5px;
+        font-weight: 600;
         color: var(--muted);
       }
 
@@ -1229,11 +1507,10 @@
         margin: 0;
       }
       .wrap-sub {
-        font-family: var(--font-mono);
-        font-size: 8.5px;
-        font-weight: 700;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         color: rgba(247, 251, 255, 0.6);
       }
       .review-columns {
@@ -1263,14 +1540,14 @@
         display: block;
         color: #fff;
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 600;
         line-height: 1.2;
       }
       .review-card p {
         margin: 1px 0 0;
         color: rgba(247, 251, 255, 0.66);
-        font-size: 9.5px;
-        font-weight: 600;
+        font-size: 10px;
+        font-weight: 500;
         line-height: 1.28;
         white-space: nowrap;
         overflow: hidden;
@@ -1283,11 +1560,10 @@
         background: rgba(43, 138, 247, 0.12);
       }
       .memory-ledger-title {
-        font-family: var(--font-mono);
-        font-size: 8.5px;
-        font-weight: 900;
-        letter-spacing: 0.07em;
-        text-transform: uppercase;
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         color: #d9e9ff;
         margin-bottom: 4px;
       }
@@ -1301,8 +1577,8 @@
         border-radius: 5px;
         background: rgba(255, 255, 255, 0.08);
         color: rgba(247, 251, 255, 0.82);
-        font-size: 9.5px;
-        font-weight: 700;
+        font-size: 10px;
+        font-weight: 500;
         line-height: 1.2;
         white-space: nowrap;
         overflow: hidden;
@@ -1339,6 +1615,97 @@
         border-color: rgba(255, 73, 36, 0.4);
         color: var(--red);
       }
+
+      /* ---------- Usage strip (cumulative native-agent tokens) ----------
+         Sits as its own row directly under each layout's header,
+         right-aligned within the card flex column. This deliberately
+         avoids the top-right corner where the × close button lives
+         and the bottom-right where footer action buttons sit.
+         Reads /api/llm/usage/summary on init, on ai-settings-changed, and
+         (debounced) on every loop:decision terminal event.
+
+         Visibility: only the idle Loomi Online (connection) layout shows
+         the chip. The card's `data-active-layout` is set by apply() so
+         every non-connection layout hides it via the default rule
+         below — that way the chip never flashes during a layout swap
+         and never competes with footer / decision content. */
+      .usage-strip {
+        display: none;
+        flex: 0 0 auto;
+        align-self: flex-end;
+        /* Push the chip to the bottom of the card flex column so it
+           behaves like a status bar even when the connection layout
+           doesn't fill the card height. On non-connection layouts the
+           strip is `display: none` (rule below), so this auto margin
+           never steals vertical space from the layout's own footer. */
+        margin-top: auto;
+        height: 22px;
+        max-width: 100%;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        color: var(--ink);
+        pointer-events: auto;
+        cursor: default;
+      }
+      .card[data-active-layout="connection"] .usage-strip {
+        display: inline-flex;
+        margin-top: auto;
+      }
+      .card.dark .usage-strip {
+        background: rgba(20, 33, 60, 0.6);
+        border-color: rgba(255, 255, 255, 0.14);
+        color: #d9e9ff;
+      }
+      .usage-strip[data-state="loading"],
+      .usage-strip[data-state="error"] {
+        opacity: 0.78;
+      }
+      .usage-strip[data-state="error"] .usage-value {
+        color: var(--red);
+      }
+      .usage-strip[data-state="unconfigured"] {
+        background: var(--orange-softer);
+        border-color: var(--orange-border);
+        color: var(--orange-text);
+      }
+      .usage-strip[data-state="has-usage"] {
+        background: var(--blue-soft);
+        border-color: var(--blue-border);
+      }
+      .usage-label {
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        color: var(--label);
+      }
+      .card.dark .usage-label {
+        color: #d9e9ff;
+      }
+      .usage-value {
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: var(--ink);
+      }
+      .card.dark .usage-value {
+        color: #f7fbff;
+      }
+      .usage-meta {
+        color: var(--label);
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+        max-width: 110px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card.dark .usage-meta {
+        color: #b8c6dc;
+      }
     </style>
   </head>
   <body>
@@ -1371,16 +1738,15 @@
           <div class="queue-label" id="queue-label">PENDING QUEUE · 0</div>
           <div class="queue-rows" id="connection-queue"></div>
         </div>
-        <div class="footer single-col">
-          <button
-            class="primary"
-            data-action="guide-connect-more"
-            type="button"
-          >
-            <span class="footer-cta-icon">＋</span>
-            <span class="footer-cta-label">Add more connectors</span>
-          </button>
-        </div>
+        <!-- The "Add more connectors" CTA was removed: the in-list
+             connector rows already carry enough signal (each row
+             exposes its status — "Awaiting first probe" / "Offline" /
+             "Reachable" — and the dot color matches), and the bottom
+             full-width button was duplicating an action that lives
+             primarily in settings. Users who want to add a new
+             connector go through the regular settings flow. The
+             connection layout now ends with the pending queue, which
+             is the actionable information. -->
       </section>
 
       <!-- ============================================================
@@ -1463,11 +1829,18 @@
           </button>
         </div>
         <div class="pipeline-title">Judgment system</div>
+        <!-- Self-identifying subtitle — the original "see signal →
+             read state → triage → wait for approval" reads as a
+             sequence diagram, not a live view, and confuses fresh
+             users (#311). Now the panel names what it is up front. -->
         <div class="pipeline-sub">
-          see signal → read state → triage → wait for approval
+          Live view — updates as I process incoming signals.
         </div>
+        <!-- Live indicator. renderPipeline() drives both this block
+             and the empty-state block below; only one is visible at
+             a time. -->
         <div class="pipeline-steps" id="pipeline-steps">
-          <div class="pipeline-step active" data-step="1">
+          <div class="pipeline-step active" data-step="1" tabindex="0">
             <span class="num">01</span>
             <div>
               <strong class="step-title">See signal</strong>
@@ -1476,7 +1849,7 @@
               >
             </div>
           </div>
-          <div class="pipeline-step" data-step="2">
+          <div class="pipeline-step" data-step="2" tabindex="0">
             <span class="num">02</span>
             <div>
               <strong class="step-title">Read state</strong>
@@ -1485,7 +1858,7 @@
               >
             </div>
           </div>
-          <div class="pipeline-step" data-step="3">
+          <div class="pipeline-step" data-step="3" tabindex="0">
             <span class="num">03</span>
             <div>
               <strong class="step-title">Triage attention</strong>
@@ -1494,7 +1867,7 @@
               >
             </div>
           </div>
-          <div class="pipeline-step" data-step="4">
+          <div class="pipeline-step" data-step="4" tabindex="0">
             <span class="num">04</span>
             <div>
               <strong class="step-title">Wait for approval</strong>
@@ -1505,7 +1878,32 @@
           </div>
         </div>
         <div class="pipeline-progress" id="pipeline-progress">
-          Step 1 of 4 · see signal
+          Now: see signal
+        </div>
+        <!-- Empty-state block for the pipeline layout — shown when
+             no source is connected. Without signals the live
+             indicator sits on step 1 forever, which users read as a
+             broken wizard (#311). The CTA routes to the connectors
+             page so the next time the user opens the card the
+             indicator actually moves. -->
+        <div class="pipeline-empty" id="pipeline-empty" hidden>
+          <div class="pipeline-empty-title">
+            Connect a source and you'll see this pipeline run for real.
+          </div>
+          <div class="pipeline-empty-sub">
+            Right now there's nothing to watch — the indicator is stuck on "see
+            signal" because no events are arriving. Link a connector and the
+            lights will start moving.
+          </div>
+          <div class="footer" id="pipeline-empty-footer">
+            <button
+              class="primary"
+              data-action="guide-connect-more"
+              type="button"
+            >
+              Add a source
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1528,24 +1926,39 @@
           </button>
         </div>
         <div class="noise-title">Trashing the noise</div>
-        <div class="trash-message">
-          <span class="tag-trashed">▼ Trashed</span>
-          <span class="msg-from" id="noise-from">newsletter@trythis.app</span>
-          <span class="msg-subject" id="noise-subject"
-            >"Try this bundle — 50% off!"</span
-          >
+        <!-- Live "what was just trashed" block — only populated when
+             we have a real noise-reduction payload to render. When
+             empty / not applicable, renderNoise() hides this and
+             surfaces the honest empty-state block below instead.
+             Fixes #312 (no more fabricated newsletter samples). -->
+        <div class="noise-live" id="noise-live">
+          <div class="trash-message">
+            <span class="tag-trashed">▼ Trashed</span>
+            <span class="msg-from" id="noise-from">—</span>
+            <span class="msg-subject" id="noise-subject">—</span>
+          </div>
+          <div class="context-checks" id="context-checks">
+            <div class="context-pill">Not in contacts</div>
+            <div class="context-pill">Newsletter tag</div>
+            <div class="context-pill">No thread</div>
+            <div class="context-pill">Off-hours send</div>
+          </div>
         </div>
-        <div class="context-checks" id="context-checks">
-          <div class="context-pill">Not in contacts</div>
-          <div class="context-pill">Newsletter tag</div>
-          <div class="context-pill">No thread</div>
-          <div class="context-pill">Off-hours send</div>
+        <!-- Empty state — shown when there's no mail source connected
+             (cold install) or when no mail has actually been swept
+             (idle inbox). The footer CTA only renders for the
+             "no source" branch; for the "clean inbox" branch the
+             user already has a connector and just needs reassurance. -->
+        <div class="noise-empty" id="noise-empty" hidden>
+          <div class="noise-empty-title" id="noise-empty-title"></div>
+          <div class="noise-empty-sub" id="noise-empty-sub"></div>
+          <div class="footer" id="noise-empty-footer"></div>
         </div>
         <div class="triage-log">
-          <div class="log-title" id="triage-log-title">
-            12 sent to trash today
+          <div class="log-title" id="triage-log-title">—</div>
+          <div class="log-sub" id="triage-log-sub">
+            Urgent noise still wakes you · lane kept
           </div>
-          <div class="log-sub">Urgent noise still wakes you · lane kept</div>
         </div>
       </section>
 
@@ -1568,13 +1981,26 @@
           </button>
         </div>
         <div class="title" id="dec-title">Pending</div>
+        <!-- Subtitle: type-aware, replaces the previous machine-style
+             "(4 emails)" suffix. Renders the cluster count + related
+             signal metadata the user actually needs to scan before
+             deciding. -->
+        <div class="subtitle" id="dec-subtitle"></div>
         <div class="source-chain" id="dec-source-chain"></div>
-        <div class="recommendation" id="dec-recommendation">
-          <span class="label">RECOMMEND</span>
-          <span class="body" id="dec-recommendation-body">…</span>
-        </div>
-        <div class="confidence-row" id="dec-confidence-row">
-          <span class="label">CONFIDENCE</span>
+        <!-- Type-specific body block. Renders one of:
+             - deadline_reminder: sender + subject + email snippet + countdown
+             - draft_reply: drafted body preview + thread context
+             - rsvp: event time + organizer + attendee summary
+             - review_pr: PR title + repo/diffstat + reviewer status
+             - other types: hidden (falls back to evidence pills)
+             Add `.show-body` to #dec (in JS) so the legacy evidence
+             grid is hidden when the body block is taking its slot. -->
+        <div class="dec-body" id="dec-body" hidden></div>
+        <!-- Confidence is already shown in the meta-node row above.
+             Hide the duplicate bottom bar — the percentage and color
+             gradient were both being rendered twice on every decision. -->
+        <div class="confidence-row" id="dec-confidence-row" hidden>
+          <span class="label">Confidence</span>
           <div class="confidence-track">
             <div
               class="confidence-fill"
@@ -1585,14 +2011,14 @@
           <span class="value" id="dec-confidence-value">72%</span>
         </div>
         <div class="dialogue" id="dec-dialogue">
-          <span class="label">LOOMI</span>
+          <span class="label">From Loomi</span>
           <span class="body" id="dec-dialogue-body">…</span>
         </div>
         <div class="evidence-pills" id="dec-evidence"></div>
-        <!-- Inline status banner — shows Running… / Sent ✓ / Failed inline
-             between the evidence pills and the footer so the user sees
-             the trail without losing the action context. The toast still
-             fires for redundancy but the banner is the primary signal. -->
+        <!-- Inline status banner — shows Running… / Sent ✓ / Dismissed ✓
+             inline so the user sees the trail without losing the action
+             context. The toast still fires for redundancy but the
+             banner is the primary signal. -->
         <div class="status-banner" id="dec-status"></div>
         <!-- Inline draft editor — hidden by default. Toggled on for
              draft_reply when the user clicks ↗ Edit. Replaces the
@@ -1603,7 +2029,7 @@
              pre-fills from `decision.action.params.subject`; body
              starts empty with a "Write your reply…" placeholder. -->
         <div id="dec-editor">
-          <label for="dec-editor-subject">SUBJECT</label>
+          <label for="dec-editor-subject">Subject</label>
           <input
             id="dec-editor-subject"
             type="text"
@@ -1611,7 +2037,7 @@
             spellcheck="false"
             placeholder="Subject"
           />
-          <label for="dec-editor-body">BODY</label>
+          <label for="dec-editor-body">Body</label>
           <textarea
             id="dec-editor-body"
             rows="6"
@@ -1620,13 +2046,13 @@
           <div id="dec-editor-error" role="alert"></div>
           <div id="dec-editor-footer">
             <button
-              class="primary"
-              id="dec-editor-save-run"
-              data-editor-action="save-run"
+              class="danger"
+              id="dec-editor-cancel"
+              data-editor-action="cancel"
               type="button"
-              title="Save the draft and schedule the send"
+              title="Discard local edits and close the editor"
             >
-              Save &amp; Run
+              Cancel
             </button>
             <button
               class="ghost"
@@ -1638,23 +2064,39 @@
               Save
             </button>
             <button
-              class="danger"
-              id="dec-editor-cancel"
-              data-editor-action="cancel"
+              class="primary"
+              id="dec-editor-save-run"
+              data-editor-action="save-run"
               type="button"
-              title="Discard local edits and close the editor"
+              title="Save the draft and schedule the send"
             >
-              Cancel
+              Save &amp; Run
             </button>
           </div>
+        </div>
+        <!-- Recommendation is hidden — the per-type action buttons
+             (e.g. "✓ Add reminder", "▶ Send", "✓ Approve") already
+             communicate the proposed action. Surfacing the same
+             information twice as "Suggested: Add calendar reminder"
+             duplicated the proposal text without adding any new signal.
+             The block is kept in the DOM (hidden) so the existing
+             #dec-recommendation-body element remains a valid target
+             for any legacy code path. -->
+        <div class="recommendation" id="dec-recommendation" hidden>
+          <span class="label">Suggested</span>
+          <span class="body" id="dec-recommendation-body">…</span>
         </div>
         <!-- Footer is JS-rendered per decision.type (see TYPE_ACTIONS in
              the inline script below). RSVP gets 4 buttons
              (Yes/No/Maybe/Skip); every other type gets 2-3 typed
              buttons (Send/Edit/Discard, Approve/Comment, etc.). Each
              button gets a native tooltip from its `tip` field.
+             Buttons are ordered by convention: neutral / cancel on
+             the LEFT, confirm / primary on the RIGHT. That way the
+             destructive primary action doesn't read as "the first
+             click target" when the user is scanning left-to-right.
              A decision without a known type falls back to the legacy
-             Run/Dismiss/Open trio. -->
+             Open/Dismiss/Run trio. -->
         <div class="footer" id="dec-footer"></div>
       </section>
 
@@ -1687,19 +2129,27 @@
           </div>
           <div class="brief-tag" id="brief-tag">3 unread · 2 conflicts</div>
         </div>
+        <div
+          class="brief-narrative"
+          id="brief-narrative"
+          style="display: none"
+        ></div>
         <div class="brief-metrics" id="brief-metrics">
           <div class="metric-chip">
-            <strong id="brief-m1">0</strong><span>UNREAD MAIL</span>
+            <span class="metric-value" id="brief-m1">0</span>
+            <span class="metric-label">UNREAD MAIL</span>
           </div>
           <div class="metric-chip">
-            <strong id="brief-m2">0</strong><span>CONFLICTS</span>
+            <span class="metric-value" id="brief-m2">0</span>
+            <span class="metric-label">CONFLICTS</span>
           </div>
           <div class="metric-chip">
-            <strong id="brief-m3">0</strong><span>PR REVIEWS</span>
+            <span class="metric-value" id="brief-m3">0</span>
+            <span class="metric-label">PR REVIEWS</span>
           </div>
         </div>
         <div class="brief-list" id="brief-list"></div>
-        <div class="footer">
+        <div class="footer single-col">
           <button class="primary" data-action="open" type="button">
             View details
           </button>
@@ -1724,48 +2174,109 @@
             ×
           </button>
         </div>
-        <div class="wrap-title" id="wrap-title">
-          Today wrapped. Tomorrow staged.
-        </div>
-        <div class="wrap-sub" id="wrap-sub">
-          end of day · 4 done · 1 dismissed · 2 carried
-        </div>
-        <div class="review-columns" id="wrap-columns">
-          <div class="review-card">
-            <span class="pill green">DONE 4</span>
-            <div class="rc-body">
-              <strong>Resolved</strong>
-              <p>Mira · BigCo · PR #482 · RSVP Wed</p>
-            </div>
-          </div>
-          <div class="review-card">
-            <span class="pill">SKIP 1</span>
-            <div class="rc-body">
-              <strong>Dismissed</strong>
-              <p>Newsletter bundle (off-circle)</p>
-            </div>
-          </div>
-          <div class="review-card">
-            <span class="pill blue">CARRY 2</span>
-            <div class="rc-body">
-              <strong>Tomorrow</strong>
-              <p>Security review · Triage api-clients inbox</p>
-            </div>
-          </div>
-        </div>
-        <div class="memory-ledger">
+        <!-- The wrap layout intentionally ships with NO demo content as
+             the default DOM. Previously the static markup contained a
+             hardcoded evening wrap ("Today wrapped. Tomorrow staged." +
+             "4 done · 1 dismissed · 2 carried" + Mira / PR #482 /
+             Newsletter bundle / Security review / Triage api-clients),
+             which rendered for any user whose `decision.wrap_summary`
+             was missing — including fresh installs with zero activity.
+             On a quiet install that fabricated summary read like data
+             from another account. Everything below is filled in (or
+             hidden) by renderWrap() from real data; if JS fails to
+             run the card simply shows blank instead of inventing
+             activity. See issue #310. -->
+        <div class="wrap-title" id="wrap-title"></div>
+        <div class="wrap-sub" id="wrap-sub"></div>
+        <div class="review-columns" id="wrap-columns"></div>
+        <div
+          class="brief-narrative"
+          id="wrap-narrative"
+          style="display: none"
+        ></div>
+        <div class="memory-ledger" id="wrap-ledger-block" style="display: none">
           <div class="memory-ledger-title">Tomorrow starts with</div>
-          <div class="ledger-rows" id="wrap-ledger">
-            <div class="ledger-row">Security review with Mira (10:00)</div>
-            <div class="ledger-row">Triage api-clients inbox</div>
-          </div>
+          <div class="ledger-rows" id="wrap-ledger"></div>
         </div>
-        <div class="footer">
+        <div class="footer single-col" id="wrap-footer">
           <button class="primary" data-action="open" type="button">
             View details
           </button>
         </div>
       </section>
+
+      <!-- ============================================================
+           LAYOUT: QUIET_DIGEST  (issue #316)
+           Read-only filler card shown when a brief or wrap comes up
+           empty and the user opted into a content module
+           (ai-news-digest / weather-calendar / memory-resurface).
+           Renders the module's headline as the card title and
+           `context.items[]` as a bulleted list. No run / dismiss
+           action buttons — it's a one-off read.
+           ============================================================ -->
+      <section data-layout="quiet-digest">
+        <div class="header">
+          <span class="icon">✦</span>
+          <span class="type-label">DIGEST</span>
+          <span
+            class="pill"
+            id="quiet-digest-pill"
+            style="background: var(--blue-soft); color: var(--blue-dark)"
+            >QUIET</span
+          >
+          <span class="spacer"></span>
+          <button
+            class="close"
+            data-action="close"
+            type="button"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div class="brief-header">
+          <div class="brief-title" id="quiet-digest-title">
+            Worth a re-read.
+          </div>
+          <div class="brief-tag" id="quiet-digest-tag">Quiet day filler</div>
+        </div>
+        <div class="brief-list" id="quiet-digest-list"></div>
+        <div class="footer single-col">
+          <button class="primary" data-action="dismiss" type="button">
+            Got it
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           USAGE STRIP (cumulative native-agent tokens)
+           Anchored to the bottom of the card flex column, right-aligned.
+           This keeps it out of the way of the layout's own header (×)
+           and the layout's footer action buttons — both common in the
+           pipeline / decision / brief / wrap forms. On the idle Loomi
+           Online (connection) layout, where the card has plenty of empty
+           room below the pending queue, the chip docks at the very
+           bottom edge as a quiet status line, much like the status bar
+           on a chat / IDE window.
+           Data: GET /api/llm/usage/summary. Title attr carries the
+           full breakdown so we avoid shipping a tooltip library.
+
+           Visibility: CSS only shows this when the card has
+           `data-active-layout="connection"` (idle Loomi Online). Other
+           layouts (pipeline / decision / brief / wrap / no-api-key)
+           hide it via the default rule so it never competes with
+           their own footer actions.
+           ============================================================ -->
+      <div
+        class="usage-strip"
+        id="usage-strip"
+        data-state="loading"
+        title="Cumulative native-agent token usage since provider was configured"
+      >
+        <span class="usage-label">TOKENS</span>
+        <span class="usage-value" id="usage-value">—</span>
+        <span class="usage-meta" id="usage-meta">loading…</span>
+      </div>
 
       <div class="toast" id="toast"></div>
     </div>
@@ -1777,6 +2288,71 @@
         const card = document.getElementById("card");
         const toast = document.getElementById("toast");
         const layouts = document.querySelectorAll("[data-layout]");
+
+        function getCurrentWindow() {
+          const t = window.__TAURI__;
+          if (!t) return null;
+          if (
+            t.webviewWindow &&
+            typeof t.webviewWindow.getCurrentWebviewWindow === "function"
+          ) {
+            return t.webviewWindow.getCurrentWebviewWindow();
+          }
+          if (
+            t.window &&
+            typeof t.window.getCurrentWebviewWindow === "function"
+          ) {
+            return t.window.getCurrentWebviewWindow();
+          }
+          if (t.window && typeof t.window.getCurrentWindow === "function") {
+            return t.window.getCurrentWindow();
+          }
+          if (t.window && typeof t.window.getCurrent === "function") {
+            return t.window.getCurrent();
+          }
+          return null;
+        }
+
+        function restoreCursorEvents() {
+          const win = getCurrentWindow();
+          if (win && typeof win.setIgnoreCursorEvents === "function") {
+            try {
+              win.setIgnoreCursorEvents(false);
+            } catch (_) {
+              /* non-fatal */
+            }
+          }
+          return win;
+        }
+
+        function isInteractiveTarget(target) {
+          return Boolean(
+            target &&
+            target.closest &&
+            target.closest(
+              "button,a,input,textarea,select,[contenteditable='true'],[data-action],[data-editor-action]",
+            ),
+          );
+        }
+
+        card.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0) return;
+          if (isInteractiveTarget(e.target)) return;
+          const header =
+            e.target && e.target.closest ? e.target.closest(".header") : null;
+          if (!header) return;
+          const win = restoreCursorEvents();
+          if (win && typeof win.startDragging === "function") {
+            try {
+              const t = window.__TAURI__;
+              if (t && t.event && t.event.emit)
+                t.event.emit("pet:card-drag-start");
+              win.startDragging();
+            } catch (_) {
+              /* native drag is best-effort */
+            }
+          }
+        });
 
         // ---------- State store ----------
         let state = "idle";
@@ -1869,7 +2445,7 @@
         // is a secondary option, `danger` is the negative path.
         //
         // Why this exists: the legacy footer showed the same generic
-        // Run / Dismiss / Open trio for every decision type, which made
+        // Open / Dismiss / Run trio for every decision type, which made
         // RSVP, draft_reply, and review_pr all look identical even though
         // they ask for very different user input. Mapping each type to
         // its natural buttons (Yes/No/Maybe, Send/Edit/Discard,
@@ -1880,12 +2456,15 @@
         // user gets a native tooltip explaining the consequence.
         const TYPE_ACTIONS = {
           rsvp: [
+            // Order convention: Skip / destructive on the LEFT, the
+            // primary Yes on the RIGHT. The two middle slots hold the
+            // neutral replies so the user scans left-to-right
+            // ("skip / decline / maybe / accept").
             {
-              action: "run",
-              label: "✓ Yes",
-              variant: "primary",
-              tip: "Confirm attendance — Loomi adds it to your calendar and replies 'yes' to the host",
-              body: { response: "yes" },
+              action: "dismiss",
+              label: "Skip",
+              variant: "danger",
+              tip: "Don't reply — leave the invite pending for a later pass",
             },
             {
               action: "run",
@@ -1902,18 +2481,19 @@
               body: { response: "maybe" },
             },
             {
-              action: "dismiss",
-              label: "Skip",
-              variant: "danger",
-              tip: "Don't reply — leave the invite pending for a later pass",
+              action: "run",
+              label: "✓ Yes",
+              variant: "primary",
+              tip: "Confirm attendance — Loomi adds it to your calendar and replies 'yes' to the host",
+              body: { response: "yes" },
             },
           ],
           draft_reply: [
             {
-              action: "run",
-              label: "▶ Send",
-              variant: "primary",
-              tip: "Send the drafted email (or the edited version if you saved one) as-is",
+              action: "dismiss",
+              label: "Discard",
+              variant: "danger",
+              tip: "Drop the draft — no message will be sent; the thread stays unread",
             },
             {
               action: "edit",
@@ -1922,19 +2502,18 @@
               tip: "Edit the subject and body inline before sending",
             },
             {
-              action: "dismiss",
-              label: "Discard",
-              variant: "danger",
-              tip: "Drop the draft — no message will be sent; the thread stays unread",
+              action: "run",
+              label: "▶ Send",
+              variant: "primary",
+              tip: "Send the drafted email (or the edited version if you saved one) as-is",
             },
           ],
           review_pr: [
             {
-              action: "run",
-              label: "✓ Approve",
-              variant: "primary",
-              tip: "Post an approval — use this when the diff looks good and you want to unblock the merge",
-              body: { verdict: "approve" },
+              action: "dismiss",
+              label: "Skip",
+              variant: "danger",
+              tip: "Skip this review for now — leave the PR unassigned on your side, you can come back later",
             },
             {
               action: "run",
@@ -1943,13 +2522,20 @@
               tip: "Post a neutral review note (no approve / request-changes verdict) — for questions, nits, or FYIs",
               body: { verdict: "comment" },
             },
+            {
+              action: "run",
+              label: "✓ Approve",
+              variant: "primary",
+              tip: "Post an approval — use this when the diff looks good and you want to unblock the merge",
+              body: { verdict: "approve" },
+            },
           ],
           slack_reply: [
             {
-              action: "run",
-              label: "▶ Send",
-              variant: "primary",
-              tip: "Post the drafted reply to the channel as-is",
+              action: "dismiss",
+              label: "Skip",
+              variant: "danger",
+              tip: "Don't post — leave the message unread, the draft is discarded",
             },
             {
               action: "open",
@@ -1958,10 +2544,10 @@
               tip: "Open the draft in the dashboard to tweak the message before posting",
             },
             {
-              action: "dismiss",
-              label: "Skip",
-              variant: "danger",
-              tip: "Don't post — leave the message unread, the draft is discarded",
+              action: "run",
+              label: "▶ Send",
+              variant: "primary",
+              tip: "Post the drafted reply to the channel as-is",
             },
           ],
           release_plan: [
@@ -1979,26 +2565,36 @@
             },
           ],
           deadline_reminder: [
+            // Button order convention (applied across all 2/4-button
+            // layouts): neutral / skip / cancel on the LEFT, confirm /
+            // primary on the RIGHT. Avoids the destructive button
+            // winning the user's left-to-right scan.
+            {
+              action: "dismiss",
+              label: "Skip",
+              variant: "ghost",
+              tip: "Drop the reminder suggestion",
+            },
             {
               action: "run",
               label: "✓ Add reminder",
               variant: "primary",
               body: { channel: "calendar" },
+              tip: "Add a calendar event with a reminder before the deadline",
             },
-            { action: "dismiss", label: "Skip", variant: "danger" },
           ],
           todo: [
+            {
+              action: "dismiss",
+              label: "Skip",
+              variant: "ghost",
+              tip: "Don't add — drop the suggestion, no todo is created",
+            },
             {
               action: "run",
               label: "✓ Add",
               variant: "primary",
               tip: "Add to your todo list — Loomi tracks it across surfaces and the dashboard",
-            },
-            {
-              action: "dismiss",
-              label: "Skip",
-              variant: "danger",
-              tip: "Don't add — drop the suggestion, no todo is created",
             },
           ],
           brief: [
@@ -2014,9 +2610,9 @@
         // decision payload is missing). Mirrors the legacy trio so
         // unknown types still respond to clicks.
         const DEFAULT_ACTIONS = [
-          { action: "run", label: "▶ Run", variant: "primary" },
-          { action: "dismiss", label: "✕ Dismiss", variant: "danger" },
           { action: "open", label: "↗ Open", variant: "ghost" },
+          { action: "dismiss", label: "✕ Dismiss", variant: "danger" },
+          { action: "run", label: "▶ Run", variant: "primary" },
         ];
         const TYPE_LABELS = {
           rsvp: "RSVP",
@@ -2034,6 +2630,60 @@
           p1: 0.75,
           p2: 0,
         };
+
+        // ---------- User-defined decision types ----------
+        //
+        // Mirrors `apps/web/components/loop/decision-card.tsx` — the
+        // user can register a new `type` string via
+        // `PUT /api/loop/types`, and the dispatch tables above
+        // (TYPE_ICONS / TYPE_LABELS / TYPE_RECOMMENDATIONS) need to
+        // know about it so the card renders the user's icon and label
+        // instead of falling back to `ri-question-line`. We fetch once
+        // on load, merge the user's entries into the existing maps,
+        // and re-render any open decision. A failed fetch is silent —
+        // the built-in dispatch tables still apply.
+        function applyCustomTypes(list) {
+          if (!Array.isArray(list)) return;
+          for (const t of list) {
+            if (!t || typeof t.id !== "string" || !t.id) continue;
+            if (typeof t.icon === "string" && t.icon.length > 0) {
+              TYPE_ICONS[t.id] = t.icon;
+            }
+            if (typeof t.label === "string" && t.label.length > 0) {
+              TYPE_LABELS[t.id] = t.label.toUpperCase();
+            }
+            if (typeof t.description === "string" && t.description.length > 0) {
+              // Mirror the action-button layout for built-in types:
+              // a single "Open in dashboard" ghost button is enough
+              // for unknown custom types — the user can wire the
+              // real action semantics in the agent later.
+              if (!TYPE_ACTIONS[t.id]) {
+                TYPE_ACTIONS[t.id] = [
+                  { action: "open", label: "↗ Open", variant: "ghost" },
+                  { action: "dismiss", label: "✕ Dismiss", variant: "danger" },
+                  { action: "run", label: "▶ Run", variant: "primary" },
+                ];
+              }
+              TYPE_RECOMMENDATIONS[t.id] = t.description.slice(0, 80);
+            }
+          }
+        }
+        if (typeof fetch === "function") {
+          const apiBase =
+            (typeof window !== "undefined" && window.__OPENLOOMI_API__) || "";
+          fetch(`${apiBase}/api/loop/types`, {
+            credentials: "include",
+            cache: "no-store",
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (data && Array.isArray(data.types))
+                applyCustomTypes(data.types);
+            })
+            .catch(() => {
+              /* best-effort — built-in dispatch tables still apply */
+            });
+        }
 
         // ---------- Toast ----------
         function showToast(text, isError) {
@@ -2098,10 +2748,19 @@
           //    regardless of whether the watcher would agree.
           if (devForm && DEV_FORM_LAYOUT[devForm])
             return DEV_FORM_LAYOUT[devForm];
+          // 1b. `presenting` mirrors a freshly-done decision — render
+          //     it as the decision layout so the user lands on the
+          //     same surface they would have seen if they had been
+          //     watching the loop finish. Keeps the experience
+          //     consistent: "open card from presenting state" looks
+          //     the same as "open card from the bubble for a finished
+          //     decision".
+          if (state === "presenting") return "decision";
           // 2. Decision-driven layouts.
           if (decision && decision.id) {
             if (decision.type === "brief") return "brief";
             if (decision.type === "wrap") return "wrap";
+            if (decision.type === "quiet_digest") return "quiet-digest";
             return "decision";
           }
           // 3. State-driven fallback.
@@ -2117,6 +2776,15 @@
             el.classList.toggle("active", el.dataset.layout === layout),
           );
           card.classList.toggle("dark", layout === "wrap");
+          // The usage chip is only meaningful on the idle Loomi Online
+          // (connection) screen. Action / reading layouts (pipeline,
+          // decision, brief, wrap) compete with footer buttons and
+          // body content for visual attention, and no-api-key already
+          // explains the missing config in its own copy. The CSS uses
+          // this attribute to hide the chip on every non-connection
+          // layout — including during transitions where multiple
+          // layouts briefly co-exist.
+          card.dataset.activeLayout = layout;
           // Hide footer / pills on layouts that don't use them — but the
           // footer lives inside each section, so layout-level switching
           // already hides them. Nothing global to do here.
@@ -2128,6 +2796,7 @@
           renderDecision();
           renderBrief();
           renderWrap();
+          renderQuietDigest();
           renderNoApiKey();
         }
 
@@ -2210,7 +2879,13 @@
           const queueLabel = document.getElementById("queue-label");
           const queue = document.getElementById("connection-queue");
           const cl = document.getElementById("connection-connectors");
-          // Connectors
+          // Connectors — render all of them, capped visually by the
+          // `.connector-list` max-height + overflow:auto so the 360×420
+          // card never clips a half-row at the bottom. The previous
+          // "+N more" summary row was removed because it duplicated
+          // the bottom "Add more connectors" CTA — same action, two
+          // places. The list still scrolls; the CTA below is the
+          // single discoverable action.
           cl.innerHTML = "";
           if (!connectors.length) {
             const empty = document.createElement("div");
@@ -2286,9 +2961,19 @@
 
         // ---------- Pipeline layout (Form 2) ----------
         function renderPipeline() {
-          // Active step picks the pet state's hint if available. Without
-          // extra watcher context we default to step 1; the user can
-          // see the rest of the pipeline at a glance.
+          // Three honest states. The original implementation always
+          // landed on "Step 1 of 4 · see signal" — wizard vocabulary
+          // for what is actually a live indicator — and never moved
+          // when no signals were arriving. See #311.
+          const stepsEl = document.getElementById("pipeline-steps");
+          const progress = document.getElementById("pipeline-progress");
+          const empty = document.getElementById("pipeline-empty");
+          const emptyFooter = document.getElementById("pipeline-empty-footer");
+
+          const anyConnected = connectors.some((c) => c && c.connected);
+          // Map a pet state to whichever pipeline step it's currently
+          // working through. Kept from the original implementation;
+          // the difference is what we render around the highlight.
           const stepMap = {
             greet: 1,
             thinking: 1,
@@ -2297,54 +2982,155 @@
             juggling: 2,
             sweeping: 3,
             happy: 4,
+            presenting: 4,
             idle: 1,
             sleeping: 1,
           };
-          const step = stepMap[state] || 1;
-          document
-            .querySelectorAll("#pipeline-steps .pipeline-step")
-            .forEach((el) => {
-              el.classList.toggle("active", Number(el.dataset.step) === step);
-            });
           const labels = [
             "see signal",
             "read state",
             "triage attention",
             "wait for approval",
           ];
-          const progress = document.getElementById("pipeline-progress");
-          if (progress)
-            progress.textContent =
-              "Step " + step + " of 4 · " + labels[step - 1];
+          const step = stepMap[state] || 1;
+          const isIdle =
+            state === "idle" || state === "sleeping" || state === "greet";
+
+          if (!anyConnected) {
+            // Cold install: nothing to watch. Hide the live block
+            // and surface the empty-state CTA instead so the panel
+            // never reads as a frozen wizard.
+            if (stepsEl) stepsEl.hidden = true;
+            if (progress) progress.hidden = true;
+            if (empty) empty.hidden = false;
+            // Keep the footer in place — the markup already wires the
+            // button to data-action="guide-connect-more".
+            void emptyFooter;
+            return;
+          }
+
+          // Connected. Show the live indicator.
+          if (stepsEl) stepsEl.hidden = false;
+          if (progress) progress.hidden = false;
+          if (empty) empty.hidden = true;
+
+          document
+            .querySelectorAll("#pipeline-steps .pipeline-step")
+            .forEach((el) => {
+              el.classList.toggle("active", Number(el.dataset.step) === step);
+            });
+
+          if (progress) {
+            if (isIdle) {
+              // Connected but quiet — the indicator would otherwise
+              // sit on step 1 forever and look like a stuck wizard.
+              // Use unmistakably live / idle vocabulary.
+              progress.textContent =
+                "No signals right now — the pipeline lights up when something arrives.";
+            } else {
+              // Active: live vocabulary ("Now: …") beats "Step N of
+              // 4" because the panel is a status indicator, not a
+              // navigation. The next step is still surfaced so the
+              // user knows what is queued.
+              const nextIdx = step < labels.length ? step : labels.length - 1;
+              progress.textContent =
+                "Now: " + labels[step - 1] + " · next: " + labels[nextIdx];
+            }
+          }
         }
 
         // ---------- Noise layout (Form 3) ----------
+        // Identify mail-source connectors. The noise card is only
+        // meaningful when at least one of these is connected — without
+        // a mail source, "Trashing the noise" is a lie. Mirrors the
+        // `d.source === "gmail"` checks elsewhere in the card.
+        const MAIL_CONNECTOR_HINTS = [
+          "gmail",
+          "outlook",
+          "mail",
+          "inbox",
+          "imap",
+          "fastmail",
+          "protonmail",
+        ];
+        function isMailConnector(c) {
+          if (!c || !c.connected) return false;
+          const hay = ((c.id || "") + " " + (c.label || "")).toLowerCase();
+          return MAIL_CONNECTOR_HINTS.some((hint) => hay.includes(hint));
+        }
         function renderNoise() {
-          // Top dismissed item, if any, becomes the trashed message
-          // shown in the demo. Otherwise we show a representative
-          // newsletter.
-          const noiseSamples = [
-            {
-              from: "newsletter@trythis.app",
-              subject: "Try this bundle — 50% off!",
-            },
-            {
-              from: "digest@producthunt.com",
-              subject: "Today's top 5 launches",
-            },
-            {
-              from: "promo@stripe-news.com",
-              subject: "Webinar replay — payments 2026",
-            },
-          ];
-          const sample =
-            noiseSamples[
-              Math.floor((Date.now() / 60000) % noiseSamples.length)
-            ];
-          const fromEl = document.getElementById("noise-from");
-          const subEl = document.getElementById("noise-subject");
-          if (fromEl) fromEl.textContent = sample.from;
-          if (subEl) subEl.textContent = '"' + sample.subject + '"';
+          // Three honest states. The previous implementation always
+          // fell through to a fabricated newsletter sample (issue
+          // #312); we now distinguish cold-install (no mail source)
+          // from connected-but-quiet (no mail swept). A live "what I
+          // just trashed" block is reserved for the future case where
+          // a noise-reduction payload actually arrives — none of the
+          // data sources currently available to this card carry one,
+          // so today both branches show empty-state copy. The block
+          // is wired in markup so the live render is a one-line
+          // change when the payload lands.
+          const live = document.getElementById("noise-live");
+          const empty = document.getElementById("noise-empty");
+          const emptyTitle = document.getElementById("noise-empty-title");
+          const emptySub = document.getElementById("noise-empty-sub");
+          const emptyFooter = document.getElementById("noise-empty-footer");
+          const logTitle = document.getElementById("triage-log-title");
+          const logSub = document.getElementById("triage-log-sub");
+
+          const anyMail = connectors.some(isMailConnector);
+
+          // The live block is never populated today (no payload
+          // source), so we keep it hidden. Wipe the placeholder text
+          // so it can't ever leak through if it does get shown.
+          if (live) {
+            live.hidden = true;
+            const fromEl = document.getElementById("noise-from");
+            const subEl = document.getElementById("noise-subject");
+            if (fromEl) fromEl.textContent = "—";
+            if (subEl) subEl.textContent = "—";
+          }
+
+          if (!empty || !emptyTitle || !emptySub || !emptyFooter) return;
+
+          empty.hidden = false;
+          emptyFooter.innerHTML = "";
+
+          if (!anyMail) {
+            // Cold install: no mail source connected. Honest about
+            // why the noise card is empty, with a CTA into the
+            // connectors page (same destination as the wrap card's
+            // empty state, so the user lands somewhere useful).
+            emptyTitle.textContent =
+              "Nothing swept — I don't have eyes on your inbox yet.";
+            emptySub.textContent =
+              "Connect a mail source and I'll start catching the junk. " +
+              "Until then, this panel stays empty on purpose.";
+            const cta = document.createElement("button");
+            cta.className = "primary";
+            cta.type = "button";
+            cta.setAttribute("data-action", "guide-connect-more");
+            cta.textContent = "Add mail source";
+            emptyFooter.appendChild(cta);
+            if (logTitle) logTitle.textContent = "—";
+            if (logSub)
+              logSub.textContent = "Connect a mail source to start the sweep.";
+            return;
+          }
+
+          // Connected mail source, but no real noise payload is
+          // available to the card (today, always). Reassure the
+          // user without fabricating data. The wording is in the
+          // pet's voice so the layout still feels alive.
+          emptyTitle.textContent =
+            "Broom's clean — no noise made it past me today.";
+          emptySub.textContent =
+            "Anything that looks like junk lands here as soon as I trash it. " +
+            "Right now nothing qualifies.";
+          // No CTA — the user already has the connector they need;
+          // a button would invent work that isn't there.
+          if (logTitle) logTitle.textContent = "0 sent to trash today";
+          if (logSub)
+            logSub.textContent = "Urgent noise still wakes you · lane kept";
         }
 
         // ---------- Decision layout (Forms 4/5/8) ----------
@@ -2353,6 +3139,7 @@
           const typeLabel = document.getElementById("dec-type-label");
           const pill = document.getElementById("dec-pill");
           const titleEl = document.getElementById("dec-title");
+          const subEl = document.getElementById("dec-subtitle");
           const sc = document.getElementById("dec-source-chain");
           const recBody = document.getElementById("dec-recommendation-body");
           const confFill = document.getElementById("dec-confidence-fill");
@@ -2360,31 +3147,76 @@
           const dlgBody = document.getElementById("dec-dialogue-body");
           const ev = document.getElementById("dec-evidence");
           const dlgWrap = document.getElementById("dec-dialogue");
+          const bodyEl = document.getElementById("dec-body");
+          const decEl = document.getElementById("dec");
 
           if (!decision || !decision.id) return;
 
           const t = decision.type || "decision";
           icon.textContent = TYPE_ICONS[t] || "●";
           typeLabel.textContent = TYPE_LABELS[t] || t.toUpperCase();
-          const pri = (
-            decision.priority || priorityFor(decision)
-          ).toLowerCase();
-          pill.textContent = pri;
-          pill.className = "pill " + pri;
+          // `presenting` is the watcher's "I have a freshly-done
+          // result, hand it off" state. When the user opens the
+          // card from there, the priority pill flips from the
+          // numeric p0/p1/p2 to a green "READY" tag and the
+          // primary CTA changes from "Run" to "Open result".
+          // Falls back to the regular pill when status is anything
+          // else (incl. the user opening the card pre-decision).
+          const isPresenting =
+            state === "presenting" && decision.status === "done";
+          if (isPresenting) {
+            pill.textContent = "READY";
+            pill.className = "pill ready";
+          } else {
+            const pri = (
+              decision.priority || priorityFor(decision)
+            ).toLowerCase();
+            pill.textContent = pri;
+            pill.className = "pill " + pri;
+          }
+          // Set both title and subtitle. Title is the action verb +
+          // entity + time (driven by the tick prompt). Subtitle is the
+          // scan-friendly context line — replaces the legacy
+          // machine-style "(4 emails)" suffix the agent used to cram
+          // into the title itself.
           titleEl.textContent = decision.title || t;
+          renderDecisionSubtitle(subEl, decision);
+          renderDecisionBody(bodyEl, decEl, decision, t);
 
-          // Source chain
+          // Source chain (chrome strip — keeps SIGNAL/TYPE/TIMING/CONFIDENCE
+          //  since they're useful as a quick at-a-glance summary. Labels
+          //  were changed from blue uppercase to neutral sentence-case
+          //  to stop competing with the title for visual weight.)
           sc.innerHTML = "";
           const conf =
             typeof decision.confidence === "number"
               ? decision.confidence
               : null;
+          // Short channel aliases keep the 4-cell meta-node row from
+          // overflowing the 360px card. Long IDs like
+          // "google_calendar" → "gcal", "github_pr" → "pr", etc.
+          const SHORT = {
+            gmail: "gmail",
+            google_calendar: "gcal",
+            github: "github",
+            slack: "slack",
+            linear: "linear",
+            obsidian: "obs",
+            email: "email",
+            calendar_event: "cal",
+            github_pr: "pr",
+            slack_message: "slack",
+          };
+          const rawType = decision.source_type || t;
           const nodes = [
-            { label: "SIGNAL", value: decision.source || "—" },
-            { label: "TYPE", value: decision.source_type || t },
-            { label: "TIMING", value: fmtTs(decision.source_ts) },
             {
-              label: "CONFIDENCE",
+              label: "Signal",
+              value: SHORT[decision.source] || decision.source || "—",
+            },
+            { label: "Type", value: SHORT[rawType] || rawType },
+            { label: "Received", value: fmtTs(decision.source_ts) },
+            {
+              label: "Confidence",
               value: conf != null ? Math.round(conf * 100) + "%" : "—",
             },
           ];
@@ -2459,6 +3291,331 @@
           renderDecisionFooter();
         }
 
+        // ---------- Decision subtitle (context line under the title) ----------
+        // The LLM-generated title is reserved for the action + entity + time
+        // (eg "Add reminder: 7/14 OneSignal event"). Subtitle carries the
+        // scan-friendly counts that used to be smashed into the title
+        // (eg "(4 emails)") plus the relative-time remaining when the
+        // decision carries a deadline. Hidden when there's nothing
+        // meaningful to add so the card doesn't grow a useless blank row.
+        function renderDecisionSubtitle(subEl, dec) {
+          if (!subEl) return;
+          const parts = [];
+          // Cluster count from the email/Slack thread dedupe. The tick
+          // prompt is expected to populate `context.cluster.size` for
+          // deadline_reminder / draft_reply so the user immediately
+          // knows whether the decision represents one event or many.
+          const cluster =
+            dec && dec.context && dec.context.cluster
+              ? dec.context.cluster
+              : null;
+          const clusterSize = cluster ? Number(cluster.size) || 0 : 0;
+          if (clusterSize > 1) {
+            const label =
+              cluster.kind === "thread"
+                ? `${clusterSize} replies in thread`
+                : cluster.kind === "mailbox"
+                  ? `${clusterSize} related emails`
+                  : cluster.kind === "channel"
+                    ? `${clusterSize} messages in channel`
+                    : `${clusterSize} related items`;
+            parts.push(label);
+          }
+          // Time-to-deadline for deadline_reminder. `action.params.deadlineAt`
+          // is the ISO timestamp the tick prompt detected; rendering "due
+          // in 5 days" gives the user an immediate yes-this-is-urgent
+          // signal without opening the thread to check the date.
+          const deadlineAt =
+            dec && dec.action && dec.action.params
+              ? dec.action.params.deadlineAt
+              : null;
+          if (deadlineAt) {
+            const until = secondsUntil(deadlineAt);
+            const days = Math.floor(until / 86400);
+            const hours = Math.floor((until % 86400) / 3600);
+            let human;
+            if (until <= 0) human = "due now";
+            else if (days >= 1) human = `due in ${days}d`;
+            else if (hours >= 1) human = `due in ${hours}h`;
+            else human = `due in ${Math.max(1, Math.floor(until / 60))}m`;
+            parts.push(human);
+          }
+          if (parts.length === 0) {
+            subEl.textContent = "";
+            subEl.style.display = "none";
+          } else {
+            subEl.textContent = parts.join(" · ");
+            subEl.style.display = "";
+          }
+        }
+
+        // ---------- Decision body (type-specific content block) ----------
+        // Renders a content block tailored to the decision type. Replaces
+        // the legacy machine-style "Why 1/2/3" evidence pills for types
+        // where the actual content (an email snippet, a drafted reply,
+        // a PR diff stat) is what the user needs to make the call. For
+        // types that don't get a custom block (review_pr, rsvp,
+        // release_plan, todo) the body is hidden and the evidence pills
+        // stand in. Net effect: a single source of truth for "what is
+        // this about" instead of two parallel explanations.
+        function renderDecisionBody(bodyEl, decEl, dec, t) {
+          if (!bodyEl) return;
+          bodyEl.innerHTML = "";
+          bodyEl.hidden = true;
+          if (decEl) decEl.classList.remove("show-body");
+          if (!dec) return;
+
+          // ---------- deadline_reminder ----------
+          // Show the email subject + sender + a snippet of the body so the
+          // user doesn't have to open Gmail just to decide. Cluster rows
+          // (when present) list the other messages the agent folded into
+          // this decision — replaces the previous opaque "(4 emails)"
+          // suffix the user couldn't act on.
+          if (t === "deadline_reminder") {
+            const src = dec && dec.source === "email" ? dec : null;
+            const payload =
+              src && Array.isArray(src.signals) && src.signals[0]
+                ? src.signals[0].payload || {}
+                : {};
+            // Fall back through the decision-level subject/title so the
+            // card never renders the placeholder "Untitled deadline" when
+            // the agent already supplied a meaningful title upstream.
+            const subject =
+              (payload && payload.subject) ||
+              (src && src.title) ||
+              dec.subject ||
+              dec.title ||
+              "";
+            const sender = (payload && payload.from) || dec.from || "";
+            const snippet =
+              (payload && (payload.snippet || payload.body)) || "";
+            // Cluster rows
+            const cluster = (dec.context && dec.context.cluster) || null;
+            const extras =
+              cluster && Array.isArray(cluster.extras) ? cluster.extras : [];
+            // Drop the entire block if no meaningful fields exist — the
+            // empty shell used to render with "Untitled deadline" /
+            // "email" placeholders which made the card look unfinished.
+            if (!subject && !sender && !snippet) return;
+            // Build markup
+            const lab = document.createElement("span");
+            lab.className = "label";
+            lab.textContent = "Source email";
+            bodyEl.appendChild(lab);
+            if (sender) {
+              const fromEl = document.createElement("span");
+              fromEl.className = "sender";
+              fromEl.textContent = sender;
+              bodyEl.appendChild(fromEl);
+            }
+            if (subject) {
+              const subj = document.createElement("div");
+              subj.className = "subject";
+              subj.textContent = subject;
+              bodyEl.appendChild(subj);
+            }
+            if (snippet) {
+              const snip = document.createElement("div");
+              snip.className = "snippet";
+              snip.textContent = stripSnippet(snippet);
+              bodyEl.appendChild(snip);
+            }
+            // Countdown pill (duplicates the subtitle for at-a-glance
+            // readability — the user reads top-down so the chip near
+            // the body text carries the urgency regardless of how far
+            // they scrolled)
+            const deadlineAt =
+              (dec.action &&
+                dec.action.params &&
+                dec.action.params.deadlineAt) ||
+              null;
+            if (deadlineAt) {
+              const cd = document.createElement("span");
+              cd.className = "countdown";
+              const until = secondsUntil(deadlineAt);
+              const days = Math.floor(until / 86400);
+              const hours = Math.floor((until % 86400) / 3600);
+              cd.textContent =
+                until <= 0
+                  ? "Due now"
+                  : days >= 1
+                    ? `${days}d until deadline`
+                    : hours >= 1
+                      ? `${hours}h until deadline`
+                      : `${Math.max(1, Math.floor(until / 60))}m left`;
+              bodyEl.appendChild(cd);
+            }
+            // Cluster list — the user previously asked about
+            // "4 related emails" being collapsed. Render each surviving
+            // message as one muted row so they can see the cluster
+            // shape without leaving the card.
+            if (extras.length > 0) {
+              const cl = document.createElement("div");
+              cl.className = "cluster";
+              const clLab = document.createElement("span");
+              clLab.className = "label";
+              clLab.textContent = "Also in this batch";
+              bodyEl.appendChild(clLab);
+              for (const r of extras.slice(0, 4)) {
+                const row = document.createElement("div");
+                row.className = "cluster-row";
+                row.textContent = r.subject || r.from || "(no subject)";
+                cl.appendChild(row);
+              }
+              bodyEl.appendChild(cl);
+            }
+            bodyEl.hidden = false;
+            if (decEl) decEl.classList.add("show-body");
+            return;
+          }
+
+          // ---------- draft_reply ----------
+          // Show the drafted reply body so the user sees what would go
+          // out before clicking Run. Saves an edit cycle for the
+          // common case where the draft is fine.
+          if (t === "draft_reply") {
+            const draft =
+              (dec.context && dec.context.draft && dec.context.draft.body) ||
+              (dec.action &&
+                dec.action.params &&
+                dec.action.params.draftBody) ||
+              "";
+            const subject =
+              (dec.context && dec.context.draft && dec.context.draft.subject) ||
+              (dec.action && dec.action.params && dec.action.params.subject) ||
+              "";
+            if (!draft && !subject) return;
+            const lab = document.createElement("span");
+            lab.className = "label";
+            lab.textContent = "Drafted reply";
+            bodyEl.appendChild(lab);
+            if (subject) {
+              const sbj = document.createElement("div");
+              sbj.className = "subject";
+              sbj.textContent = "Re: " + subject;
+              bodyEl.appendChild(sbj);
+            }
+            const draftEl = document.createElement("div");
+            draftEl.className = "draft";
+            draftEl.textContent = draft || "(empty draft)";
+            bodyEl.appendChild(draftEl);
+            bodyEl.hidden = false;
+            if (decEl) decEl.classList.add("show-body");
+            return;
+          }
+
+          // ---------- rsvp ----------
+          // Show the event time + organizer + attendee summary so the
+          // user knows what they're accepting without opening the
+          // calendar. Falls back gracefully when the payload only
+          // carries a title.
+          if (t === "rsvp") {
+            const params = (dec.action && dec.action.params) || {};
+            const payload =
+              (dec.signals && dec.signals[0] && dec.signals[0].payload) || {};
+            const start =
+              payload.start || params.start || dec.context?.eventTime;
+            const organizer = payload.organizer || dec.context?.person || "";
+            const attendees = Array.isArray(payload.attendees)
+              ? payload.attendees
+              : [];
+            const title = payload.title || dec.subject || dec.title || "";
+            if (!start && !title) return;
+            const lab = document.createElement("span");
+            lab.className = "label";
+            lab.textContent = "Calendar invite";
+            bodyEl.appendChild(lab);
+            if (title) {
+              const tEl = document.createElement("div");
+              tEl.className = "subject";
+              tEl.textContent = title;
+              bodyEl.appendChild(tEl);
+            }
+            if (start) {
+              const tm = document.createElement("div");
+              tm.className = "snippet";
+              tm.textContent = `When: ${fmtTs(start, "full")}`;
+              bodyEl.appendChild(tm);
+            }
+            if (organizer) {
+              const org = document.createElement("div");
+              org.className = "snippet";
+              org.textContent = `From: ${organizer}`;
+              bodyEl.appendChild(org);
+            }
+            if (attendees.length > 0) {
+              const att = document.createElement("div");
+              att.className = "snippet";
+              const others = attendees.filter(
+                (a) => a && a !== dec.context?.person,
+              );
+              att.textContent = others.length
+                ? `With: ${others.slice(0, 3).join(", ")}${others.length > 3 ? "…" : ""}`
+                : `With: ${attendees.slice(0, 3).join(", ")}`;
+              bodyEl.appendChild(att);
+            }
+            bodyEl.hidden = false;
+            if (decEl) decEl.classList.add("show-body");
+            return;
+          }
+
+          // ---------- review_pr ----------
+          // Show the PR's repo/number, title, and diffstat so the user
+          // can size the change before clicking Approve. Without this
+          // block the meta-node row says "github / github_pr" but
+          // hides everything else the user needs to decide.
+          if (t === "review_pr") {
+            const params = (dec.action && dec.action.params) || {};
+            const payload =
+              (dec.signals && dec.signals[0] && dec.signals[0].payload) || {};
+            const repo = params.repo || payload.repo || "";
+            const number = params.number || payload.number;
+            const title = payload.title || dec.subject || dec.title || "";
+            const additions =
+              typeof payload.additions === "number" ? payload.additions : null;
+            const deletions =
+              typeof payload.deletions === "number" ? payload.deletions : null;
+            if (!title && !number) return;
+            const lab = document.createElement("span");
+            lab.className = "label";
+            lab.textContent = "Pull request";
+            bodyEl.appendChild(lab);
+            if (title) {
+              const tEl = document.createElement("div");
+              tEl.className = "subject";
+              tEl.textContent = title;
+              bodyEl.appendChild(tEl);
+            }
+            const meta = document.createElement("div");
+            meta.className = "snippet";
+            const repoLine =
+              repo && number != null ? `${repo} #${number}` : repo || "";
+            const diff =
+              additions != null && deletions != null
+                ? ` · +${additions} / −${deletions}`
+                : additions != null
+                  ? ` · +${additions}`
+                  : "";
+            meta.textContent = repoLine + diff;
+            bodyEl.appendChild(meta);
+            bodyEl.hidden = false;
+            if (decEl) decEl.classList.add("show-body");
+            return;
+          }
+        }
+
+        // Trim and collapse Gmail-style snippets (which arrive with
+        // embedded "\n" and trailing "...") for the body block. Stays
+        // cheap — no DOM, just a string slice.
+        function stripSnippet(s, max = 220) {
+          if (!s) return "";
+          const flat = String(s).replace(/\s+/g, " ").trim();
+          if (flat.length <= max) return flat;
+          const cut = flat.slice(0, max);
+          const lastSpace = cut.lastIndexOf(" ");
+          return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut) + "…";
+        }
+
         // ---------- Decision footer (per-type action buttons) ----------
         // Rebuilds `#dec-footer` from the per-type TYPE_ACTIONS map. The
         // buttons are static-HTML in the BRIEF/WRAP footers (those
@@ -2504,16 +3661,41 @@
           }
           const actions =
             (decision.type && TYPE_ACTIONS[decision.type]) || DEFAULT_ACTIONS;
+          // `presenting` swaps the primary CTA label from "Run" to
+          // "Open result" so the user understands the loop has
+          // already finished — they don't need to "run" anything,
+          // just look at the prepared output. Reuses the existing
+          // `open` action (the postAction handler already routes
+          // that to the dashboard / external app).
+          const isPresentingReady =
+            state === "presenting" && decision.status === "done";
+          const finalActions = isPresentingReady
+            ? actions.map((a) =>
+                a.action === "run"
+                  ? {
+                      ...a,
+                      label: "↗ Open result",
+                      tip: "View the prepared output",
+                    }
+                  : a.action === "dismiss"
+                    ? {
+                        ...a,
+                        label: "✓ Got it",
+                        tip: "Acknowledge and dismiss",
+                      }
+                    : a,
+              )
+            : actions;
           // 2 → two-col, 3 → default 3-col, 4 → four-col.
           const cls =
-            actions.length === 4
+            finalActions.length === 4
               ? "footer four-col"
-              : actions.length === 2
+              : finalActions.length === 2
                 ? "footer two-col"
                 : "footer";
           footer.className = cls;
           footer.innerHTML = "";
-          for (const a of actions) {
+          for (const a of finalActions) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = a.variant || "";
@@ -2860,8 +4042,24 @@
           document.getElementById("brief-m3").textContent = prs;
 
           const tag = document.getElementById("brief-tag");
-          tag.textContent =
-            unread + " unread · " + conflicts + " conflicts · " + prs + " PRs";
+          // When an agentic narrative is ready, swap the templated tag
+          // for the headline so the card opens with the actual story.
+          const narr = decision?.context?.narrative;
+          if (narr && narr.status === "ready" && narr.headline) {
+            tag.textContent = narr.headline;
+          } else {
+            tag.textContent =
+              unread +
+              " unread · " +
+              conflicts +
+              " conflicts · " +
+              prs +
+              " PRs";
+          }
+
+          renderNarrative("brief-narrative", decision?.context?.narrative, {
+            generating: "Generating morning brief…",
+          });
 
           const list = document.getElementById("brief-list");
           list.innerHTML = "";
@@ -2891,17 +4089,97 @@
         }
 
         // ---------- Wrap layout (Form 7) ----------
+        // Renders the evening wrap card. Two principles:
+        //
+        //   1. Never fabricate activity. Counts default to 0 (never the
+        //      demo constants 4 / 1 / 2 that used to ship in this
+        //      function and in the static markup). The review columns
+        //      and the "Tomorrow starts with" ledger only render when
+        //      they have real data.
+        //
+        //   2. Distinguish "no connectors linked" (blindfolded) from
+        //      "connectors linked, nothing captured" (a quiet day). The
+        //      two deserve different copy and a different footer CTA —
+        //      the former turns the wrap into a real onboarding nudge
+        //      instead of an empty success screen. See issue #310.
         function renderWrap() {
           // Pull counts from a `wrap_summary` field on the decision if
-          // present, else from the recent done/dismissed buckets — we
-          // only have the pending list here, so we fall back to a
-          // reasonable demo summary.
+          // present, otherwise default to 0. `wrap_summary.carried` is
+          // authoritative when present; pendingList is only a soft
+          // hint when the backend hasn't published a count yet.
           const summary = decision?.wrap_summary;
-          const doneCount = summary?.done ?? 4;
-          const dismissedCount = summary?.dismissed ?? 1;
+          const doneCount = summary?.done ?? 0;
+          const dismissedCount = summary?.dismissed ?? 0;
           const carriedCount =
-            summary?.carried ?? Math.min(pendingList.length, 2);
+            summary?.carried ??
+            (pendingList.length ? Math.min(pendingList.length, 2) : 0);
+
           const sub = document.getElementById("wrap-sub");
+          const title = document.getElementById("wrap-title");
+          const columns = document.getElementById("wrap-columns");
+          const ledgerBlock = document.getElementById("wrap-ledger-block");
+          const ledger = document.getElementById("wrap-ledger");
+          const footer = document.getElementById("wrap-footer");
+
+          const isEmpty =
+            doneCount === 0 &&
+            dismissedCount === 0 &&
+            carriedCount === 0 &&
+            pendingList.length === 0;
+
+          // `connectors` is populated by refreshConnectors() / the
+          // `loop:connectors` event (see below). An empty array means
+          // we haven't fetched yet (or the user has nothing
+          // configured). Either way the right empty-state copy is the
+          // "I can't see anything yet" line — for a fresh install
+          // those states are observationally identical.
+          const anyConnected = connectors.some((c) => c && c.connected);
+
+          if (isEmpty) {
+            if (title) title.textContent = "Nothing to wrap tonight.";
+            if (sub)
+              sub.textContent = anyConnected
+                ? "A quiet day on my radar. Rest counts as progress."
+                : "End of day — but I can't see anything yet (no sources linked).";
+            if (columns) {
+              columns.style.display = "none";
+              columns.innerHTML = "";
+            }
+            if (ledgerBlock) ledgerBlock.style.display = "none";
+            if (ledger) ledger.innerHTML = "";
+
+            // Footer CTA: when nothing is connected, route the user to
+            // the connectors page so the next wrap has real data.
+            // Otherwise keep the dashboard link.
+            if (footer) {
+              footer.innerHTML = "";
+              if (!anyConnected) {
+                const cta = document.createElement("button");
+                cta.className = "primary";
+                cta.type = "button";
+                cta.setAttribute("data-action", "guide-connect-more");
+                cta.textContent = "Connect a source";
+                footer.appendChild(cta);
+              } else {
+                const cta = document.createElement("button");
+                cta.className = "primary";
+                cta.type = "button";
+                cta.setAttribute("data-action", "open");
+                cta.textContent = "View details";
+                footer.appendChild(cta);
+              }
+            }
+
+            renderNarrative("wrap-narrative", decision?.context?.narrative, {
+              generating: "Generating evening wrap…",
+            });
+            return;
+          }
+
+          // Non-empty: rebuild the title / sub / columns from real data
+          // only. Anything the backend doesn't carry is omitted rather
+          // than filled in with a placeholder.
+          if (title) title.textContent = "Today wrapped. Tomorrow staged.";
           if (sub)
             sub.textContent =
               "end of day · " +
@@ -2912,11 +4190,48 @@
               carriedCount +
               " carried";
 
-          // Optional: pre-render the carried rows from pendingList when
-          // we have them, otherwise keep the static demo copy.
-          const ledger = document.getElementById("wrap-ledger");
-          if (ledger && pendingList.length) {
-            ledger.innerHTML = "";
+          if (columns) {
+            columns.style.display = "";
+            columns.innerHTML = "";
+            if (doneCount > 0) {
+              columns.appendChild(
+                buildReviewCard(
+                  "DONE " + doneCount,
+                  "pill green",
+                  "Resolved",
+                  summary?.done_detail || "Closed out today.",
+                ),
+              );
+            }
+            if (dismissedCount > 0) {
+              columns.appendChild(
+                buildReviewCard(
+                  "SKIP " + dismissedCount,
+                  "pill",
+                  "Dismissed",
+                  summary?.dismissed_detail || "Skipped.",
+                ),
+              );
+            }
+            if (carriedCount > 0) {
+              columns.appendChild(
+                buildReviewCard(
+                  "CARRY " + carriedCount,
+                  "pill blue",
+                  "Tomorrow",
+                  summary?.carried_detail || "Carrying over.",
+                ),
+              );
+            }
+          }
+
+          // Pre-render the carried rows from pendingList when we have
+          // them. Hide the ledger block entirely when there's nothing
+          // to carry — don't fall back to demo items.
+          if (ledger) ledger.innerHTML = "";
+          if (ledgerBlock)
+            ledgerBlock.style.display = pendingList.length ? "" : "none";
+          if (pendingList.length && ledger) {
             for (const d of pendingList.slice(0, 3)) {
               const row = document.createElement("div");
               row.className = "ledger-row";
@@ -2925,6 +4240,183 @@
                 (d.source_ts ? " · " + fmtTs(d.source_ts) : "");
               ledger.appendChild(row);
             }
+          }
+
+          // Reset the footer to the default dashboard link in case a
+          // prior empty-state render swapped in the Connect CTA.
+          if (footer) {
+            footer.innerHTML = "";
+            const btn = document.createElement("button");
+            btn.className = "primary";
+            btn.type = "button";
+            btn.setAttribute("data-action", "open");
+            btn.textContent = "View details";
+            footer.appendChild(btn);
+          }
+
+          renderNarrative("wrap-narrative", decision?.context?.narrative, {
+            generating: "Generating evening wrap…",
+          });
+        }
+
+        // Builds one of the three DONE / SKIP / CARRY rows in the wrap
+        // card. Used only by renderWrap() so the structure matches the
+        // original CSS exactly.
+        function buildReviewCard(pillText, pillClass, label, detail) {
+          const card = document.createElement("div");
+          card.className = "review-card";
+          const pill = document.createElement("span");
+          pill.className = pillClass;
+          pill.textContent = pillText;
+          const body = document.createElement("div");
+          body.className = "rc-body";
+          const strong = document.createElement("strong");
+          strong.textContent = label;
+          const p = document.createElement("p");
+          p.textContent = detail;
+          body.appendChild(strong);
+          body.appendChild(p);
+          card.appendChild(pill);
+          card.appendChild(body);
+          return card;
+        }
+
+        // ---------- Narrative overlay (shared by brief / wrap) ----------
+        /**
+         * Render an agentic narrative block into the container with id
+         * `containerId`. Three states:
+         *   - missing / null / undefined → hide the container (template fallback)
+         *   - { status: "generating" }   → spinner + label
+         *   - { status: "ready", headline, body }
+         *                               → headline + body, line-clamp to 2
+         *                                 lines with a "Read more" toggle when
+         *                                 body is long enough to need it.
+         */
+        function renderNarrative(containerId, narrative, labels) {
+          const el = document.getElementById(containerId);
+          if (!el) return;
+          if (!narrative) {
+            el.style.display = "none";
+            el.innerHTML = "";
+            return;
+          }
+          if (narrative.status === "generating") {
+            el.style.display = "";
+            el.innerHTML =
+              '<div class="brief-narrative-generating">' +
+              '<span class="brief-narrative-spinner"></span>' +
+              esc(labels?.generating || "Generating…") +
+              "</div>";
+            return;
+          }
+          if (narrative.status === "ready" && narrative.headline) {
+            const body = narrative.body || "";
+            // > 140 chars → collapse by default + offer a toggle.
+            const collapsible = body.length > 140;
+            const bodyHtml = collapsible
+              ? '<div class="brief-narrative-body" data-collapsed="true">' +
+                esc(body) +
+                "</div>"
+              : '<div class="brief-narrative-body">' + esc(body) + "</div>";
+            const toggleHtml = collapsible
+              ? '<button class="brief-narrative-toggle" data-action="narr-expand" type="button">Read more</button>'
+              : "";
+            el.style.display = "";
+            el.innerHTML =
+              '<div class="brief-narrative-headline">' +
+              esc(narrative.headline) +
+              "</div>" +
+              bodyHtml +
+              toggleHtml;
+            return;
+          }
+          // Unknown shape → hide.
+          el.style.display = "none";
+          el.innerHTML = "";
+        }
+
+        // ---------- Quiet-digest layout (issue #316) ----------
+        // Read-only filler card for empty brief / wrap days. Renders the
+        // module's `decision.context.items[]` as a bulleted list, the
+        // dialogue as the title, and a single "Got it" dismiss button.
+        //
+        // Defensive: a module that forgot to populate `context.items`
+        // renders an empty list (not a crash) so the user can still
+        // dismiss the card. Module id is read from
+        // `decision.action.params.module` and shown in the tag chip so
+        // the user can tell ai-news from weather from memory at a glance.
+        function renderQuietDigest() {
+          const titleEl = document.getElementById("quiet-digest-title");
+          const tagEl = document.getElementById("quiet-digest-tag");
+          const listEl = document.getElementById("quiet-digest-list");
+          if (!titleEl || !tagEl || !listEl) return;
+
+          if (!decision || !decision.id || decision.type !== "quiet_digest") {
+            // No decision to render — blank out so a stale digest from
+            // a previous decision doesn't sit there waiting for a click.
+            titleEl.textContent = "Worth a re-read.";
+            tagEl.textContent = "Quiet day filler";
+            listEl.innerHTML = "";
+            return;
+          }
+
+          // Title: prefer the decision's `dialogue` (module-supplied
+          // headline), fall back to the decision's `title`.
+          titleEl.textContent =
+            decision.dialogue || decision.title || "Worth a re-read.";
+
+          // Tag chip: show module id when known so the user can tell
+          // digests apart at a glance.
+          const moduleId =
+            (decision.action &&
+              decision.action.params &&
+              decision.action.params.module) ||
+            null;
+          const moduleLabel =
+            moduleId === "ai-news-digest"
+              ? "Last 24h in AI / tech"
+              : moduleId === "weather-calendar"
+                ? "Weather + meetings"
+                : moduleId === "memory-resurface"
+                  ? "From your memory"
+                  : "Quiet day filler";
+          tagEl.textContent = moduleLabel;
+
+          // Bullets. The contract is `context.items: { title, summary, ref?, url? }[]`.
+          // We render title + summary as the visible line; ref/url go
+          // into the title attribute so hovering reveals the source
+          // (a real read can land in a follow-up PR with a click-through).
+          const items = Array.isArray(decision.context?.items)
+            ? decision.context.items
+            : [];
+          listEl.innerHTML = "";
+          if (items.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "brief-item";
+            empty.innerHTML =
+              '<span class="brief-priority p2">·</span><div><div class="bi-title">Nothing to read</div><div class="bi-sub">The filler ran but had nothing to surface.</div></div><span></span>';
+            listEl.appendChild(empty);
+            return;
+          }
+          for (const it of items) {
+            const row = document.createElement("div");
+            row.className = "brief-item";
+            const title = (it && it.title) || "Untitled";
+            const summary = (it && it.summary) || "";
+            const ref = (it && (it.ref || it.url)) || "";
+            const subBits = [];
+            if (summary) subBits.push(esc(summary));
+            if (ref) subBits.push(esc(ref));
+            const sub = subBits.join(" · ");
+            row.innerHTML =
+              '<span class="brief-priority p2">·</span>' +
+              '<div><div class="bi-title">' +
+              esc(title) +
+              "</div>" +
+              (sub ? '<div class="bi-sub">' + sub + "</div>" : "") +
+              "</div>" +
+              "<span></span>";
+            listEl.appendChild(row);
           }
         }
 
@@ -3084,6 +4576,78 @@
           return base.join("\n");
         }
 
+        async function dismissDecisionFromCard(id, reason) {
+          if (!id) return;
+          try {
+            const res = await fetch(
+              `${window.__OPENLOOMI_API__ || ""}/api/loop/decision/${encodeURIComponent(id)}`,
+              {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  action: "dismiss",
+                  reason: reason || "closed from card",
+                }),
+              },
+            );
+            if (!res.ok) return;
+            const t = window.__TAURI__;
+            if (t && t.event && t.event.emit) {
+              t.event.emit("loop:decision-cleared", { id });
+            }
+          } catch (_) {
+            /* non-fatal: watcher keeps the card pending if archive fails */
+          }
+        }
+
+        // Shared card-window retirement used by every exit that closes
+        // the card: the ✕ button and the "View details" (open) action.
+        // Both must fully hide the OS window, stop it intercepting the
+        // cursor, tell the Rust host, and fade the local DOM (so the
+        // standalone browser preview also reacts). Before #319 the open
+        // branch navigated but skipped this, leaving the card floating
+        // until the user clicked ✕ — the mirror-image half of #317.
+        function hideCardWindow() {
+          const t = window.__TAURI__;
+          const win =
+            t && t.window
+              ? t.window.getCurrentWebviewWindow
+                ? t.window.getCurrentWebviewWindow()
+                : t.window.getCurrentWindow
+                  ? t.window.getCurrentWindow()
+                  : null
+              : null;
+          // Primary path: hide the window directly. More reliable than
+          // the pet:close-card event roundtrip — the OS-level hide takes
+          // effect immediately and doesn't depend on the Rust listener.
+          if (win && typeof win.hide === "function") {
+            try {
+              win.hide();
+            } catch (_) {
+              /* fall through to the event + fade below */
+            }
+          }
+          // Defensive: turn off cursor events so even if the OS-level
+          // hide is delayed, the 360×420 region stops intercepting the
+          // mouse. Reset by the loop:state / loop:decision listeners when
+          // the card re-shows.
+          if (win && typeof win.setIgnoreCursorEvents === "function") {
+            try {
+              win.setIgnoreCursorEvents(true);
+            } catch (_) {}
+          }
+          // Secondary path: still emit pet:close-card so the Rust host
+          // can run its own hide + bubble-restore logic (main.rs).
+          if (t && t.event && t.event.emit) t.event.emit("pet:close-card");
+          // Even without Tauri, fade the card locally so the click has a
+          // visible effect (e.g. previewing the page in a plain browser).
+          card.style.opacity = "0";
+          setTimeout(() => {
+            card.style.display = "none";
+          }, 160);
+        }
+
         async function postAction(action, body) {
           if (!decision || !decision.id) {
             setStatus("error", "No pending decision — try refreshing.");
@@ -3105,6 +4669,7 @@
             // `/brief` / `/wrap` (the dedicated pages that read
             // brief.json / wrap.json directly).
             const t = window.__TAURI__;
+            const decisionId = decision.id;
             const activeLayout = document.querySelector("[data-layout].active")
               ?.dataset.layout;
             if (t && t.event && t.event.emit) {
@@ -3114,7 +4679,7 @@
               } else if (activeLayout === "wrap") {
                 t.event.emit("pet:open-wrap");
               } else {
-                t.event.emit("pet:open-decision", { id: decision.id });
+                t.event.emit("pet:open-decision", { id: decisionId });
               }
             } else {
               if (activeLayout === "brief") {
@@ -3123,9 +4688,32 @@
                 window.location.href = "/wrap";
               } else {
                 window.location.href =
-                  "/loop/" + encodeURIComponent(decision.id);
+                  "/loop/" + encodeURIComponent(decisionId);
               }
             }
+            // Synchronously drop the local decision + notify peer windows
+            // so an in-flight loop:decision for this id can't re-show the
+            // card mid-fade (mirrors the ✕ handler's inline clear).
+            decision = null;
+            apply();
+            if (t && t.event && t.event.emit) {
+              t.event.emit("loop:decision-cleared", { id: decisionId });
+            }
+            // Brief/wrap cards aren't actionable decisions — archive them
+            // server-side so the watcher drops them from `pending[]` and
+            // never re-pops the card. (A real decision stays pending: the
+            // user is going to act on it in the main window.)
+            if (activeLayout === "brief" || activeLayout === "wrap") {
+              dismissDecisionFromCard(
+                decisionId,
+                `opened ${activeLayout} details`,
+              );
+            }
+            // #319: retire the card window too. Every exit from the card
+            // must both handle the decision AND hide the window — before
+            // this the open branch just returned, leaving the card
+            // floating until the user clicked ✕.
+            hideCardWindow();
             return;
           }
           if (action === "edit") {
@@ -3156,13 +4744,84 @@
           //   - failures are written to the row, not lost on refresh
           //   - status survives UI reloads (it lives in the DB)
           // The cost: 30–90s before the action actually fires
-          // (local-scheduler polls every 60s). For one-click actions
-          // this feels live; for power users the Cancel covers the
-          // "I changed my mind" case.
+          // (local-scheduler polls every 60s).
+          //
+          // EXCEPTION — `dismiss` is fast-tracked. Marking a decision
+          // dismissed does NOT need the scheduler round-trip:
+          //   - it has no external side-effect (no email sent, no
+          //     calendar event created, no PR review posted)
+          //   - the user expects "Skip" to close the card instantly
+          //     (they just want to silence the suggestion)
+          //   - the scheduler's 30–90s window made the click feel
+          //     stuck — feedback was that "after Skip it sat there for
+          //     a while, what is the meaning of the wait?" (the
+          //     `Dismissal scheduled · fires in ~30s` banner).
+          //
+          // We POST /api/loop/decision/:id directly with `{action:
+          // "dismiss"}` — applyDecisionAction() flips status to
+          // "dismissed" synchronously. The card then closes within
+          // ~300ms: status banner shows "Dismissed ✓", the watcher
+          // emits `loop:decision` (which the existing listener already
+          // handles), and the card auto-hides.
           setBusy(true);
           const id = decision.id;
           const apiAction =
             action === "run" || action === "dismiss" ? action : "dismiss";
+
+          // Fast path for dismiss — no scheduler, no 30s wait.
+          if (apiAction === "dismiss") {
+            setStatus("running", "Dismissing…");
+            try {
+              const res = await fetch(
+                `${window.__OPENLOOMI_API__ || ""}/api/loop/decision/${encodeURIComponent(id)}`,
+                {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({ action: "dismiss" }),
+                },
+              );
+              if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                throw new Error(
+                  `dismiss HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`,
+                );
+              }
+              const out = await res.json().catch(() => ({}));
+              // Mirror server truth into the in-memory decision so the
+              // watcher event listener (or `clearPendingActionOnTerminal`
+              // if it races) doesn't second-guess our local state.
+              if (out && out.decision) {
+                decision = out.decision;
+              }
+              setStatus("success", "Dismissed · closing…");
+              // Close after a beat so the user sees the green ✓ trail.
+              // The watcher will also emit loop:decision which fires
+              // `clearPendingActionOnTerminal`, but we don't want to
+              // wait for it — the dismissal already landed.
+              setTimeout(() => {
+                try {
+                  card.style.opacity = "0";
+                  setTimeout(() => {
+                    card.style.display = "none";
+                  }, 160);
+                } catch (_) {
+                  /* best-effort */
+                }
+              }, 600);
+              showToast("Dismissed", false);
+              setBusy(false);
+              return;
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              setStatus("error", `Dismiss failed: ${msg}`);
+              showToast(`Dismiss failed: ${msg}`, true);
+              setBusy(false);
+              return;
+            }
+          }
+
+          // Run path stays through the scheduler (existing behaviour).
           let schedule = null;
           try {
             const res = await fetch(
@@ -3200,7 +4859,7 @@
             // event listener. Whichever lands first wins; both paths
             // are idempotent via `clearPendingActionOnTerminal`.
             startPendingActionPoll();
-            const verb = apiAction === "dismiss" ? "Dismissal" : "Action";
+            const verb = "Action";
             const inS = secondsUntil(schedule.fire_at);
             // Once the fire_at window has passed (which can happen on
             // the very first tick if the server clock is ahead of the
@@ -3229,10 +4888,10 @@
             return;
           }
           // Hand off — the watcher will emit `loop:decision` when the
-          // job fires and the decision moves to done/dismissed. From
-          // here the user just sees the spinner-style banner with the
-          // Cancel button. setBusy stays true until the success path
-          // (or error path) resets it.
+          // job fires and the decision moves to done. From here the
+          // user just sees the spinner-style banner with the Cancel
+          // button. setBusy stays true until the success path (or
+          // error path) resets it.
         }
 
         // Delegated click handler — one listener on the card root that
@@ -3249,52 +4908,38 @@
           if (btn.disabled) return;
           const action = btn.dataset.action;
           if (action === "close") {
-            const t = window.__TAURI__;
-            // Resolve a Tauri WebviewWindow handle from the global Tauri
-            // API. Tauri 2.x exposes `getCurrentWebviewWindow`; older
-            // builds may still have `getCurrentWindow`. Both are safe to
-            // call — we just need an object with `.hide()` and
-            // `.setIgnoreCursorEvents()`.
-            const win =
-              t && t.window
-                ? t.window.getCurrentWebviewWindow
-                  ? t.window.getCurrentWebviewWindow()
-                  : t.window.getCurrentWindow
-                    ? t.window.getCurrentWindow()
-                    : null
-                : null;
-
-            // Primary path: hide the window directly. More reliable than
-            // the pet:close-card event roundtrip — the OS-level hide
-            // takes effect immediately and doesn't depend on the Rust
-            // listener.
-            if (win && typeof win.hide === "function") {
-              try {
-                win.hide();
-              } catch (_) {
-                /* fall through */
+            // Synchronous local clear: prevents an in-flight `loop:decision`
+            // event for the same id from immediately undoing the close.
+            // Mirrors what the `loop:decision-cleared` listener at lines
+            // ~5249 does, but does it inline so the order is guaranteed (a
+            // queued Tauri event can't interleave with this synchronous
+            // click handler).
+            const tauri = window.__TAURI__;
+            let closingDecisionId = null;
+            if (decision && decision.id) {
+              closingDecisionId = decision.id;
+              decision = null;
+              apply();
+              if (tauri && tauri.event && tauri.event.emit) {
+                tauri.event.emit("loop:decision-cleared", {
+                  id: closingDecisionId,
+                });
               }
             }
-            // Defensive: turn off cursor events so even if the OS-level
-            // hide is delayed / doesn't take effect, the 360×420 region
-            // stops intercepting mouse events. Reset by the loop:state /
-            // loop:decision listeners below when the card re-shows.
-            if (win && typeof win.setIgnoreCursorEvents === "function") {
-              try {
-                win.setIgnoreCursorEvents(true);
-              } catch (_) {}
+            // Best-effort server-side dismiss: write `dismissed` to
+            // ~/.openloomi/loop/decisions.json so the watcher's next 2s
+            // poll (apps/web/src-tauri/src/pet/watcher.rs) sees the id
+            // leave `pending[]` and stops re-emitting `loop:decision`
+            // for it. Fire-and-forget; the visual close below is what the
+            // user sees. No `await` — the close must not block on the
+            // network.
+            if (closingDecisionId) {
+              dismissDecisionFromCard(closingDecisionId, "closed from card");
             }
-            // Secondary path: still emit pet:close-card so the Rust host
-            // can run its own hide + bubble-restore logic (see
-            // main.rs:599-602).
-            if (t && t.event && t.event.emit) t.event.emit("pet:close-card");
-            // Even without Tauri, hide the card locally so the click
-            // produces a visible effect (e.g. when previewing the page
-            // standalone in a browser).
-            card.style.opacity = "0";
-            setTimeout(() => {
-              card.style.display = "none";
-            }, 160);
+            // Retire the card window (hide + cursor-transparent +
+            // pet:close-card + local fade). Shared with the open branch
+            // (#319) so both exits close the window the same way.
+            hideCardWindow();
             return;
           }
           // Connection layout "Add more connectors" CTA → ask
@@ -3354,6 +4999,21 @@
           // handler doesn't need to know about per-type bodies.
           if (action === "cancel-pending") {
             cancelPendingAction();
+            return;
+          }
+          // Toggle the agentic narrative body's 2-line clamp. The toggle
+          // button is rendered by renderNarrative() next to a
+          // `.brief-narrative-body[data-collapsed]` element — we flip the
+          // attribute and update the button label.
+          if (action === "narr-expand") {
+            const body = btn.parentElement?.querySelector(
+              ".brief-narrative-body",
+            );
+            if (body) {
+              const collapsed = body.getAttribute("data-collapsed") === "true";
+              body.setAttribute("data-collapsed", collapsed ? "false" : "true");
+              btn.textContent = collapsed ? "Show less" : "Read more";
+            }
             return;
           }
           const body = btn._actionBody;
@@ -3564,6 +5224,16 @@
         function evaluateAiConfigured(payload) {
           if (!payload || !payload.settings || !payload.systemDefaults)
             return false;
+          // The server also returns the resolved agent runtime via
+          // `defaultAgent`. Non-claude runtimes (codex/opencode/hermes/
+          // openclaw) ship their own CLI auth and don't need an
+          // anthropic-compatible key — treat them as already configured
+          // so the card doesn't nag for a credential they won't use.
+          // Mirrors `hasUsableConversationApiConfiguration` in
+          // `apps/web/lib/ai/conversation-api-configuration.ts`.
+          if (payload.defaultAgent && payload.defaultAgent !== "claude") {
+            return true;
+          }
           const userSetting = (payload.settings || []).find(
             (s) => s.providerType === "anthropic_compatible",
           );
@@ -3580,7 +5250,30 @@
           return hasUserConfig || Boolean(sysDefault.hasApiKey);
         }
 
+        // Track inflight + retry state for the AI-config fetch. A
+        // single boot-time failure (e.g. `window.__OPENLOOMI_API__`
+        // not yet bridged into the Tauri webview — see issue #313)
+        // used to leave `apiConfigured = null` forever because the
+        // original code only retried on `openloomi:ai-settings-changed`,
+        // an event a brand-new user never fires. We now:
+        //   1. retry with exponential backoff on the initial fetch
+        //   2. let any `loop:state` / `loop:decision` event re-arm
+        //      the fetch when the gate is still open
+        //   3. throttle the re-arm so we don't hammer the API
+        let aiConfigInflight = false;
+        let aiConfigRetryDelay = 0; // ms; 0 means "not scheduled"
+        let aiConfigRetryTimer = null;
+        function scheduleAiConfigRetry(delay) {
+          if (aiConfigRetryTimer) return;
+          aiConfigRetryDelay = delay;
+          aiConfigRetryTimer = setTimeout(() => {
+            aiConfigRetryTimer = null;
+            void refreshAiConfig();
+          }, delay);
+        }
         async function refreshAiConfig() {
+          if (aiConfigInflight) return;
+          aiConfigInflight = true;
           let payload = null;
           try {
             const res = await fetch(
@@ -3591,10 +5284,27 @@
               payload = await res.json().catch(() => null);
             }
           } catch (_) {}
-          // Network failure → leave `apiConfigured` null so we don't
-          // permanently hide the connection layout. The next
-          // `openloomi:ai-settings-changed` event will retry.
-          if (!payload) return;
+          aiConfigInflight = false;
+          if (!payload) {
+            // Self-heal from a transient boot failure. Backoff ladder
+            // (1s → 3s → 8s) is short enough that a fresh install
+            // resolves within ~12s, and the loop:* event listener
+            // below will re-arm the fetch if the user opens the card
+            // (or the watcher reports state) before that. After three
+            // failed attempts we stop scheduling and wait for an
+            // event-driven retry.
+            const nextDelays = [1000, 3000, 8000];
+            const lastDelay = aiConfigRetryDelay > 0 ? aiConfigRetryDelay : 0;
+            const idx = nextDelays.indexOf(lastDelay);
+            const nextDelay =
+              idx >= 0 && idx < nextDelays.length - 1
+                ? nextDelays[idx + 1]
+                : null;
+            if (nextDelay !== null) {
+              scheduleAiConfigRetry(nextDelay);
+            }
+            return;
+          }
           aiSettings = payload;
           apiConfigured = evaluateAiConfigured(payload);
           apply();
@@ -3699,6 +5409,22 @@
             }
             decision = next;
             apply();
+            // If the initial AI-config fetch failed (apiConfigured is
+            // still null), every decision event is a chance to retry.
+            // The inflight guard inside refreshAiConfig prevents us
+            // from piling up requests, and the backoff ladder caps the
+            // total number of retries so this can't loop forever.
+            // Fixes #313 — the boot-time fetch on a fresh install can
+            // fail (e.g. before window.__OPENLOOMI_API__ is bridged),
+            // and without this re-arm the no-api-key CTA would never
+            // surface.
+            if (apiConfigured === null) void refreshAiConfig();
+            // Terminal decision events (done / dismissed) usually mean a
+            // native agent run just finished. Debounce-refresh the usage
+            // strip so the new totals land without flooding the API.
+            if (next && next.status && next.status !== "pending") {
+              scheduleUsageRefresh();
+            }
           });
           tauri.event.listen("loop:state", (e) => {
             // The previous × click set setIgnoreCursorEvents(true) so
@@ -3723,6 +5449,10 @@
               (typeof p === "object" && p.state) ||
               (typeof p === "string" ? p : "idle");
             apply();
+            // Re-arm the AI-config fetch when the gate is still open
+            // (see loop:decision branch above for the same pattern and
+            // the original issue: #313).
+            if (apiConfigured === null) void refreshAiConfig();
           });
           tauri.event.listen("loop:pending-list", (e) => {
             const p = (e && e.payload) || {};
@@ -3779,16 +5509,266 @@
           });
         }
 
-        // AI settings saved → re-evaluate the missing-key state. The
-        // React side dispatches both a DOM event (for same-webview
-        // listeners — kept for backwards compat / dev-panel previews)
-        // and a Tauri event (which actually reaches this card webview
-        // from the main webview; the two webviews are separate
-        // browser contexts in Tauri 2.x, so `window.dispatchEvent`
-        // doesn't cross them). Without the Tauri mirror the card
-        // would keep showing the no-api-key CTA even after a
-        // successful save.
-        const onAiSettingsChanged = () => refreshAiConfig();
+        // ---------- Usage strip (cumulative native-agent tokens) ----------
+        // Reads `/api/llm/usage/summary` and renders the top-right chip.
+        // Mirrors `refreshConnectors()` / `refreshAiConfig()` for auth
+        // (credentials: include) and silent failure (leave the prior
+        // state visible so the chip never blinks to a misleading "—").
+        //
+        // Refresh triggers:
+        //   1. card init (line ~end of script below)
+        //   2. `openloomi:ai-settings-changed` (provider added/removed)
+        //   3. `loop:decision` terminal event (debounced 1.5s, so we
+        //      don't refetch on every state push)
+        let usageSummary = null;
+        let usageFetchInflight = false;
+        let usageFetchQueued = false;
+        let usageDebounceTimer = null;
+
+        async function refreshUsageSummary() {
+          if (usageFetchInflight) {
+            // Coalesce overlapping calls so a storm of `loop:decision`
+            // events during the result flush does not pile up requests.
+            usageFetchQueued = true;
+            return;
+          }
+          usageFetchInflight = true;
+          try {
+            // `credentials: "omit"` because the card webview runs at
+            // `tauri://localhost` and the Next.js session cookies are
+            // `SameSite=Lax` scoped to the `http://localhost:3414` jar.
+            // Including them on the cross-origin fetch triggers a WKWebView
+            // cookie-policy rejection that throws inside the webview, which
+            // used to leave the TOKENS chip stuck on "loading…". The server
+            // already resolves the active user from the dual-auth chain
+            // (file-storage session fallback, then provider-context synthesis
+            // for env-resolved codex/opencode/hermes/openclaw runtimes), so
+            // the response stays meaningful without the cookie.
+            const res = await fetch(
+              `${window.__OPENLOOMI_API__ || ""}/api/llm/usage/summary`,
+              { credentials: "omit" },
+            );
+            // 401 → keep the strip in "loading" so we don't claim
+            // "unconfigured" for a logged-out user; the next event will retry.
+            if (!res.ok) {
+              if (res.status === 401) {
+                renderUsageStrip({ state: "loading" });
+              } else {
+                renderUsageStrip({ state: "error" });
+              }
+              return;
+            }
+            const data = await res.json().catch(() => null);
+            if (!data) {
+              renderUsageStrip({ state: "error" });
+              return;
+            }
+            usageSummary = data;
+            renderUsageStrip({ state: deriveUsageState(data) });
+          } catch (error) {
+            // Network/CORS failure — log so the cause is visible in the
+            // webview devtools, and stop the chip getting stuck on
+            // "loading…" forever. If we already have a successful summary
+            // cached, keep showing it (don't blink to "error"); otherwise
+            // fall back to the "no-usage" sentinel, which the renderer
+            // turns into a hidden strip — better than a permanent spinner.
+            console.warn("[loomi-card] usage summary fetch failed:", error);
+            if (usageSummary && usageSummary.configured) {
+              renderUsageStrip({ state: deriveUsageState(usageSummary) });
+            } else {
+              renderUsageStrip({ state: "no-usage" });
+            }
+          } finally {
+            usageFetchInflight = false;
+            if (usageFetchQueued) {
+              usageFetchQueued = false;
+              // Re-fetch immediately so a decision that lands while we
+              // were mid-request still gets the latest totals.
+              void refreshUsageSummary();
+            }
+          }
+        }
+
+        function scheduleUsageRefresh() {
+          // Debounce so a burst of decision events still results in a
+          // single fetch after the run completes.
+          if (usageDebounceTimer) {
+            clearTimeout(usageDebounceTimer);
+          }
+          usageDebounceTimer = setTimeout(() => {
+            usageDebounceTimer = null;
+            void refreshUsageSummary();
+          }, 1500);
+        }
+
+        function deriveUsageState(data) {
+          if (data && data.error === "usage_unavailable") return "error";
+          if (!data || data.configured === false) return "unconfigured";
+          if (!data.runCount || data.runCount === 0) return "no-usage";
+          return "has-usage";
+        }
+
+        function formatTokenCount(n) {
+          if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+          if (n >= 1_000_000) {
+            return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + "M";
+          }
+          if (n >= 10_000) {
+            return (n / 1000).toFixed(0) + "K";
+          }
+          // Compact grouping for sub-10K numbers: 1,234.
+          return Math.round(n).toLocaleString("en-US");
+        }
+
+        function formatRelativeShort(iso) {
+          if (!iso) return "";
+          const t = new Date(iso).getTime();
+          if (!Number.isFinite(t)) return "";
+          const diff = Date.now() - t;
+          if (diff < 60 * 1000) return "just now";
+          if (diff < 60 * 60 * 1000) {
+            return `${Math.max(1, Math.floor(diff / (60 * 1000)))} min ago`;
+          }
+          if (diff < 24 * 60 * 60 * 1000) {
+            return `${Math.floor(diff / (60 * 60 * 1000))} h ago`;
+          }
+          if (diff < 30 * 24 * 60 * 60 * 1000) {
+            return `${Math.floor(diff / (24 * 60 * 60 * 1000))} d ago`;
+          }
+          // Older than a month → fall back to a month label.
+          return new Date(t).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+        }
+
+        function formatSinceShort(iso) {
+          if (!iso) return "";
+          const t = new Date(iso).getTime();
+          if (!Number.isFinite(t)) return "";
+          const d = new Date(t);
+          return d.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          });
+        }
+
+        // The /api/llm/usage/summary route synthesizes `providerSince = epoch 0`
+        // for env-resolved runtimes (codex / opencode / hermes / openclaw)
+        // when no DB provider row exists, so the SQL filter still counts
+        // every historical native-agent row. We don't actually know when
+        // the env var was first set, so rendering "since Jan 1, 1970" is
+        // misleading — callers should suppress the "since" line in that
+        // case. Detected by the timestamp being at or before the year
+        // 2000 sentinel; anything ≤ that boundary is treated as the
+        // placeholder.
+        function isEpochSentinel(iso) {
+          if (!iso) return false;
+          const t = new Date(iso).getTime();
+          return Number.isFinite(t) && t <= 946684800000; // 2000-01-01 UTC
+        }
+
+        function buildUsageTitle(data) {
+          if (!data) {
+            return "Cumulative native-agent token usage since provider was configured";
+          }
+          if (data.error === "usage_unavailable") {
+            return "Token usage stats are temporarily unavailable";
+          }
+          if (!data.configured) {
+            return "No LLM provider configured\nConfigure one in Settings to see cumulative token usage here";
+          }
+          const total = data.totals?.totalTokens ?? 0;
+          const input = data.totals?.inputTokens ?? 0;
+          const output = data.totals?.outputTokens ?? 0;
+          const lines = [];
+          lines.push(
+            `${formatTokenCount(total)} tokens since provider was configured`,
+          );
+          lines.push(
+            `Input ${formatTokenCount(input)} · Output ${formatTokenCount(output)}`,
+          );
+          lines.push(`${data.runCount ?? 0} native-agent calls`);
+          if (data.currentProvider) {
+            const cp = data.currentProvider;
+            lines.push(
+              `Provider: ${cp.providerType}${cp.model ? " · " + cp.model : ""}`,
+            );
+          }
+          if (data.providerSince && !isEpochSentinel(data.providerSince)) {
+            lines.push(
+              `since ${formatSinceShort(data.providerSince)} · last ${
+                data.lastRunAt ? formatSinceShort(data.lastRunAt) : "—"
+              }`,
+            );
+          } else if (data.lastRunAt) {
+            lines.push(`last ${formatSinceShort(data.lastRunAt)}`);
+          }
+          lines.push(
+            "Only counts /api/native/agent calls whose provider reports usage",
+          );
+          return lines.join("\n");
+        }
+
+        function renderUsageStrip({ state }) {
+          const strip = document.getElementById("usage-strip");
+          const value = document.getElementById("usage-value");
+          const meta = document.getElementById("usage-meta");
+          if (!strip || !value || !meta) return;
+          strip.dataset.state = state;
+          strip.title = buildUsageTitle(usageSummary);
+          switch (state) {
+            case "unconfigured":
+              // Actionable: user has no runtime + no DB provider. Keep
+              // the chip visible as a CTA to open AI settings.
+              value.textContent = "No LLM provider";
+              meta.textContent = "";
+              strip.style.display = "";
+              break;
+            case "no-usage":
+              // Configured (DB row or env-resolved runtime) but no
+              // recorded runs yet. The chip carries no signal — hide it
+              // entirely until the first native-agent call lands. The
+              // meta line is still computed for the title tooltip.
+              value.textContent = "0";
+              meta.textContent =
+                usageSummary?.providerSince &&
+                !isEpochSentinel(usageSummary.providerSince)
+                  ? `since ${formatSinceShort(usageSummary.providerSince)}`
+                  : "";
+              strip.style.display = "none";
+              break;
+            case "has-usage":
+              value.textContent = formatTokenCount(
+                usageSummary?.totals?.totalTokens ?? 0,
+              );
+              meta.textContent = `${usageSummary?.runCount ?? 0} runs · ${
+                usageSummary?.lastRunAt
+                  ? "last " + formatRelativeShort(usageSummary.lastRunAt)
+                  : "—"
+              }`;
+              strip.style.display = "";
+              break;
+            case "error":
+              value.textContent = "--";
+              meta.textContent = "stats unavailable";
+              strip.style.display = "";
+              break;
+            default:
+              value.textContent = "—";
+              meta.textContent = "loading…";
+              strip.style.display = "";
+          }
+        }
+
+        // AI settings saved → re-evaluate the missing-key state AND the
+        // usage summary. Provider add/remove flips `configured` so we need
+        // to re-fetch immediately (no debounce) — the previous totals may
+        // be stale or the chip may need to flip into "unconfigured".
+        const onAiSettingsChanged = () => {
+          refreshAiConfig();
+          void refreshUsageSummary();
+        };
         window.addEventListener(
           "openloomi:ai-settings-changed",
           onAiSettingsChanged,
@@ -3813,6 +5793,7 @@
         // Initial fetch + render
         refreshConnectors();
         refreshAiConfig();
+        refreshUsageSummary();
         apply();
       })();
     </script>

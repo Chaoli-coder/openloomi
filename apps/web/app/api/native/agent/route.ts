@@ -16,72 +16,107 @@ import {
   type AuthenticatedNativeAgentSession,
   type NativeAgentRequest,
 } from "@/lib/ai/native-agent/runner";
+import { recordUsage } from "@/lib/llm-usage/recorder";
+import { resolveNativeAgentProviderRequest } from "@/lib/ai/native-agent/provider-env";
 
 // Set max duration for long-running agent tasks.
 // This prevents "TypeError: Load failed" when tool calls take a long time.
 // NOTE: Vercel has hard limits (Hobby: 10s, Pro: 800s).
 export const maxDuration = 800;
 
+/**
+ * Resolves a stable providerType slug from the request body. Today the only
+ * tracking-eligible provider is the Anthropic-compatible path ("claude"),
+ * but `body.provider` is the contract — anything else becomes "unknown"
+ * so the recorder still writes the row with provider metadata intact.
+ */
+function resolveProviderType(body: NativeAgentRequest): string {
+  if (body.provider === "claude") {
+    return "anthropic_compatible";
+  }
+  return typeof body.provider === "string" && body.provider.trim().length > 0
+    ? body.provider
+    : "unknown";
+}
+
 // Helper to create SSE stream with heartbeat to keep connection alive.
 // SSE heartbeat sends a comment every 30 seconds to prevent idle timeouts
 // from proxies, load balancers, and browsers.
 function createSSEStream(
   generator: AsyncGenerator<AgentMessage>,
-  onClose?: () => void,
+  options?: {
+    onClose?: () => void;
+    onUsage?: (message: AgentMessage) => void;
+  },
 ) {
   const encoder = new TextEncoder();
   const HEARTBEAT_INTERVAL_MS = 30000;
+  const { onClose, onUsage } = options ?? {};
+  let heartbeatTimer: NodeJS.Timeout | undefined;
+  let finalized = false;
+
+  const clearHeartbeat = () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
+    }
+  };
+
+  const finalize = () => {
+    if (finalized) return;
+    finalized = true;
+    clearHeartbeat();
+    onClose?.();
+    console.log("[AgentAPI] ===== CHAT COMPLETE =====");
+  };
 
   return new ReadableStream({
-    async start(controller) {
-      let heartbeatTimer: NodeJS.Timeout | undefined;
-
-      const clearHeartbeat = () => {
-        if (heartbeatTimer) {
-          clearInterval(heartbeatTimer);
-          heartbeatTimer = undefined;
+    start(controller) {
+      heartbeatTimer = setInterval(() => {
+        try {
+          // SSE comments are ignored by clients but keep the connection hot.
+          controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        } catch {
+          clearHeartbeat();
         }
-      };
+      }, HEARTBEAT_INTERVAL_MS);
 
-      const setupHeartbeat = () => {
-        heartbeatTimer = setInterval(() => {
-          try {
-            // SSE comments are ignored by clients but keep the connection hot.
-            controller.enqueue(encoder.encode(": keep-alive\n\n"));
-          } catch {
-            clearHeartbeat();
+      void (async () => {
+        try {
+          for await (const message of generator) {
+            const data = `data: ${JSON.stringify(message)}\n\n`;
+            controller.enqueue(encoder.encode(data));
+            // Fire usage instrumentation AFTER the byte is enqueued so a slow
+            // disk write can never push the SSE frame out.
+            onUsage?.(message);
           }
-        }, HEARTBEAT_INTERVAL_MS);
-      };
-
-      try {
-        setupHeartbeat();
-
-        for await (const message of generator) {
-          const data = `data: ${JSON.stringify(message)}\n\n`;
-          controller.enqueue(encoder.encode(data));
+        } catch (error) {
+          console.error("[AgentAPI] Generator error:", {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            name: error instanceof Error ? error.name : String(error),
+          });
+          const errorData = `data: ${JSON.stringify({
+            type: "error",
+            message: error instanceof Error ? error.message : String(error),
+          })}\n\n`;
+          try {
+            controller.enqueue(encoder.encode(errorData));
+          } catch {}
+        } finally {
+          try {
+            controller.close();
+          } catch {}
+          finalize();
         }
-      } catch (error) {
-        console.error("[AgentAPI] Generator error:", {
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          name: error instanceof Error ? error.name : String(error),
-        });
-        const errorData = `data: ${JSON.stringify({
-          type: "error",
-          message: error instanceof Error ? error.message : String(error),
-        })}\n\n`;
-        try {
-          controller.enqueue(encoder.encode(errorData));
-        } catch {}
-      } finally {
-        clearHeartbeat();
-        try {
-          controller.close();
-        } catch {}
-        onClose?.();
-        console.log("[AgentAPI] ===== CHAT COMPLETE =====");
-      }
+      })();
+    },
+    async cancel() {
+      clearHeartbeat();
+      // Abort the provider before awaiting generator.return(); an async
+      // generator blocked in a child process cannot process return otherwise.
+      finalize();
+      await generator.return(undefined);
     },
   });
 }
@@ -152,16 +187,62 @@ export async function POST(req: NextRequest) {
       session.platform = requestPlatform;
     }
 
-    const run = await runNativeAgentRequest(body, {
+    const resolvedProviderBody = resolveNativeAgentProviderRequest(body);
+    const run = await runNativeAgentRequest(resolvedProviderBody, {
       session,
       userId: authUser.id,
       abortController,
     });
-
-    const readable = createSSEStream(run.generator, () => {
-      if (run.shouldAbortOnClose()) {
-        abortController.abort();
+    const abortFromRequest = () => {
+      if (!abortController.signal.aborted) {
+        abortController.abort(req.signal.reason);
       }
+    };
+    req.signal.addEventListener("abort", abortFromRequest, { once: true });
+    if (req.signal.aborted) {
+      abortFromRequest();
+    }
+
+    // Usage metadata captured once per request — derived from the parsed
+    // body so we don't need to re-resolve provider settings here. The
+    // recorder is the source of truth; the SSE loop never blocks on it.
+    const usageContext = {
+      userId: authUser.id,
+      providerType: resolveProviderType(resolvedProviderBody),
+      model:
+        typeof resolvedProviderBody.modelConfig?.model === "string" &&
+        resolvedProviderBody.modelConfig.model.trim().length > 0
+          ? resolvedProviderBody.modelConfig.model.trim()
+          : null,
+      endpoint: "native-agent",
+      runId: body.sessionId ?? null,
+    } as const;
+
+    const readable = createSSEStream(run.generator, {
+      onClose: () => {
+        req.signal.removeEventListener("abort", abortFromRequest);
+        if (run.shouldAbortOnClose()) {
+          abortController.abort();
+        }
+      },
+      onUsage: (message) => {
+        if (message.type !== "result") return;
+        const usage = message.usage;
+        if (
+          !usage ||
+          typeof usage.inputTokens !== "number" ||
+          typeof usage.outputTokens !== "number"
+        ) {
+          return;
+        }
+        // Fire and forget — recordUsage has its own try/catch and per-
+        // user serialization, and the SSE stream must not be affected.
+        void recordUsage({
+          ...usageContext,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+        });
+      },
     });
 
     return new Response(readable, { headers: SSE_HEADERS });

@@ -31,19 +31,7 @@ import { desc, eq } from "drizzle-orm";
 import { mkdirSync } from "node:fs";
 import { generateUUID } from "@/lib/utils";
 import { stripMalformedToolCalls } from "@/lib/utils/tool-names";
-import {
-  buildStructuredExecutionReport,
-  parseStructuredOutput,
-  type ExecutionTraceEvent,
-  type ReasoningFile,
-  type StructuredExecutionOutput,
-} from "@/lib/types/execution-result";
-import {
-  reconcileExecutionArtifacts,
-  type ArtifactToolPart,
-} from "./artifact-reconciliation";
-import { getAllFilesAtPathWithSize } from "@/lib/files/workspace/sessions";
-import { platform, homedir } from "node:os";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_JOB_TIMEOUT_MS } from "../env/config/constants";
 import { APP_DIR_NAME } from "../env/config/constants";
@@ -61,6 +49,13 @@ export const customJobHandlers: Record<
   string,
   (context: JobExecutionContext) => Promise<JobExecutionResult>
 > = {};
+
+export type ArtifactToolPart = {
+  toolName?: string;
+  toolInput?: unknown;
+  toolOutput?: unknown;
+  isError?: boolean;
+};
 
 /**
  * Register a custom job handler
@@ -305,7 +300,6 @@ async function executeCustomJob(
     null;
   let charSources: Array<{ type: string; name: string; id?: string }> = [];
   let charNotificationChannels: string[] = [];
-  let charSystemNotification = true;
   if (context.characterId) {
     [char] = await db
       .select()
@@ -331,17 +325,6 @@ async function executeCustomJob(
           : Array.isArray(char.notificationChannels)
             ? char.notificationChannels
             : [];
-    }
-
-    // Parse system notification toggle (default true for backward compatibility)
-    if (
-      char?.systemNotification !== undefined &&
-      char?.systemNotification !== null
-    ) {
-      charSystemNotification =
-        typeof char.systemNotification === "number"
-          ? char.systemNotification === 1
-          : char.systemNotification === true;
     }
 
     if (char && char.status !== "active") {
@@ -518,77 +501,16 @@ After calling chatInsight with withDetail=true, if any insights have attachments
           executionCompleted: "执行完成",
         };
 
-    // Determine platform for system notifications
-    const osPlatform = platform();
-    const isMacOS = osPlatform === "darwin";
-    const isLinux = osPlatform === "linux";
-    const isWindows = osPlatform === "win32";
-
-    let platformNotificationSection = "";
-    let platformNotificationWorkflow = "";
-    let platformNotificationExamples = "";
-    let platformNotificationName: string = osPlatform;
-
-    if (charSystemNotification) {
-      if (isMacOS) {
-        platformNotificationName = "macOS";
-        platformNotificationSection = `**macOS Notification (ALWAYS send if no platform specified):**
-- dialog: (sleep 18 && osascript -e 'display dialog "Notification content" buttons {"OK"} default button 1 with title "openloomi Reminder"') &
-- notification: (sleep 18 && osascript -e 'display notification "Notification content" with title "openloomi Reminder"') &`;
-        platformNotificationWorkflow =
-          "5. macOS notification - ALWAYS use the delayed notification pattern: (sleep 18 && osascript -e 'display notification ...' with title \"openloomi Reminder\") & AND also (sleep 18 && osascript -e 'display dialog ...' with title \"openloomi Reminder\") & - BOTH commands must be used with proper background delay execution (the & at the end makes it run in background)";
-        platformNotificationExamples = `- Task: "Remind me to attend meeting at 9 AM every day" (no platform specified)
-  - Platforms: ALL available platforms + macOS notification
-  - Reminder: "Time for meeting!"
-
-- Task: "Remind me to submit weekly report every Friday" (no platform specified)
-  - Platforms: ALL available platforms + macOS notification
-  - Reminder: "Time to submit weekly report!"`;
-      } else if (isLinux) {
-        platformNotificationName = "Linux";
-        platformNotificationSection = `**Linux Notification (ALWAYS send if no platform specified):**
-- Use the Bash tool to send system notification: (sleep 18 && notify-send "openloomi Reminder" "Notification content") &
-- Alternative: (sleep 18 && zenity --info --text="Notification content" --title="openloomi Reminder") &`;
-        platformNotificationWorkflow =
-          '5. Linux notification - ALWAYS use the delayed notification pattern: (sleep 18 && notify-send "openloomi Reminder" "Notification content") & - must run in background with & at the end';
-        platformNotificationExamples = `- Task: "Remind me to attend meeting at 9 AM every day" (no platform specified)
-  - Platforms: ALL available platforms + Linux notification
-  - Reminder: "Time for meeting!"
-
-- Task: "Remind me to submit weekly report every Friday" (no platform specified)
-  - Platforms: ALL available platforms + Linux notification
-  - Reminder: "Time to submit weekly report!"`;
-      } else if (isWindows) {
-        platformNotificationName = "Windows";
-        platformNotificationSection = `**Windows Notification (ALWAYS send if no platform specified):**
-- Use PowerShell: Start-Process powershell -ArgumentList '-Command', 'Start-Sleep -Seconds 18; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(\"Notification content\", \"openloomi Reminder\")'`;
-        platformNotificationWorkflow =
-          "5. Windows notification - ALWAYS use the delayed notification pattern: Start-Process powershell -ArgumentList '-Command', 'Start-Sleep -Seconds 18; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show(\"Notification content\", \"openloomi Reminder\")' - must run in background";
-        platformNotificationExamples = `- Task: "Remind me to attend meeting at 9 AM every day" (no platform specified)
-  - Platforms: ALL available platforms + Windows notification
-  - Reminder: "Time for meeting!"
-
-- Task: "Remind me to submit weekly report every Friday" (no platform specified)
-  - Platforms: ALL available platforms + Windows notification
-  - Reminder: "Time to submit weekly report!"`;
-      } else {
-        platformNotificationName = "your system";
-        platformNotificationSection = `**System Notification:**
-Current platform (${osPlatform}) system notification is not configured. Only send to connected platforms.`;
-        platformNotificationWorkflow =
-          "5. System notification - send to connected platforms only";
-        platformNotificationExamples = `- Task: "Remind me to attend meeting at 9 AM every day" (no platform specified)
-  - Platforms: ALL available platforms
-  - Reminder: "Time for meeting!"`;
-      }
-    } // end charSystemNotification
+    // OS desktop notifications are no longer injected into cron prompts.
+    // All reminders go through configured cross-platform Notification Channels
+    // (Telegram/Slack/Discord/etc.) via `sendReply`.
 
     // Add system prompt as first assistant message to guide behavior
     messages.push({
       role: "assistant",
       content: `**SCHEDULED TASK EXECUTION**
 
-You are executing a scheduled task on **${platformNotificationName} (${osPlatform})**.
+You are executing a scheduled task.
 
 **TASK DESCRIPTION:**
 "${jobDescription}"
@@ -618,15 +540,17 @@ When the task description mentions or is associated with a specific insight, eve
 - Add **tags** for categorization and **action** for next steps (e.g., "Review competitor update", "Schedule follow-up", "Share with team")
 
 **PLATFORM SELECTION:**
-1. First, use queryIntegrations to check which platforms the user has connected
+1. First, use queryIntegrations to check which first-party platforms the user has connected (Slack/Telegram/Discord/Gmail/etc. — openloomi-native bots only).
+   - For platforms queryIntegrations does not see (Composio-only toolkits such as HubSpot/Asana/Notion/GitHub/Linear), run \`Skill composio connections list\` (or \`Bash(composio connections list)\`) and treat those as available connections too.
 2. If the task specifies a platform (e.g., "Remind me on Telegram"), only use that platform
 3. If no platform is specified, ONLY send to the user's configured Notification Channels (from CHARACTER CONTEXT):
    - Send to each channel listed in Notification Channels using sendReply
    - Do NOT send to platforms not in Notification Channels
-${charSystemNotification ? `   - System notification (${platformNotificationName}) is still sent if configured` : "   - Do NOT send system/desktop notifications"}
+   - Do NOT send system/desktop notifications
 
 **EXECUTION WORKFLOW:**
 1. queryIntegrations - Verify the configured Notification Channels are available
+1a. (Composio check) \`Skill composio connections list\` or \`Bash(composio connections list)\` — record which Composio toolkits are reachable, in case the task references one.
 2. Determine target platforms based on task description:
    - If platform specified (e.g., "Telegram reminder") -> use that platform only (must be in Notification Channels)
    - If no platform specified -> use ONLY the Notification Channels configured for this character
@@ -635,9 +559,6 @@ ${charSystemNotification ? `   - System notification (${platformNotificationName
    - For other platforms: Find the user's own contact via queryContacts (the recipient is the user themselves)
 4. sendReply - Send the reminder message to the user via each configured Notification Channel
 5. If the task description references an existing insight/event/track -> use modifyInsight to update it
-${platformNotificationWorkflow}
-
-${platformNotificationSection}
 
 **EXAMPLES:**
 - Task: "Remind me to drink water at 8 PM every day on Telegram"
@@ -654,8 +575,6 @@ ${platformNotificationSection}
   - The user has associated this task with the "Book Tracker" insight
   - Action: Use modifyInsight to add a timeline event to the existing "Book Tracker" insight
 
-${platformNotificationExamples}
-
 **IMPORTANT:**
 - Recipient is always the USER (yourself), not other people
 - Send a short, actionable reminder message, NOT the task description
@@ -669,21 +588,12 @@ ${characterContextSection}`,
       chatId,
     );
 
-    let lastTextContent = ""; // Track only the last text for output
-    let submittedStructuredData: StructuredExecutionOutput | undefined;
+    let lastTextContent = "";
     const internalToolUseIds = new Set<string>();
     let hasError = false;
     let errorMessage = "";
     const executionToolParts: ArtifactToolPart[] = [];
     const executionToolPartsById = new Map<string, ArtifactToolPart>();
-    const traceEvents: ExecutionTraceEvent[] = [
-      {
-        type: "task_received",
-        title: traceTitles.taskReceived,
-        detail: jobDescription || config.handler || context.jobId,
-        timestamp: new Date().toISOString(),
-      },
-    ];
 
     try {
       // Get job name for chat title
@@ -970,11 +880,10 @@ ${characterContextSection}`,
         if (message.type === "text") {
           // With stream: false, text messages are complete (not incremental deltas)
           // Use the complete text directly without accumulation
-          const textContent = message.content || "";
-          const { cleanText: displayText } = parseStructuredOutput(textContent);
+          const displayText = message.content || "";
           const sanitizedText = stripMalformedToolCalls(displayText);
 
-          lastTextContent = textContent;
+          lastTextContent = displayText;
           if (sanitizedText) {
             await options?.onAgentEvent?.({
               type: "text",
@@ -1195,61 +1104,9 @@ ${characterContextSection}`,
     }
 
     // --- Extract structured output from agent response ---
-    const { data: parsedStructuredData, cleanText } =
-      parseStructuredOutput(lastTextContent);
-    const artifactReconciliation = reconcileExecutionArtifacts({
-      sessionDir,
-      sessionsRoot: join(homedir(), APP_DIR_NAME, "sessions"),
-      executionId: context.executionId,
-      toolParts: executionToolParts,
-      finalText: lastTextContent,
-      structuredData: submittedStructuredData ?? parsedStructuredData,
-    });
-    const structuredData = artifactReconciliation.structuredData;
-
-    const sessionFiles: ReasoningFile[] = [];
-    try {
-      const result = await getAllFilesAtPathWithSize(chatId, sessionDir);
-      for (const file of result.files) {
-        if (file.isDirectory) continue;
-        sessionFiles.push({
-          name: file.name,
-          path: file.absolutePath ?? file.path,
-          type: file.type,
-          role: "output",
-        });
-      }
-    } catch (error) {
-      console.warn("[JobExecutor] Failed to scan execution files:", error);
-    }
-
-    const structuredReport = buildStructuredExecutionReport({
-      structuredData,
-      cleanText,
-      rawText: lastTextContent,
-      taskText: messageText,
-      traceEvents,
-      sessionFiles,
-      hasError,
-      errorMessage,
-      language: userLanguage,
-    });
-
-    if (structuredReport.diagnostics?.source === "model") {
-      console.log(
-        "[JobExecutor] Parsed structured output from agent response:",
-        JSON.stringify(structuredReport).slice(0, 200),
-      );
-    } else {
-      console.log(
-        "[JobExecutor] Repaired structured execution report:",
-        JSON.stringify(structuredReport).slice(0, 200),
-      );
-    }
-
+    const cleanText = lastTextContent;
     const jobResult: JobExecutionResult = {
       status: (hasError ? "error" : "success") as "error" | "success",
-      // Use cleanText (structured-output block stripped) for display
       output: stripMalformedToolCalls(cleanText) || "Task completed",
       error: hasError ? errorMessage : undefined,
       result: {

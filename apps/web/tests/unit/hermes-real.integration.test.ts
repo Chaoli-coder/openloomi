@@ -292,10 +292,10 @@ describeRealHermes("Hermes real ACP integration", () => {
     130_000,
   );
 
-  it("rejects unsupported Hermes model/provider env overrides before spawning", async () => {
+  it("rejects an incomplete Hermes provider override before spawning", async () => {
     withHermesProviderEnv();
-    process.env.OPENLOOMI_AGENT_HERMES_MODEL = "not-supported";
-    process.env.OPENLOOMI_AGENT_HERMES_PROVIDER = "not-supported";
+    process.env.OPENLOOMI_AGENT_HERMES_MODEL = "";
+    process.env.OPENLOOMI_AGENT_HERMES_PROVIDER = "openrouter";
     const host = createHermesRealHost();
 
     await expect(
@@ -308,7 +308,9 @@ describeRealHermes("Hermes real ACP integration", () => {
         createContext(10_000),
         host,
       ),
-    ).rejects.toThrow(/OPENLOOMI_AGENT_HERMES_MODEL is not supported/);
+    ).rejects.toThrow(
+      /OPENLOOMI_AGENT_HERMES_PROVIDER requires OPENLOOMI_AGENT_HERMES_MODEL/,
+    );
   }, 20_000);
 });
 
@@ -389,7 +391,6 @@ function setHermesCredentialEnv(apiKey: string, baseUrl?: string) {
 
   process.env.OPENAI_API_KEY = apiKey;
   process.env.ANTHROPIC_API_KEY = apiKey;
-  process.env.OPENLOOMI_HERMES_REAL_PROVIDER_API_KEY = apiKey;
 
   if (normalizedBaseUrl && /openrouter\.ai/i.test(normalizedBaseUrl)) {
     process.env.OPENROUTER_API_KEY = apiKey;
@@ -432,7 +433,7 @@ async function createHermesRealHome(credentials: HermesRealCredentials) {
       "custom_providers:",
       "  - name: openloomi-real",
       `    base_url: ${yamlString(baseUrl)}`,
-      "    key_env: OPENLOOMI_HERMES_REAL_PROVIDER_API_KEY",
+      "    key_env: OPENAI_API_KEY",
       "    api_mode: anthropic_messages",
       `    model: ${yamlString(model)}`,
       "",

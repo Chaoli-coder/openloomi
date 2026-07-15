@@ -25,6 +25,9 @@ export type DecisionType =
   | "doc_update"
   | "brief"
   | "wrap"
+  | "noop" // NEW — non-actionable; filtered at decisions.add()
+  | "tick_summary" // NEW — explicit per-tick summary; filtered at decisions.add()
+  | "quiet_digest" // NEW — filler content for empty brief/wrap days; read-only
   | "unknown";
 
 export type DecisionStatus = "pending" | "done" | "dismissed";
@@ -43,6 +46,7 @@ export type ActionKind =
   | "doc_update"
   | "brief"
   | "wrap"
+  | "quiet_digest" // NEW — filler content for empty brief/wrap days
   | string; // open form for agent-emitted kinds
 
 export interface LoopAction {
@@ -104,6 +108,22 @@ export interface LoopSignal {
   _insightId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Quiet-day filler module ids (#316)
+// ---------------------------------------------------------------------------
+//
+// Selected via `LoopPreferences.quietDayFiller` when a brief / wrap snapshot
+// comes up empty. Each id maps to a `QuietDayModule` implementation in
+// `quiet-modules.ts`; new modules are drop-in additions to the
+// `QUIET_DAY_MODULES` registry. "none" is the deliberate no-op default —
+// empty day → no card, no badge, snapshot still on disk.
+
+export type QuietDayFillerId =
+  | "none"
+  | "ai-news-digest"
+  | "weather-calendar"
+  | "memory-resurface";
+
 export interface LoopPreferences {
   enabled: boolean;
   /** 24h HH:MM local time. */
@@ -123,6 +143,86 @@ export interface LoopPreferences {
    * honours the user's wall-clock 09:00 / 21:00.
    */
   timezone?: string;
+  /**
+   * Generate agentic narrative summary for brief/wrap. When `false`, brief
+   * and wrap fall back to the deterministic templated dialogue. Default
+   * `true` — opt-out via `PUT /api/loop/preferences { narrative: false }`.
+   */
+  narrative?: boolean;
+  /**
+   * Send native macOS / OS desktop notifications for high-priority Loop
+   * events. Default `false` because the Loomi Pet bubble/card is the
+   * primary desktop surface and is always on. Opt-in via
+   * `PUT /api/loop/preferences { desktopNotifications: true }`.
+   */
+  desktopNotifications?: boolean;
+  /**
+   * When `true`, a *user-created* scheduled cron job POSTs a transient
+   * Loomi pet **bubble** message on completion (both success and error).
+   * This is a bubble-only surface — explicitly NOT a decision card, so it
+   * carries no Run/Dismiss buttons and auto-dismisses on the bubble's own
+   * timer. Loop's own jobs (`loop.tick` / `loop.brief` / `loop.wrap` /
+   * `loop.action`) are excluded — they already reach the pet as decision
+   * cards via the `decisions.json` watcher.
+   *
+   * Default `false` — opt-in via
+   * `PUT /api/loop/preferences { cronCompletionPetNotify: true }`.
+   */
+  cronCompletionPetNotify?: boolean;
+  /**
+   * When the brief or wrap snapshot is empty (no surfaced items /
+   * highlights), skip the templated "nothing to do" card entirely.
+   * Snapshot still gets persisted to `~/.openloomi/loop/{brief,wrap}.json`
+   * for history; the pet bubble stays silent and no badge increments.
+   *
+   * Default `true` — opt-out via
+   * `PUT /api/loop/preferences { quietWhenEmpty: false }` to restore the
+   * legacy "open a card to dismiss nothing" behaviour. See issue #316.
+   */
+  quietWhenEmpty?: boolean;
+  /**
+   * Optional content module to run when the quiet path fires. The module
+   * produces a `type:"quiet_digest"` decision card in place of the
+   * templated empty card, turning "nothing to dismiss" into "the card
+   * worth opening" — e.g. a news digest, weather + first meeting, or a
+   * resurfaced memory.
+   *
+   * Default `"none"` (skip the card entirely). Built-ins:
+   *   - "ai-news-digest"  → 3 last-24h AI / tech headlines
+   *   - "weather-calendar" → weather + first 2 calendar events
+   *   - "memory-resurface" → 2 stale insights from the user's memory
+   *
+   * No-op when `quietWhenEmpty === false`. See issue #316.
+   */
+  quietDayFiller?: QuietDayFillerId;
+}
+
+/** Mute rule scope — discriminated union keyed by signal type. */
+export type MuteScope =
+  | { kind: "email"; from: string }
+  | { kind: "calendar_event"; organizer: string; fallback?: "eventId" }
+  | { kind: "slack_message"; user?: string; channel?: string }
+  | { kind: "obsidian_note_changed"; path: string }
+  | { kind: "github_pr"; repo: string }
+  | { kind: "github_issue"; repo: string }
+  | { kind: "linear_issue"; team?: string; project?: string };
+
+export interface MuteRule {
+  /** Normalised lowercase key — the atom of O(1) lookups. */
+  key: string;
+  /** Discriminated scope, kept for diagnostics and a future mute UI. */
+  scope: MuteScope;
+  /** ISO timestamp when the rule was created. */
+  createdAt: string;
+  /** Provenance — which dismiss produced this rule. */
+  source?: { decisionId?: string; signalType?: SignalType };
+}
+
+export interface LoopMutes {
+  version: 1;
+  rules: MuteRule[];
+  /** Flattened keys — recomputed from `rules` on every write. */
+  keys: string[];
 }
 
 export const DEFAULT_LOOP_PREFERENCES: LoopPreferences = {
@@ -132,6 +232,11 @@ export const DEFAULT_LOOP_PREFERENCES: LoopPreferences = {
   intervalSec: 600,
   noReplySkip: true,
   promotionSkip: true,
+  narrative: true,
+  desktopNotifications: false, // NEW
+  cronCompletionPetNotify: false, // NEW — opt-in transient pet bubble
+  quietWhenEmpty: true, // NEW (#316) — opt-out via prefs
+  quietDayFiller: "none", // NEW (#316) — opt into a module
 };
 
 export interface ConnectorEntry {
@@ -171,4 +276,83 @@ export interface LoopTickResult {
   muted: number;
   newDecisions: LoopDecision[];
   errors: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Agentic narrative for brief / wrap
+// ---------------------------------------------------------------------------
+//
+// The brief / wrap snapshots are otherwise plain data (items, stats). The
+// `narrative` field is the agentic overlay — a short headline + body the agent
+// writes, plus generation lifecycle state. Three terminal shapes:
+//
+//   - undefined  → user opted out (prefs.narrative === false); UI uses the
+//                  templated dialogue.
+//   - null       → tried but failed; UI silently falls back to template.
+//   - { status: "generating", ... } → an agent call is in flight; UI shows
+//                  a spinner placeholder, never hangs.
+//   - { status: "ready", ... }     → headline + body available.
+//
+// `input_hash` is sha1(items) (or sha1(highlights) for wrap) — used to detect
+// staleness so we can skip a redundant agent call when the underlying queue
+// hasn't changed since the last successful generation.
+
+export interface BriefNarrativeReady {
+  status: "ready";
+  /** ≤ 200 chars after slice; do not start with "Morning:". */
+  headline: string;
+  /** ≤ 800 chars after slice; plain prose, no markdown. */
+  body: string;
+  /** ISO timestamp the narrative finished generating. */
+  generatedAt: string;
+  /** Optional model id for debugging / admin panels. */
+  model?: string;
+  /** sha1(items) at the time of generation. Detects staleness. */
+  input_hash?: string;
+}
+
+export interface BriefNarrativeGenerating {
+  status: "generating";
+  /** ISO timestamp the agent call started. */
+  startedAt: string;
+  /** sha1(items) the agent was invoked on. */
+  input_hash: string;
+}
+
+export type BriefNarrative =
+  | BriefNarrativeReady
+  | BriefNarrativeGenerating
+  | null;
+
+export interface WrapNarrativeReady {
+  status: "ready";
+  headline: string;
+  body: string;
+  generatedAt: string;
+  model?: string;
+  input_hash?: string;
+}
+
+export interface WrapNarrativeGenerating {
+  status: "generating";
+  startedAt: string;
+  input_hash: string;
+}
+
+export type WrapNarrative = WrapNarrativeReady | WrapNarrativeGenerating | null;
+
+// ---------------------------------------------------------------------------
+// Brief snapshot — muted bucket shape
+// ---------------------------------------------------------------------------
+//
+// `id` is the originating `LoopDecision.id`. Two muted rows can have the same
+// `kind`+`title` (e.g. two `wrap` decisions on the same date, or multiple
+// `draft_reply` rows for the same thread), so we need a stable identity beyond
+// position for React keys and any future "un-mute from the UI" flow.
+
+export interface BriefMuted {
+  id: string;
+  kind: string;
+  title: string;
+  reason: string;
 }

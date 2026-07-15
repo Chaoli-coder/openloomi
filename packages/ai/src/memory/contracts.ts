@@ -257,6 +257,11 @@ export interface MemoryForgettingRunInput {
   userId: string;
   now?: number;
   dryRun?: boolean;
+  /**
+   * Soft-deprecate raw source records after their summary is saved.
+   * Defaults to true. Dry runs still skip all writes.
+   */
+  deprecateSourceRecords?: boolean;
 }
 
 export interface MemoryForgettingRunResult {
@@ -270,6 +275,10 @@ export interface MemoryForgettingRunResult {
   createdSummaries: number;
   transitionedRecords: number;
   archivedDetailRecords: number;
+  deprecationStatus?: "disabled" | "dry-run" | "failed" | "no-op" | "persisted";
+  deprecationPlannedRecords?: number;
+  deprecatedRecords?: number;
+  deprecationReasonCodes?: string[];
 }
 
 export type MemorySearchHit =
@@ -283,6 +292,42 @@ export type MemorySearchHit =
       timestamp: number;
       summary: MemorySummary;
     };
+
+export interface MemorySearchGraphRetrievalOwnerScope {
+  userId: string;
+  workspaceId?: string;
+  tenantId?: string;
+}
+
+export interface MemorySearchGraphRetrievalAuditTrail {
+  ownerScope: MemorySearchGraphRetrievalOwnerScope;
+  nodeId: string;
+  sourceNodeIds: string[];
+  edgeIds: string[];
+  operationIds: string[];
+  reasonCodes: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface MemorySearchGraphRetrievalResult {
+  ownerScope: MemorySearchGraphRetrievalOwnerScope;
+  rankedNodeIds: string[];
+  hiddenDeprecatedNodeIds: string[];
+  expandedClusterIds: string[];
+  auditTrail?: MemorySearchGraphRetrievalAuditTrail[];
+  reasonCodes: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface MemorySearchGraphRetrievalDiagnostic {
+  status: "applied" | "no-op" | "failed";
+  reasonCodes: string[];
+  result?: MemorySearchGraphRetrievalResult;
+  error?: {
+    name: string;
+    message: string;
+  };
+}
 
 export interface MemorySemanticRecallResult {
   items: Array<
@@ -299,4 +344,5 @@ export interface MemorySearchWithFallbackResult {
   rawCount: number;
   summaryCount: number;
   hasMore: boolean;
+  graphRetrieval?: MemorySearchGraphRetrievalDiagnostic;
 }

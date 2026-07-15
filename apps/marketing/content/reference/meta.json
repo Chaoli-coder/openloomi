@@ -3,6 +3,8 @@
   "defaultOpen": false,
   "collapsible": true,
   "pages": [
-    "openloomi-ctl"
+    "agent-runtimes",
+    "openloomi-ctl",
+    "embedding-providers"
   ]
 }

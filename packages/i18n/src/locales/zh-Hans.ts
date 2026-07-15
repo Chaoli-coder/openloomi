@@ -677,6 +677,15 @@ const zhHans = {
         description: "处理请求时遇到问题。",
         suggestions: ["稍后重试", "如果问题持续存在，请联系支持"],
       },
+      fileNotFoundError: {
+        title: "文件未找到",
+        description: "找不到指定的文件。",
+        suggestions: [
+          "检查文件路径是否正确",
+          "确认文件是否存在",
+          "使用完整的文件路径",
+        ],
+      },
     },
     confirmDeleteTitle: "确认删除",
     confirmDeleteMessage: "确定要删除此项目吗？",
@@ -790,6 +799,17 @@ const zhHans = {
       "把连接的日历（Google/Outlook）中新建/临近的日程推送到 openloomi。",
     addPlatform: "添加平台",
     addConnector: "添加连接器",
+    connectMoreViaComposio: "通过 Composio 连接更多",
+    connectMoreViaComposioDesc:
+      "让 Agent 帮你接入 GitHub、Linear、Notion、HubSpot 等上百款应用。",
+    composioMoreAppsLabel: "更多应用",
+    /**
+     * 提示词原样发送给聊天 Agent,作为用户点击「通过 Composio 连接更多」时的
+     * 首发消息。Agent 会使用 `composio` 技能列出尚未连接的可用平台,
+     * 并一步步引导用户完成授权,Agent 回复使用用户的当前语言。
+     */
+    composioConnectMorePrompt:
+      "帮我通过 Composio 连接更多应用。先列出我还没连接的可用平台(如 GitHub、Linear、Notion、HubSpot、Asana 等),然后一步步引导我完成每个应用的授权。",
     connectPlatform: "连接 {{name}}",
     platformCardAriaConnecting: "连接中",
     platformCardAriaConnect: "连接 {{label}}",
@@ -5474,6 +5494,9 @@ const zhHans = {
       hideDetails: "隐藏详情",
       allow: "允许",
       deny: "拒绝",
+      allowed: "已允许此次操作",
+      denied: "已拒绝此次操作",
+      submitError: "提交权限决定失败",
     },
     complete: {
       title: "认识你的 AI 助手",

@@ -60,6 +60,14 @@ async function handleTick(
     setActiveUser(context.userId);
     const watchResult = await runWatcher({ userId: context.userId });
     const tickResult = await run({ userId: context.userId });
+    // #288 — fire-and-forget desktop notifications only for fresh,
+    // actionable decisions. Pet bubble is the primary surface; this is
+    // opt-in via LoopPreferences.desktopNotifications. Errors are
+    // swallowed and logged by notifyForDecisions.
+    if (tickResult.newDecisions && tickResult.newDecisions.length > 0) {
+      const { notifyForDecisions } = await import("./notifications");
+      await notifyForDecisions(tickResult.newDecisions);
+    }
     return { ...tickResult, watch: watchResult };
   }, context);
 }
@@ -68,12 +76,20 @@ async function handleTick(
 async function handleBrief(
   context: JobExecutionContext,
 ): Promise<JobExecutionResult> {
-  // brief.ts exports `buildAndEnqueue` as its native name; it's already async.
+  // brief.ts exports `buildAndEnqueue` as its native name; it's async because
+  // the narrative enrichment runs fire-and-forget after the card is enqueued.
+  // The function returns once the card is queued; the background agent call
+  // completes (or times out) on its own and is captured by the
+  // `kickOffBackgroundEnrichment` helper — it MUST NOT throw, so a slow /
+  // failed agent never causes a cron row to error.
   const { buildAndEnqueue } = await import("./brief");
-  return runAsJob(
-    () => Promise.resolve(buildAndEnqueue({ force: true })),
-    context,
-  );
+  return runAsJob(async () => {
+    const out = await buildAndEnqueue({ force: true });
+    return {
+      card: out.card?.id ?? null,
+      narrative: !!out.snapshot.narrative,
+    };
+  }, context);
 }
 
 /** Handler for `loop.wrap` — build an evening wrap card and enqueue it. */
@@ -81,10 +97,13 @@ async function handleWrap(
   context: JobExecutionContext,
 ): Promise<JobExecutionResult> {
   const { buildAndEnqueue } = await import("./wrap");
-  return runAsJob(
-    () => Promise.resolve(buildAndEnqueue({ force: true })),
-    context,
-  );
+  return runAsJob(async () => {
+    const out = await buildAndEnqueue({ force: true });
+    return {
+      card: out.card?.id ?? null,
+      narrative: !!out.snapshot.narrative,
+    };
+  }, context);
 }
 
 /**

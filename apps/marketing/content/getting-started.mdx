@@ -26,8 +26,8 @@ icon: "FaRocket"
 
 | Option                                                                                                                                        | Notes                                                      |
 | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Download .dmg installer (Apple Silicon)](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_aarch64.dmg) | Recommended for M1/M2/M3/M4 Macs — double-click to install |
-| [Download .dmg installer (Intel)](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_amd64.dmg)           | For Intel Macs                                             |
+| [Download .dmg installer (Apple Silicon)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_aarch64.dmg) | Recommended for M1/M2/M3/M4 Macs — double-click to install |
+| [Download .dmg installer (Intel)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_amd64.dmg)           | For Intel Macs                                             |
 | Homebrew                                                                                                                                      | For developers — see command below                         |
 
 ```bash
@@ -51,14 +51,14 @@ brew upgrade --cask openloomi
 
 | Option                                                                                                                              | Notes                                               |
 | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Download .deb package (x86_64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_amd64.deb)  | For x86_64 / AMD64 systems                          |
-| [Download .deb package (ARM64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_aarch64.deb) | For ARM64 systems (e.g., Raspberry Pi, ARM servers) |
+| [Download .deb package (x86_64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.deb)  | For x86_64 / AMD64 systems                          |
+| [Download .deb package (ARM64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.deb) | For ARM64 systems (e.g., Raspberry Pi, ARM servers) |
 
 ```bash
-sudo dpkg -i openloomi_0.7.0_linux_amd64.deb
+sudo dpkg -i openloomi_0.7.5_linux_amd64.deb
 sudo apt-get install -f
 
-# Fix resource path (required for v0.7.0 and earlier)
+# Fix resource path (required for v0.7.5 and earlier)
 sudo ln -sf /usr/lib/openloomi/_up_ /usr/bin/_up_
 
 # Start the application
@@ -85,7 +85,7 @@ openloomi
 
 | Option                                                                                                                        | Notes                                               |
 | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Download .exe installer](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_windows_amd64.exe) | Recommended — run the installer to set up OpenLoomi |
+| [Download .exe installer](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_windows_amd64.exe) | Recommended — run the installer to set up OpenLoomi |
 | Winget                                                                                                                        | Coming Soon                                         |
 
 > **Windows SmartScreen:** If Windows shows a warning when running the installer, click **"More info"** then **"Run anyway"**. This is normal — OpenLoomi is open-source and the code is publicly verifiable. You only need to do this once per machine.
@@ -132,7 +132,7 @@ No special permissions are required on Linux. OpenLoomi uses the standard deskto
 
 ## AI Configuration
 
-When you start OpenLoomi for the first time, you'll be guided through the onboarding flow to choose your AI agent and sign in.
+When you start OpenLoomi for the first time, you'll be guided through the [Onboarding](/docs/onboarding) flow — pick an AI runtime, complete the conversation API setup, and select your account.
 
 <div style={{ textAlign: "center" }}>
   <img src="/img/openloomi/onboarding.png" alt="OpenLoomi onboarding screen" />
@@ -155,19 +155,49 @@ OpenLoomi uses your existing AI agent configuration to work. To get started, set
 
 **Default: Claude**
 
-OpenLoomi automatically detects your Claude configuration — no extra setup required if you're already using Claude Code or Claude for Desktop.
+OpenLoomi automatically detects an existing Claude Code configuration. For server deployments and shared installations, configure a Claude API key or an Anthropic-compatible endpoint in OpenLoomi instead of relying on a personal Claude login.
 
 **Supported Agents**
 
-| Agent    | Status         | Notes                                    |
-| -------- | -------------- | ---------------------------------------- |
-| Claude   | ✅ Supported   | Auto-detected by default                 |
-| Codex    | 🔜 Coming Soon | GitHub Copilot's CLI agent               |
-| Pi       | 🔜 Coming Soon | Anthropic's research assistant           |
-| OpenClaw | 🔜 Coming Soon | Open-source agent compatible with Claude |
-| Hermes   | 🔜 Coming Soon | Browser-use compatible agent             |
+| Agent      | Status         | Notes                                                   |
+| ---------- | -------------- | ------------------------------------------------------- |
+| Claude     | ✅ Supported   | Default built-in runtime                                |
+| Codex      | ✅ Supported   | Secondary option using local `codex exec --json`        |
+| OpenCode   | ✅ Supported   | Local `opencode run` integration with JSON event stream |
+| Hermes     | ✅ Supported   | Local `hermes acp` integration                          |
+| OpenClaw   | ✅ Supported   | Gateway-backed `openclaw acp` bridge                    |
+| DeepAgents | 🔜 Coming Soon | Metadata exists; a production adapter is not registered |
 
-> **Note:** OpenLoomi currently supports Claude. Additional agent support (Codex, Pi, OpenClaw, Hermes) is on the roadmap and will be available in a future release.
+Runtime selection is intentionally server-controlled and is not shown as an in-app setting yet. Claude is used when `OPENLOOMI_AGENT_PROVIDER` is unset; supported explicit values are `claude`, `codex`, `opencode`, `hermes`, and `openclaw`.
+
+```bash
+# OpenCode
+OPENLOOMI_AGENT_PROVIDER=opencode
+OPENLOOMI_AGENT_OPENCODE_COMMAND=opencode
+OPENLOOMI_AGENT_OPENCODE_MODEL=anthropic/claude-sonnet-4.6
+
+# Hermes
+OPENLOOMI_AGENT_PROVIDER=hermes
+OPENLOOMI_AGENT_HERMES_COMMAND=hermes
+OPENLOOMI_AGENT_HERMES_PROFILE=coding
+
+# OpenClaw (configure and start its Gateway first)
+OPENLOOMI_AGENT_PROVIDER=openclaw
+OPENLOOMI_AGENT_OPENCLAW_COMMAND=openclaw
+OPENLOOMI_AGENT_OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789
+OPENLOOMI_AGENT_OPENCLAW_TOKEN_FILE=/path/to/gateway.token
+
+# Codex
+OPENLOOMI_AGENT_PROVIDER=codex
+OPENLOOMI_AGENT_CODEX_COMMAND=codex
+OPENLOOMI_AGENT_CODEX_SANDBOX=workspace-write
+```
+
+OpenLoomi does not install or authenticate these CLIs. CLI subprocesses receive a restricted environment; use `OPENLOOMI_AGENT_ENV_ALLOWLIST` only when a runtime needs an additional named variable. Executable paths, runtime models, profiles, Gateway targets, and approval policy cannot be overridden by chat/API request bodies.
+
+Agent runtimes and sandboxes are separate layers: OpenCode, Hermes, OpenClaw, and Codex are registered through `AgentPlugin` and do not pretend to be sandbox providers. Filesystem or process isolation must still be selected and enforced independently by the host.
+
+See the **[Agent Runtimes reference](/docs/reference/agent-runtimes)** for detailed runtime setup and security behavior.
 
 **Configuring Your Agent**
 

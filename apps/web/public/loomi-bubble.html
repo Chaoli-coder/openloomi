@@ -229,6 +229,48 @@
           },
         };
 
+        // ---------- User-defined decision types ----------
+        //
+        // Mirrors the merge in `apps/web/public/loomi-card.html` and
+        // `apps/web/components/loop/decision-card.tsx` — when the user
+        // has registered a new `type` via `PUT /api/loop/types`, the
+        // bubble's `TYPE_PHRASES` map needs a phrase entry so the
+        // bubble shows something on-screen instead of falling through
+        // to the state-driven fallback. We fetch once on load and
+        // merge; a failed fetch is silent.
+        function applyCustomTypes(list) {
+          if (!Array.isArray(list)) return;
+          for (const t of list) {
+            if (!t || typeof t.id !== "string" || !t.id) continue;
+            if (TYPE_PHRASES[t.id]) continue;
+            const lead =
+              typeof t.label === "string" && t.label.length > 0
+                ? t.label
+                : t.id;
+            const sub =
+              typeof t.description === "string" && t.description.length > 0
+                ? t.description.slice(0, 60)
+                : "tap to review";
+            TYPE_PHRASES[t.id] = { lead, sub };
+          }
+        }
+        if (typeof fetch === "function") {
+          const apiBase =
+            (typeof window !== "undefined" && window.__OPENLOOMI_API__) || "";
+          fetch(`${apiBase}/api/loop/types`, {
+            credentials: "include",
+            cache: "no-store",
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (data && Array.isArray(data.types))
+                applyCustomTypes(data.types);
+            })
+            .catch(() => {
+              /* best-effort — built-in phrases still apply */
+            });
+        }
+
         // Pet-state driven phrases. Surfaced when there's no pending
         // decision so the bubble still has something on-screen while the
         // pet sweeps / thinks / sleeps. The `idle` entry is intentionally
@@ -249,6 +291,14 @@
           thinking: { lead: "Just a sec", sub: "reading the room" },
           working: { lead: "On it", sub: "I'll ping you when ready" },
           greet: { lead: "Hey", sub: "I see you" },
+          // Surfaced by the watcher after a decision moves to `done`
+          // but before the user clicks the bubble. Deliberately distinct
+          // from `happy` so the pet reads as "handing off" rather than
+          // celebrating — the cue is "review when you're ready".
+          presenting: {
+            lead: "All wrapped up — ready when you are",
+            sub: "tap to view",
+          },
           // Emitted once by the watcher on a fresh install when no
           // ANTHROPIC_* env key is set AND `~/.openloomi/loop/decisions.json`
           // doesn't exist yet. Tapping the bubble opens the pet card,
@@ -266,19 +316,35 @@
         // events update the *fallback* phrasing only.
         let currentDecision = null;
         let currentState = "idle";
+        // One-shot transient message set by a `loop:state` event that
+        // carries a `monologue` string (e.g. a cron completion). Consumed
+        // on the next render and cleared, so the bubble's re-show cycle
+        // (`pet:bubble-shown`) won't resurrect stale text. The following
+        // monologue-free `loop:state` reverts to STATE_PHRASES.
+        let pendingMonologue = null;
 
         function renderState() {
           // The "idle" CSS class is used to dim/hide the bubble. We only
-          // apply it when the pet's *state* is literally idle — i.e. there's
-          // genuinely nothing to say. Other states (thinking / sweeping /
-          // working / etc.) still surface their phrases even when there's no
-          // pending decision, so the bubble keeps the user oriented while
-          // the pet is doing background work.
-          const noContent = currentState === "idle";
+          // apply it when the pet's *state* is literally idle AND there's
+          // no pending monologue — i.e. there's genuinely nothing to say.
+          // Other states (thinking / sweeping / working / etc.) still
+          // surface their phrases even when there's no pending decision, so
+          // the bubble keeps the user oriented while the pet is doing
+          // background work.
+          const hasMonologue = pendingMonologue !== null;
+          const noContent = currentState === "idle" && !hasMonologue;
           body.classList.toggle("idle", noContent);
-          const phrase = STATE_PHRASES[currentState] || STATE_PHRASES.idle;
-          lead.textContent = phrase.lead;
-          sub.textContent = phrase.sub || "";
+          if (hasMonologue) {
+            // Transient message wins over the static STATE_PHRASES table
+            // for this one render, then clears.
+            lead.textContent = pendingMonologue;
+            sub.textContent = "";
+            pendingMonologue = null;
+          } else {
+            const phrase = STATE_PHRASES[currentState] || STATE_PHRASES.idle;
+            lead.textContent = phrase.lead;
+            sub.textContent = phrase.sub || "";
+          }
         }
 
         function applyDecision(p) {
@@ -314,6 +380,14 @@
             (typeof p === "string" ? p : null) ||
             "idle";
           currentState = next;
+          if (
+            p &&
+            typeof p === "object" &&
+            typeof p.monologue === "string" &&
+            p.monologue.length > 0
+          ) {
+            pendingMonologue = p.monologue;
+          }
           if (!currentDecision) {
             renderState();
           }
@@ -351,11 +425,22 @@
         // early, and any subsequent `loop:decision` / state flip falls
         // back to AUTO_DISMISS_MS as expected.
         const SETUP_DISMISS_MS = 12000;
+        // `presenting` is a deliberate handoff state — the user is
+        // being shown a freshly-done decision. The bubble text is the
+        // call-to-action, so 4.5 s is too short: the user is mid-task
+        // when the loop finishes, and a brief flash makes the
+        // notification easy to miss. 8 s gives enough breathing room
+        // for the user to read both lines without forcing a click.
+        const PRESENTING_DISMISS_MS = 8000;
         let autoHideTimer = null;
         function scheduleAutoHide() {
           if (autoHideTimer) clearTimeout(autoHideTimer);
           const delay =
-            currentState === "needs-setup" ? SETUP_DISMISS_MS : AUTO_DISMISS_MS;
+            currentState === "needs-setup"
+              ? SETUP_DISMISS_MS
+              : currentState === "presenting"
+                ? PRESENTING_DISMISS_MS
+                : AUTO_DISMISS_MS;
           autoHideTimer = setTimeout(() => {
             autoHideTimer = null;
             const t = window.__TAURI__;

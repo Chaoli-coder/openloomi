@@ -68,14 +68,20 @@ export const OpenLoomiDocsCards = (): JSX.Element => {
       description: "Sign up, connect platforms, and get started",
     },
     {
-      id: "connectors",
-      title: "Connectors",
-      description: "Connect messaging platforms, email, and productivity tools",
+      id: "attention-agent",
+      title: "Attention Agent",
+      description:
+        "Your always-on desk companion — gently nudges you in the moments that matter",
     },
     {
       id: "chat",
       title: "Chat",
       description: "Ask in plain language, get answers from your data",
+    },
+    {
+      id: "connectors",
+      title: "Connectors",
+      description: "Connect messaging platforms, email, and productivity tools",
     },
     {
       id: "messaging-apps",
@@ -88,6 +94,18 @@ export const OpenLoomiDocsCards = (): JSX.Element => {
       description: "Automate tasks at specified times",
     },
     {
+      id: "plugins/claude",
+      title: "Claude Code Plugin",
+      description:
+        "Wire Claude Code into the local OpenLoomi runtime with /openloomi:* commands",
+    },
+    {
+      id: "plugins/codex",
+      title: "Codex Plugin",
+      description:
+        "Use Codex as your coding surface while OpenLoomi owns memory and the runtime",
+    },
+    {
       id: "skills",
       title: "Skills",
       description: "Builtin skills that extend your capabilities",
@@ -96,6 +114,11 @@ export const OpenLoomiDocsCards = (): JSX.Element => {
       id: "library",
       title: "Library",
       description: "Upload documents and ask AI questions",
+    },
+    {
+      id: "loop",
+      title: "Loop",
+      description: "Proactively sorts out what you need to do today",
     },
     {
       id: "memory",

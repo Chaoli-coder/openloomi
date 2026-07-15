@@ -39,9 +39,10 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureDirs, LOOP_PATHS } from "./paths";
+import { customChannels } from "./custom-channels";
 import type { ConnectorEntry } from "./types";
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 1 * 60 * 60 * 1000;
 
 interface ConnectorCache {
   fetchedAt: string;
@@ -194,8 +195,9 @@ export function writeConnectorSnapshot(connectors: ConnectorEntry[]): void {
  *
  * On cache miss, this delegates to `refreshConnectors({ silent: true })`
  * so the user never sees "all OFF" right after install — the first
- * open of the Loomi Online card auto-probes (short 6s timeout) and the
- * pill row repaints to truth within a couple of seconds. The cache is
+ * open of the Loomi Online card auto-probes and the pill row repaints
+ * to truth once the agent returns or the `PROBE_TIMEOUT_MS` ceiling
+ * fires. The cache is
  * the fast path; the probe is the recovery.
  */
 export async function listConnectors(
@@ -203,7 +205,7 @@ export async function listConnectors(
 ): Promise<ConnectorEntry[]> {
   if (!opts.force) {
     const cached = readCache();
-    if (cached) return cached.connectors;
+    if (cached) return appendCustomChannels(cached.connectors);
   }
   // Cache miss (or force=true) → delegate to refresh. When called from
   // the regular UI path, this fires a short-timeout silent probe
@@ -214,15 +216,29 @@ export async function listConnectors(
   return refreshConnectors({ silent: true });
 }
 
-const PROBE_TIMEOUT_MS = 6 * 1000;
+// `silent` probe budget. The agent's full probe (see `composio-bridge.ts`'s
+// `invokeAgentPrompt({ timeoutMs: 10 * 60 * 1000 })`) can legitimately
+// take several minutes for a cold first probe on a fresh install — it
+// has to spin up the agent runtime, load the `composio` skill, run the
+// CLI, and enumerate all 5 toolkits. The previous 6 s budget was so
+// tight that the race almost always lost, so every card open would fall
+// back to the FALLBACK sentinel and show "Awaiting first probe".
+//
+// 10 minutes mirrors the upper bound of the underlying agent probe, so
+// the `silent` race and the underlying SSE timeout align — whichever
+// hits first is the effective ceiling. In practice the silent path
+// usually resolves much sooner; the long ceiling just makes sure a slow
+// first probe doesn't get short-circuited into the cooldown fallback.
+const PROBE_TIMEOUT_MS = 10 * 60 * 1000;
 const PROBE_COOLDOWN_MS = 30 * 1000;
 
 interface ConnectorCacheWithCooldown {
   fetchedAt?: unknown;
   connectors?: unknown;
   /**
-   * Set when `refreshConnectors({silent:true})` hits its 6s timeout
-   * and no agent probe result was available. Subsequent calls within
+   * Set when `refreshConnectors({silent:true})` hits its
+   * `PROBE_TIMEOUT_MS` ceiling and no agent probe result was
+   * available. Subsequent calls within
    * `PROBE_COOLDOWN_MS` will skip the probe entirely and short-circuit
    * to the FALLBACK sentinel — so a user double-clicking the card
    * after opening it twice in a row doesn't burn another agent round
@@ -245,6 +261,36 @@ function readProbeCooldown(): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Append per-user custom channels to a connector list. The user-defined
+ * entries are sourced from `~/.openloomi/loop/custom-channels.json` and
+ * are always shown alongside the built-in `FALLBACK_CONNECTORS` (in
+ * that order — built-ins first, custom last so the UI's stable layout
+ * doesn't reshuffle when a channel is added or removed). The probe
+ * never tries to confirm them: their connection state lives in the
+ * user's Composio account, and the watcher's pass will surface a real
+ * error if the toolkit isn't reachable.
+ */
+function appendCustomChannels(seed: ConnectorEntry[]): ConnectorEntry[] {
+  const extras = customChannels.list();
+  if (extras.length === 0) return seed;
+  const now = new Date().toISOString();
+  const out = seed.slice();
+  for (const c of extras) {
+    out.push({
+      id: c.id,
+      label: c.label,
+      // Conservatively report as not-yet-probed; the watcher's pass
+      // surfaces real failures when the toolkit isn't reachable.
+      connected: false,
+      accountCount: 0,
+      probed: false,
+      fetchedAt: now,
+    });
+  }
+  return out;
 }
 
 function writeProbeCooldownMarker(): void {
@@ -317,12 +363,13 @@ export function clearProbeCooldown(): void {
  * composio surfaces (skill / CLI / insights) and returns a fresh
  * snapshot, which we persist via `writeConnectorSnapshot` and return.
  *
- * `opts.silent = true` wraps the probe in a short `PROBE_TIMEOUT_MS`
- * (6s) timeout and falls back to the cache / FALLBACK on timeout,
+ * `opts.silent = true` wraps the probe in a `PROBE_TIMEOUT_MS`
+ * (10 min) ceiling and falls back to the cache / FALLBACK on timeout,
  * including writing a `probeCooldownUntil` marker so a rapid re-open
  * within `PROBE_COOLDOWN_MS` skips the probe entirely. Used by
  * `listConnectors()`'s cache-miss path so the user's first card open
- * doesn't block on a potentially-slow agent call.
+ * gets the room it needs for a cold first probe without immediately
+ * falling back to "Pending first probe" pills.
  *
  * Failure modes (in order of preference):
  *
@@ -344,8 +391,8 @@ export async function refreshConnectors(
   // or slow agent from being hammered on rapid card re-opens.
   if (opts.silent && Date.now() < readProbeCooldown()) {
     const cached = readCache();
-    if (cached) return cached.connectors;
-    return FALLBACK_CONNECTORS;
+    if (cached) return appendCustomChannels(cached.connectors);
+    return appendCustomChannels(FALLBACK_CONNECTORS);
   }
 
   const probe: Promise<ConnectorEntry[] | null> = (async () => {
@@ -373,20 +420,20 @@ export async function refreshConnectors(
     if (!probed || probed.length === 0) {
       writeProbeCooldownMarker();
       const cached = readCache();
-      if (cached) return cached.connectors;
-      return FALLBACK_CONNECTORS;
+      if (cached) return appendCustomChannels(cached.connectors);
+      return appendCustomChannels(FALLBACK_CONNECTORS);
     }
-    return probed;
+    return appendCustomChannels(probed);
   }
 
   probed = await probe;
   if (probed && probed.length > 0) {
-    return probed;
+    return appendCustomChannels(probed);
   }
   // Probe failed — degrade gracefully.
   const cached = readCache();
   if (cached) {
-    return cached.connectors;
+    return appendCustomChannels(cached.connectors);
   }
-  return FALLBACK_CONNECTORS;
+  return appendCustomChannels(FALLBACK_CONNECTORS);
 }

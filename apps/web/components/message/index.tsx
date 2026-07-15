@@ -29,9 +29,9 @@ import { useInsightPagination } from "@/hooks/use-insight-data";
 import { useInsightActions } from "@/hooks/use-insight-actions";
 import { getFileIcon, getFileColor } from "@/components/file-icons";
 import { stripMalformedToolCalls } from "@/lib/utils/tool-names";
-import { parseStructuredOutput } from "@/lib/types/execution-result";
 import { QuestionInput } from "../question-input";
 import { PasswordInput } from "../password-input";
+import { PermissionDialog } from "../permission-dialog";
 import { useChatContext } from "../chat-context";
 import { useGlobalInsightDrawer } from "../global-insight-drawer";
 import type { ContentSegment } from "@openloomi/shared/ref";
@@ -47,7 +47,10 @@ import {
   LibraryItemRow,
   type LibraryItem,
 } from "@/components/library/library-item-row";
-import { sessionRelativePathFromStoredPath } from "@/lib/files/open-workspace-file-locally";
+import {
+  workspaceFileReferenceFromStoredPath,
+  workspaceSessionFileReferenceFromStoredPath,
+} from "@/lib/files/open-workspace-file-locally";
 import { collectToolOutputFilesFromParts } from "./message-output-files";
 import { normalizeExtractedArtifactPath } from "@/lib/files/extract-artifact-paths";
 import { format } from "date-fns";
@@ -132,6 +135,30 @@ const PurePreviewMessage = ({
     setMessages: contextSetMessages,
   } = useChatContext();
   const [, copyToClipboard] = useCopyToClipboard();
+
+  const openMessageFilePreviewPanel = useCallback(
+    (file: { path: string; name: string; type: string; taskId?: string }) => {
+      const storedReference = workspaceSessionFileReferenceFromStoredPath(
+        file.path,
+      );
+      if (storedReference) {
+        openFilePreviewPanel({ ...file, ...storedReference });
+        return;
+      }
+
+      if (file.taskId) {
+        const reference = workspaceFileReferenceFromStoredPath(
+          file.path,
+          file.taskId,
+        );
+        openFilePreviewPanel({ ...file, ...reference });
+        return;
+      }
+
+      openFilePreviewPanel(file);
+    },
+    [openFilePreviewPanel],
+  );
 
   const { insightData, mutateInsightList } = useInsightPagination();
 
@@ -521,25 +548,29 @@ const PurePreviewMessage = ({
 
   /**
    * Convert tool output paths to LibraryItem same as "My Files / Dialog Space" for LibraryItemRow rendering.
-   * Files already displayed via NativeToolCall are excluded to prevent duplicate display.
+   * Temporary helper files already shown in NativeToolCall are hidden, while final artifacts stay visible
+   * at the bottom of the assistant message so users can open them without scrolling back to the tool card.
    */
   const assistantOutputLibraryItems = useMemo((): LibraryItem[] => {
     if (message.role !== "assistant") return [];
     const files = collectToolOutputFilesFromParts(filteredParts).filter(
-      (f) => !nativeToolDisplayedFilePaths.has(f.path),
+      (f) => !nativeToolDisplayedFilePaths.has(f.path) || !f.isTemporary,
     );
 
     return files.map((f) => {
-      const rel = sessionRelativePathFromStoredPath(f.path, chatId);
+      const workspaceFile = workspaceFileReferenceFromStoredPath(
+        f.path,
+        chatId,
+      );
       return {
-        id: `${message.id}-${rel}`,
+        id: `${message.id}-${workspaceFile.taskId}-${workspaceFile.path}`,
         kind: "workspace_file",
         title: f.name,
         date: new Date(0), // epoch - date not shown for chat output files
         groupKey: "chat-output",
         workspaceFile: {
-          taskId: chatId,
-          path: rel,
+          taskId: workspaceFile.taskId,
+          path: workspaceFile.path,
           name: f.name,
           type: f.type,
         },
@@ -706,7 +737,7 @@ const PurePreviewMessage = ({
                                 }
                                 taskId={chatId}
                                 onPreviewFile={(file) => {
-                                  openFilePreviewPanel(file);
+                                  openMessageFilePreviewPanel(file);
                                 }}
                               />
                             )}
@@ -726,10 +757,8 @@ const PurePreviewMessage = ({
                     if (type === "text") {
                       const rawText =
                         (part as any).text ?? (part as any).content ?? "";
-                      // Strip <structured-output> block from display text
-                      const { cleanText } = parseStructuredOutput(rawText);
                       // Filter out malformed tool calls (XML format output by some models like MiniMax)
-                      const textContent = stripMalformedToolCalls(cleanText);
+                      const textContent = stripMalformedToolCalls(rawText);
                       const isUserMessage = message.role === "user";
 
                       // Check if buttons need to be displayed (only show once, in the first text part)
@@ -772,7 +801,9 @@ const PurePreviewMessage = ({
                                     <MarkdownWithCitations
                                       onCitationClick={handleCitationClick}
                                       insights={insightData.items}
-                                      onPreviewFile={openFilePreviewPanel}
+                                      onPreviewFile={
+                                        openMessageFilePreviewPanel
+                                      }
                                     >
                                       {textContent}
                                     </MarkdownWithCitations>
@@ -789,7 +820,9 @@ const PurePreviewMessage = ({
                                     <MarkdownWithCitations
                                       onCitationClick={handleCitationClick}
                                       insights={insightData.items}
-                                      onPreviewFile={openFilePreviewPanel}
+                                      onPreviewFile={
+                                        openMessageFilePreviewPanel
+                                      }
                                     >
                                       {textContent}
                                     </MarkdownWithCitations>
@@ -1065,6 +1098,57 @@ const PurePreviewMessage = ({
                       }
                     }
 
+                    if (type === "data-permission-request") {
+                      const permissionPart = part as {
+                        data?: {
+                          permissionRequest?: {
+                            requestId: string;
+                            toolName: string;
+                            toolInput: Record<string, unknown>;
+                            toolUseID: string;
+                            decisionReason?: string;
+                            blockedPath?: string;
+                          };
+                        };
+                      };
+                      const request = permissionPart.data?.permissionRequest;
+
+                      if (request?.requestId) {
+                        return (
+                          <PermissionDialog
+                            key={key}
+                            request={request}
+                            onDecision={async (decision) => {
+                              const response = await fetch(
+                                "/api/native/agent/permission",
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    requestId: request.requestId,
+                                    ...decision,
+                                  }),
+                                },
+                              );
+                              if (!response.ok) {
+                                const result = (await response
+                                  .json()
+                                  .catch(() => null)) as {
+                                  error?: string;
+                                } | null;
+                                throw new Error(
+                                  result?.error ||
+                                    "Failed to submit permission decision",
+                                );
+                              }
+                            }}
+                          />
+                        );
+                      }
+                    }
+
                     // Handle password_input from Native Agent (sudo password prompts)
                     if (type === "password_input") {
                       const passwordPart = part as {
@@ -1238,7 +1322,7 @@ const PurePreviewMessage = ({
                       viewMode="list"
                       t={t as (key: string, fallback?: string) => string}
                       onOpenFile={(wf) =>
-                        openFilePreviewPanel({
+                        openMessageFilePreviewPanel({
                           path: wf.path,
                           name: wf.name,
                           type: wf.type ?? "",

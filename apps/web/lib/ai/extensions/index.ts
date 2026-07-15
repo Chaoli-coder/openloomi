@@ -11,3 +11,9 @@ export {
   OpenCodeAgent,
 } from "./agent/opencode";
 export { hermesPlugin, createHermesAgent, HermesAgent } from "./agent/hermes";
+export {
+  openclawPlugin,
+  createOpenClawAgent,
+  OpenClawAgent,
+} from "./agent/openclaw";
+export { codexPlugin, createCodexAgent, CodexAgent } from "./agent/codex";

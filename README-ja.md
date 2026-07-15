@@ -24,13 +24,17 @@
 
 OpenLoomiは、デスクトップ上で動作するオープンソースのAIワークスペースです。すでに使っているツール（メッセージアプリ、メール、カレンダー、ドキュメント、プロジェクト管理ツールなど）と連携し、あなたの人間関係、プロジェクト、意思決定の**ホリスティック・コンテキスト・グラフ**を構築します。
 
+<p align="center">
+  <img src="screenshots/app/main-with-loomi.png" alt="OpenLoomi メインウィンドウと Loomi" width="100%">
+</p>
+
 ## 機能
 
 |     | 機能                                                                         | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🧠  | **[ホリスティック・コンテキスト・グラフ](https://openloomi.ai/docs/memory)** | 短期 → 中期 → 長期の記憶が自律的に成長します。可視化・監査が可能で、何カ月にもわたってあなたの人間関係、プロジェクト、意思決定を常に記憶し続けます                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 🔌  | **[プラットフォームコネクタ](https://openloomi.ai/docs/connectors)**         | **[自動フェッチ](https://openloomi.ai/docs/what-is-openloomi#a-complete-intelligence-loop-from-perception-to-action)** バックグラウンド同期ループがコミット、課題、メール、ドキュメントを能動的に取得しグラフに保存。**[メッセージングアプリ](https://openloomi.ai/docs/messaging-apps)** — Telegram、WhatsApp、iMessage、QQ、拉翅/Feishu — 既存の会話内で直接AIとチャット可能。全リスト：Telegram、WhatsApp、WeChat、DingTalk、Feishu、Gmail、Google Calendar、Outlook、Google Docs、X/Twitter、Instagram、LinkedIn、Facebook Messenger、Jira、HubSpot、Asana、iMessage、QQ、RSS |
-| ⏰  | **[プロアクティブタスク](https://openloomi.ai/docs/automation)**             | あなたのニーズを先読みするインテリジェントなタスク実行。単なるスケジュール自動化ではなく、適切なタイミングで実行されるコンテキストを踏まえたアクションです                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ⏰  | **[プロアクティブタスク](https://openloomi.ai/docs/automation)**             | デスクトップ注意エージェント。画面とワークフローを見守り、次の動きを先読みして、頼まれる前にそっと処理します                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 🖥️  | **[セキュリティと使いやすさ](https://openloomi.ai/docs/privacy-security)**   | Windows、macOS、Linux向けのネイティブデスクトップアプリ。**すぐに使えて**、セットアップは数分、設定で苦労することはありません。IndexedDB + SQLiteによるローカルファースト保存、AES-256暗号化、データが端末外に出ることはなく、監査可能なアクセスログを備えています                                                                                                                                                                                                                                                                                                                |
 | 🔗  | **[オープンソース化されたスキル](https://openloomi.ai/docs/skills)**         | OpenLoomi Skillsはオープンソースで、あらゆるエージェントに組み込めます。Claude Code、Codex、OpenClaw、Hermesなどに対応しています。                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
@@ -44,7 +48,7 @@ OpenLoomiは、デスクトップ上で動作するオープンソースのAIワ
 
 | macOS Apple Silicon                                                                                        | macOS Intel                                                                                              | Linux AMD64                                                                                                                                                                                                         | Linux ARM64                                                                                                                                                                                                             | Windows                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_aarch64.dmg) | [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_amd64.dmg) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_amd64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_amd64.rpm) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_aarch64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_aarch64.rpm) | [.exe](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_windows_amd64.exe) |
+| [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_aarch64.dmg) | [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_amd64.dmg) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.rpm) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.rpm) | [.exe](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_windows_amd64.exe) |
 
 詳細なドキュメントは[こちら](https://openloomi.ai/docs)で確認できます。
 
@@ -73,6 +77,10 @@ Node.js 22以上、pnpm 9以上、Rust 1.75以上が必要です。Windows で�
 
 <table>
 <tr>
+<td><img src="screenshots/app/loomi-pet.gif" alt="Loomi ペット" width="100%"></td>
+<td><img src="screenshots/app/loomi-proactive-task.gif" alt="プロアクティブタスク" width="100%"></td>
+</tr>
+<tr>
 <td><img src="screenshots/app/docx.gif" alt="Document preview" width="100%"></td>
 <td><img src="screenshots/app/excel.gif" alt="Spreadsheet preview" width="100%"></td>
 </tr>
@@ -81,13 +89,6 @@ Node.js 22以上、pnpm 9以上、Rust 1.75以上が必要です。Windows で�
 <td><img src="screenshots/app/connectors.gif" alt="Connectors" width="100%"></td>
 </tr>
 </table>
-
-## セキュリティ
-
-- **ローカルファースト**: オフラインで動作し、外部サーバーへデータを送信しません
-- **監査可能**: データがいつ、なぜアクセスされたかを正確に確認・監査できます
-- 保存データには**AES-256暗号化**を使用
-- **ハードウェア分離された処理、公開ゲートウェイなし**
 
 ## フィードバック
 

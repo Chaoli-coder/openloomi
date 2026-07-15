@@ -22,7 +22,11 @@
 
 ## What is OpenLoomi?
 
-OpenLoomi is an open-source AI coworker and workspace for builders who want local-first work memory around their AI agents. It connects your work tools so AI can understand people, projects, decisions, and follow-ups before it acts with human approval.
+OpenLoomi is an open-source AI coworker and workspace for builders who want local-first work memory around their AI agents. It connects your work tools and screen so AI can understand people, projects, decisions, and follow-ups before it acts with human approval.
+
+<p align="center">
+  <img src="screenshots/app/main-with-loomi.png" alt="OpenLoomi main window with Loomi" width="100%">
+</p>
 
 ## Quick Start
 
@@ -30,7 +34,7 @@ OpenLoomi is an open-source AI coworker and workspace for builders who want loca
 
 | macOS Apple Silicon                                                                                        | macOS Intel                                                                                              | Linux AMD64                                                                                                                                                                                                         | Linux ARM64                                                                                                                                                                                                             | Windows                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_aarch64.dmg) | [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_macOS_amd64.dmg) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_amd64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_amd64.rpm) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_aarch64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_linux_aarch64.rpm) | [.exe](https://github.com/melandlabs/openloomi/releases/download/v0.7.0/openloomi_0.7.0_windows_amd64.exe) |
+| [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_aarch64.dmg) | [.dmg](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_amd64.dmg) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.rpm) | [.deb](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.deb) / [.rpm](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.rpm) | [.exe](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_windows_amd64.exe) |
 
 The desktop installers include `openloomi-ctl` for scripted one-shot usage from the installed app resources. See [OpenLoomi CLI](https://openloomi.ai/docs/openloomi-ctl) for bundled CLI paths, CI/CD, and `--one-shot --json` usage.
 
@@ -54,7 +58,7 @@ Requires Node.js 22+, pnpm 9+, Rust 1.75+, and on Windows: Visual Studio Build T
 | --- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 🧠  | **[Holistic Context](https://openloomi.ai/docs/memory)**                 | Short → mid → long-term memory that grows on its own — visible, auditable, and always remembering your people, projects, and decisions across months                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 🔌  | **[Platform Connectors](https://openloomi.ai/docs/connectors)**          | **[Auto-fetch](https://openloomi.ai/docs/what-is-openloomi#a-complete-intelligence-loop-from-perception-to-action)** background sync loop pulls commits, issues, emails, and docs proactively into your context graph. **[Messaging apps](https://openloomi.ai/docs/messaging-apps)** — Telegram, WhatsApp, iMessage, QQ, Lark/Feishu — let you chat with AI directly inside your existing conversations. Full list: Telegram, WhatsApp, WeChat, DingTalk, Feishu, Gmail, Google Calendar, Outlook, Google Docs, X/Twitter, Instagram, LinkedIn, Facebook Messenger, Jira, HubSpot, Asana, iMessage, QQ, RSS |
-| ⏰  | **[Proactive Tasks](https://openloomi.ai/docs/automation)**              | Intelligent task execution that anticipates your needs — not just scheduled automation, but context-aware actions that happen at the right moment                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ⏰  | **[Proactive Tasks](https://openloomi.ai/docs/automation)**              | A desktop attention agent that watches your screen and workflow — anticipates what's next, then quietly does it before you have to ask                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 🖥️  | **[Security & Ease of Use](https://openloomi.ai/docs/privacy-security)** | Native app for Windows, macOS, Linux Desktop Apps — **works out of the box**, minutes to set up, no configuration wrestling; local-first storage with IndexedDB + SQLite, AES-256 encryption, no data leaves your machine, auditable access logs                                                                                                                                                                                                                                                                                                                                                             |
 | 🔗  | **[Open Sourced Skills](https://openloomi.ai/docs/skills)**              | OpenLoomi Skills are open-source and can be integrated into any Agent — Claude Code, Codex, OpenClaw, Hermes, and more.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
@@ -75,6 +79,10 @@ Requires Node.js 22+, pnpm 9+, Rust 1.75+, and on Windows: Visual Studio Build T
 
 <table>
 <tr>
+<td><img src="screenshots/app/loomi-pet.gif" alt="Loomi Pet" width="100%"></td>
+<td><img src="screenshots/app/loomi-proactive-task.gif" alt="Proactive Tasks" width="100%"></td>
+</tr>
+<tr>
 <td><img src="screenshots/app/docx.gif" alt="Document preview" width="100%"></td>
 <td><img src="screenshots/app/excel.gif" alt="Spreadsheet preview" width="100%"></td>
 </tr>
@@ -83,13 +91,6 @@ Requires Node.js 22+, pnpm 9+, Rust 1.75+, and on Windows: Visual Studio Build T
 <td><img src="screenshots/app/connectors.gif" alt="Connectors" width="100%"></td>
 </tr>
 </table>
-
-## Security
-
-- **Local-first**: works offline, no data sent to external servers
-- **Auditable**: you can see and audit exactly when and why data is accessed
-- **AES-256 encryption** for stored data
-- **Hardware-isolated processing, no public gateways**
 
 ## Feedback
 

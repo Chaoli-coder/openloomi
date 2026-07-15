@@ -1,7 +1,7 @@
 // Decision card window: larger always-on-top webview shown on demand
 // (typically by clicking the bubble or the pet itself while there is a
 // pending decision). Loads `public/loomi-card.html` which provides a
-// full decision card with Run / Dismiss / Open-in-dashboard actions.
+// full decision card with Open / Dismiss / Run-in-dashboard actions.
 //
 // Unlike the bubble, the card is *not* managed by the watcher — the
 // host only shows it in response to a user gesture (`pet:open-card` from
@@ -51,6 +51,7 @@ pub fn build_card_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow>
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
+    .visible_on_all_workspaces(true)
     .skip_taskbar(true)
     .shadow(false)
     .visible(false)
@@ -66,6 +67,8 @@ pub fn build_card_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow>
     let builder = base;
 
     let w = builder.build()?;
+    super::macos_window::configure_as_floating_panel(&w);
+    super::macos_window::configure_for_all_spaces(&w);
     let app_handle = app.clone();
     let label = PET_CARD_LABEL.to_string();
     w.on_window_event(move |ev| {
@@ -83,18 +86,35 @@ pub fn build_card_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow>
 /// when there is a pending decision. If the window doesn't exist yet
 /// the first call builds it.
 pub fn show_card_window(app: &AppHandle) {
+    super::aux_position::clear_card_manual_position();
+    super::aux_position::reposition_card_to_pet(app);
     if let Some(w) = app.get_webview_window(PET_CARD_LABEL) {
+        let _ = w.set_ignore_cursor_events(false);
         let _ = w.show();
         let _ = w.set_focus();
         let _ = w.set_always_on_top(true);
+        let _ = w.set_visible_on_all_workspaces(true);
+        // Re-apply the NSPanel conversion on every show so a
+        // transient rebuild of the underlying NSWindow doesn't
+        // quietly strip our non-activating-overlay behaviour.
+        super::macos_window::configure_as_floating_panel(&w);
+        super::macos_window::configure_for_all_spaces(&w);
         return;
     }
     if let Err(e) = build_card_window(app) {
         log::warn!("[loop-pet] show_card_window: build failed: {e}");
     }
     if let Some(w) = app.get_webview_window(PET_CARD_LABEL) {
+        let _ = w.set_ignore_cursor_events(false);
         let _ = w.show();
         let _ = w.set_focus();
+        let _ = w.set_always_on_top(true);
+        let _ = w.set_visible_on_all_workspaces(true);
+        // Re-apply the NSPanel conversion on every show so a
+        // transient rebuild of the underlying NSWindow doesn't
+        // quietly strip our non-activating-overlay behaviour.
+        super::macos_window::configure_as_floating_panel(&w);
+        super::macos_window::configure_for_all_spaces(&w);
     }
 }
 
