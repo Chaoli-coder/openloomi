@@ -58,20 +58,29 @@ function parseCliArgs(): CliArgs {
   };
 }
 
-async function loadExistingPredictions(output?: string): Promise<GDPvalPrediction[]> {
+async function loadExistingPredictions(
+  output?: string,
+): Promise<GDPvalPrediction[]> {
   if (!output) return [];
   try {
-    const existing = JSON.parse(await readFile(output, "utf-8")) as GDPvalRunResult;
+    const existing = JSON.parse(
+      await readFile(output, "utf-8"),
+    ) as GDPvalRunResult;
     return Array.isArray(existing.predictions) ? existing.predictions : [];
   } catch {
     return [];
   }
 }
 
-function buildBenchmarkPrompt(task: { task_id: string; prompt: string; metadata?: Record<string, unknown> }) {
-  const metadataText = task.metadata && Object.keys(task.metadata).length > 0
-    ? `\n\nTask metadata:\n${JSON.stringify(task.metadata, null, 2)}`
-    : "";
+function buildBenchmarkPrompt(task: {
+  task_id: string;
+  prompt: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const metadataText =
+    task.metadata && Object.keys(task.metadata).length > 0
+      ? `\n\nTask metadata:\n${JSON.stringify(task.metadata, null, 2)}`
+      : "";
 
   return `You are completing a GDPval real-world work task. Produce the requested deliverable directly. Do not mention that this is a benchmark unless asked.\n\nTask ID: ${task.task_id}${metadataText}\n\nTask:\n${task.prompt}`;
 }
@@ -94,13 +103,17 @@ async function main() {
   const tasks = args.quick ? allTasks.slice(0, args.quick) : allTasks;
   console.log(`Loaded ${allTasks.length} tasks; running ${tasks.length}`);
 
-  const previous = args.resume ? await loadExistingPredictions(args.output) : [];
+  const previous = args.resume
+    ? await loadExistingPredictions(args.output)
+    : [];
   const predictions = [...previous];
   const completed = new Set(previous.map((item) => item.task_id));
 
   for (const [index, task] of tasks.entries()) {
     if (completed.has(task.task_id)) {
-      console.log(`[${index + 1}/${tasks.length}] Skip completed ${task.task_id}`);
+      console.log(
+        `[${index + 1}/${tasks.length}] Skip completed ${task.task_id}`,
+      );
       continue;
     }
 
@@ -140,8 +153,13 @@ async function main() {
   if (args.output) console.log(`Results saved to: ${args.output}`);
 }
 
-function summarize(dataset: string, predictions: GDPvalPrediction[]): GDPvalRunResult {
-  const errorCount = predictions.filter((item) => item.error || item.response.startsWith("Error:")).length;
+function summarize(
+  dataset: string,
+  predictions: GDPvalPrediction[],
+): GDPvalRunResult {
+  const errorCount = predictions.filter(
+    (item) => item.error || item.response.startsWith("Error:"),
+  ).length;
   return {
     dataset,
     tasks_run: predictions.length,

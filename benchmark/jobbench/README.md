@@ -75,4 +75,3 @@ pnpm.cmd --filter @openloomi/benchmark-jobbench benchmark --dataset dataset/jobb
 
 - Do not commit `.env`, raw downloaded data, generated JSONL files, or generated results unless explicitly requested.
 - The runner stores responses and basic run status. Official JobBench scoring can be added after confirming the dataset schema and target metrics.
-

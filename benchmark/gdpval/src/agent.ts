@@ -67,7 +67,9 @@ export async function callAgentApi(
   });
 
   if (!response.ok) {
-    throw new Error(`Agent API error: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Agent API error: ${response.status} ${response.statusText}`,
+    );
   }
 
   const text = await response.text();
@@ -96,10 +98,17 @@ function extractAgentText(text: string): string {
         ? trimmed.slice(5).trim()
         : trimmed.slice(1).trim();
       if (!jsonStr || jsonStr === "[DONE]") continue;
-      const parsed = JSON.parse(jsonStr) as { type?: string; content?: string; message?: string };
-      if (parsed.type === "text" && parsed.content) textParts.push(parsed.content);
-      if (parsed.type === "direct_answer" && parsed.content) textParts.push(parsed.content);
-      if (parsed.type === "error" && parsed.message) textParts.push(parsed.message);
+      const parsed = JSON.parse(jsonStr) as {
+        type?: string;
+        content?: string;
+        message?: string;
+      };
+      if (parsed.type === "text" && parsed.content)
+        textParts.push(parsed.content);
+      if (parsed.type === "direct_answer" && parsed.content)
+        textParts.push(parsed.content);
+      if (parsed.type === "error" && parsed.message)
+        textParts.push(parsed.message);
     } catch {
       // Ignore malformed stream lines.
     }
