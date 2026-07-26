@@ -3,7 +3,6 @@
   "defaultOpen": true,
   "collapsible": true,
   "pages": [
-    "index",
     "engineering-daily-sync",
     "unified-inbox-auto-draft",
     "product-research-iteration",
