@@ -33,7 +33,7 @@
 OpenLoomiは、オープンソースのAIパートナーです。デスクトップ常駐の**注意エージェント**を中心に、認可した業務ツールと画面コンテンツをつなぎ、あなたの人間関係、プロジェクト、意思決定の**ホリスティック・コンテキスト**を構築。何が起きたのか、なぜ重要なのか、次に何をすべきか、日々のサマリーまで教えてくれるので、本当に大切なことに注意を向けられます。
 
 <p align="center">
-  <img src="screenshots/app/main-with-loomi.png" alt="OpenLoomi メインウィンドウと Loomi" width="100%">
+  <img src="screenshots/app/main-with-loomi.gif" alt="OpenLoomi メインウィンドウと Loomi" width="100%">
 </p>
 
 ## 何に使える？

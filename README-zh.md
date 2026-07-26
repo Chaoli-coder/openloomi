@@ -34,7 +34,7 @@
 这就是你的 Attention Agent（注意力代理）。
 
 <p align="center">
-  <img src="screenshots/app/main-with-loomi.png" alt="OpenLoomi 主窗口与 Loomi" width="100%">
+  <img src="screenshots/app/main-with-loomi.gif" alt="OpenLoomi 主窗口与 Loomi" width="100%">
 </p>
 
 ## 它能做什么？

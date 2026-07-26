@@ -35,7 +35,7 @@ Your work is scattered across apps. OpenLoomi connects the tools you use and, wi
 **Focus on what matters. This is your Attention Agent.**
 
 <p align="center">
-  <img src="screenshots/app/main-with-loomi.png" alt="OpenLoomi main window with Loomi" width="100%">
+  <img src="screenshots/app/main-with-loomi.gif" alt="OpenLoomi main window with Loomi" width="100%">
 </p>
 
 ## What is it for?
