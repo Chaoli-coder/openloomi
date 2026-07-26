@@ -6,6 +6,15 @@ icon: "FaStream"
 
 # Product-Research Iteration — Plan the next sprint automatically
 
+## At a glance
+
+|                   |                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| **Persona**       | Product manager juggling Linear, GitHub, Notion, and Obsidian                          |
+| **Goal**          | Stop stitching the next sprint together from memory                                    |
+| **Prerequisites** | Linear + GitHub connectors; Obsidian vault folder configured as a custom signal source |
+| **Outcome**       | One rolling sprint plan that folds in feedback, code state, and prior decisions        |
+
 For a product manager, the usual way to plan the next sprint used to look like this: Linear was opened to scan dozens of tickets, GitHub was opened to dig through user feedback and bugs, Obsidian was opened to flip through half-finished proposals and customer interview notes. They'd bounce between these tools, skim 200 headlines, and stitch the next iteration together from memory — then jot the conclusion into Notion, and by Monday's standup half of it was already forgotten.
 
 The painful part wasn't the writing — it was the assembly. Which tickets are actually healthy? Which ones say "small fix" but already have 7 linked cards? Which user pain point shows up in 3 GitHub issues AND a customer interview note? The evidence was scattered across four tools and the PM had to be the one to fold them together.
@@ -222,3 +231,13 @@ Loop is on by default in the desktop app at a 10-minute scan. To tune cadence, s
 To re-scan manually at any moment, Chat is opened and the agent is asked: _"Re-run Loop with the latest screen memory, Linear, GitHub, and Obsidian."_
 
 OpenLoomi's Tracking panel records every execution — which cards surfaced, which Approves were tapped, which PRDs were generated, which Linear tickets were edited. This way the cross-tool synthesis can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the cross-tool synthesis engine
+- [Connectors](/docs/connectors) — wiring Linear + GitHub
+- [Memory](/docs/memory) — where prior sprint decisions live
+- [Automation](/docs/automation) — schedule the weekly sprint rollup
+- [Library](/docs/library) — upload prior PRDs and interview notes

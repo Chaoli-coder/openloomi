@@ -8,6 +8,22 @@ icon: "FaChartLine"
 
 OpenLoomi's memory system is rigorously evaluated against academic and industry benchmarks to ensure industry-leading performance in real-world scenarios.
 
+This page summarises the headline numbers and links to the per-benchmark harness code. For the deeper evaluation framework (accuracy, recall, temporal reasoning, knowledge update), see the [Memory Evaluation Framework](/docs/memory#memory-evaluation-framework) section of the Memory doc.
+
+## Scope
+
+Three benchmark families, each measuring a different dimension of the memory stack:
+
+| Benchmark     | Question                                    | What it stresses                                                  |
+| ------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| LoCoMo        | "Did the agent recall what was said?"       | Long-term conversation recall across retrieval modes              |
+| LongMemEval-S | "Did the agent reason across sessions?"     | Cross-session, temporal, and knowledge-update questions           |
+| CL-bench      | "Did the agent apply context to new tasks?" | Domain reasoning, extraction, and text generation in long context |
+
+## Results
+
+OpenLoomi reports **96%+ accuracy** on LoCoMo and LongMemEval-S500 — on par with leading open-source memory projects (`agentmemory`, `mempalace`). See the [GitHub harness](https://github.com/melandlabs/openloomi/tree/main/benchmark) for raw numbers, splits, and replay instructions.
+
 ---
 
 ## LoCoMo (Long-term Conversation Memory)
@@ -68,3 +84,12 @@ CL-bench evaluates AI models' context learning capabilities across professional 
 | Text Generation            | Context-aware content generation               |
 
 🔗 [GitHub Repository](https://github.com/melandlabs/openloomi/tree/main/benchmark/clbench)
+
+---
+
+## Related
+
+- [Memory](/docs/memory) — the system these benchmarks evaluate
+- [Embedding Providers](/docs/reference/embedding-providers) — backend choices that affect retrieval numbers
+- [What is OpenLoomi?](/docs/what-is-openloomi) — the 30-second pitch
+- [Changelog](/docs/changelog) — benchmark history and methodology updates

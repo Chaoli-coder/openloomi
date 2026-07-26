@@ -349,3 +349,15 @@ Yes. When you register a [custom decision type](/docs/loop#extending-loop-custom
 ### Can I force specific signal patterns to always become a specific card?
 
 Yes — register a [classifier rule](/docs/loop#register-a-deterministic-classifier-rule) and Loop will pin the routing for that pattern. The card Loomi bubbles is then deterministic, regardless of how the underlying LLM interprets the signal. Rules support a `noop` action too, which suppresses the decision so the bubble never appears for that pattern. See the [How classifier rules pin what Loomi surfaces](#how-classifier-rules-pin-what-loomi-surfaces) section above for the example and the safe-AST predicate syntax.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the judgement engine that produces Decision Cards
+- [Memory](/docs/memory) — supplies the important-contacts filter and project context
+- [Connectors](/docs/connectors) — which platforms feed the Attention Agent
+- [Chat](/docs/chat) — where bubbles deep-link into a full thread
+- [Plugins](/docs/plugins) — drive Loomi from Claude Code or Codex CLI
+- [Privacy & Security](/docs/privacy-security) — what the Attention Agent does and doesn't see
+- [Glossary](/docs/glossary) — clear up the Attention Agent vs Loomi vs Pet vs Fox naming

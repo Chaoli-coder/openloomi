@@ -6,6 +6,15 @@ icon: "FaChartLine"
 
 # Sales Teams
 
+## At a glance
+
+|                   |                                                                           |
+| ----------------- | ------------------------------------------------------------------------- |
+| **Persona**       | RevOps lead coordinating deals across HubSpot, Slack, email               |
+| **Goal**          | Stop doing pipeline archaeology every Friday                              |
+| **Prerequisites** | HubSpot connector authorized; HubSpot registered as a custom Loop channel |
+| **Outcome**       | Deal signals flow into the queue, drafts are approval-gated               |
+
 A RevOps lead at a B2B company used to spend half the week chasing context — opening HubSpot to check a deal stage, scrolling Slack to find the last conversation with a prospect, drafting the same follow-up email for the fifth time. The other half of the week was supposed to be pipeline strategy and forecast calls.
 
 By Friday afternoon, all that could be remembered was that Acme's stage changed Tuesday, Sarah's been quiet for two weeks, and the proposal promised to the partner from Berlin never got written.
@@ -185,3 +194,13 @@ Loop is on by default at a 10-minute scan. To tune trusted contacts, source togg
 > 💡 HubSpot isn't in Loop's five built-in sources, so the deal signals show up only after the custom channel has been registered. Once registered, the next tick picks them up — and they appear in the Brief and Wrap rollups alongside everything else.
 
 OpenLoomi's audit log records every execution — how many times Loop has polled, which deal signals surfaced, which Approves were tapped, which drafts were edited. This way repetitive triage can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the deal-signal engine
+- [Connectors](/docs/connectors) — wiring HubSpot + Slack + email
+- [Memory](/docs/memory) — the prospect history drafts are grounded in
+- [Automation](/docs/automation) — schedule the weekly pipeline rollup
+- [Attention Agent](/docs/attention-agent) — where high-value deal signals bubble

@@ -1,6 +1,6 @@
 ---
 title: "Messaging Apps"
-description: "Use OpenLoomi directly in Telegram, WhatsApp, iMessage, QQ, and Lark/Feishu"
+description: "Use OpenLoomi directly in Telegram, WhatsApp, iMessage, QQ, and Lark/Feishu — chat, set reminders, and trigger automations from the apps you already live in."
 icon: "FaCommentDots"
 ---
 
@@ -13,7 +13,24 @@ icon: "FaCommentDots"
 
 Besides using the OpenLoomi interface, you can also interact with OpenLoomi directly through your favorite messaging apps. Once connected, OpenLoomi becomes your AI assistant within those platforms.
 
-> ⚠️ **Important**: All conversations and data are stored **locally** on your device. The app must remain **open** for the message app feature.
+<Callout type="warning">
+  All conversations and data are stored **locally** on your device. The app must
+  remain **open** for the messaging-app feature.
+</Callout>
+
+## Goal
+
+By the end of this page you should be able to:
+
+1. Pick the messaging app that fits your workflow (bot-token vs user-account).
+2. Authorize OpenLoomi inside that app and confirm a round-trip reply.
+3. Use the same chat to set reminders, run commands, or trigger automations.
+
+## Before you begin
+
+- OpenLoomi Desktop is installed and the local API on `127.0.0.1:3414` (or `:3515`) is reachable.
+- The platform-specific authorization is ready — QR code / phone / bot token / app password depending on the platform.
+- The desktop app stays open during normal use; reminders and pushes route through it.
 
 ---
 
@@ -31,7 +48,7 @@ Besides using the OpenLoomi interface, you can also interact with OpenLoomi dire
 
 ## Telegram
 
-After connecting your Telegram account, you can also chat with OpenLoomi naturally—just send a message to **Saved Messages** and it will respond.
+After connecting your Telegram account, you can also chat with OpenLoomi naturally — just send a message to **Saved Messages** and it will respond.
 
 <div align="center">
   <img src="/img/openloomi/telegram-chat.png" alt="OpenLoomi Telegram Chat" />
@@ -39,7 +56,7 @@ After connecting your Telegram account, you can also chat with OpenLoomi natural
 
 ## iMessage
 
-iMessage integration is **only available on macOS**. Your message data stays on your local device—OpenLoomi only reads recent messages when you use it to generate insights.
+iMessage integration is **only available on macOS**. Your message data stays on your local device — OpenLoomi only reads recent messages when you use it to generate insights.
 
 - Chat with OpenLoomi naturally
 - Set reminders
@@ -79,9 +96,31 @@ Connect Lark/Feishu to enable enterprise workflow automation. Once connected, yo
 
 ## Setting Up
 
-1. Go to **Settings** → **Connectors**
-2. Click **Connect** on your preferred messaging platform
-3. Follow the authorization steps (OAuth, QR code, or device pairing)
-4. Start chatting with OpenLoomi!
+1. Go to **Settings → Connectors**.
+2. Click **Connect** on your preferred messaging platform.
+3. Follow the authorization steps (OAuth, QR code, or device pairing).
+4. Start chatting with OpenLoomi.
 
 For detailed setup instructions for each platform, see the [Connectors guide](/docs/connectors).
+
+## Verify
+
+- The connector shows **Connected** in **Settings → Connectors**.
+- A message you send yourself (Telegram Saved Messages, WhatsApp self-chat) returns an AI reply in the same thread.
+- A bot-platform user who DMs your bot gets an AI response within a few seconds.
+
+## Troubleshooting
+
+- **No reply arrives.** Confirm the desktop app is still running and the local API port is reachable.
+- **Bot doesn't reply in a group chat.** Bots only respond when @mentioned; they do not passively read all group traffic.
+- **iMessage connector disconnected.** Re-grant Full Disk Access and Automation permissions, then restart the app.
+- **Bot doesn't appear in Lark/Feishu.** Confirm the app was published in the enterprise admin console; unpublished apps can't be searched.
+
+## Related
+
+- [Connectors](/docs/connectors) — full platform setup flows and the Composio authorization mode
+- [Attention Agent](/docs/attention-agent) — desktop bubbles for non-messaging events
+- [Loop](/docs/loop) — how messages from these apps become Decision Cards
+- [Memory](/docs/memory) — where incoming messages are stored
+- [Automation](/docs/automation) — schedule cross-app actions triggered from chat
+- [Privacy & Security](/docs/privacy-security) — what data the messaging connectors can see

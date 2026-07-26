@@ -73,3 +73,12 @@ Executable paths, profiles, models, sandbox modes, Git checks, and timeouts are 
 - **Not inside a trusted directory:** keep `OPENLOOMI_AGENT_CODEX_SKIP_GIT_REPO_CHECK=true` for non-repository work directories, or run tasks in a Git repository and set it to `false`.
 - **Run times out:** increase `OPENLOOMI_AGENT_CODEX_TIMEOUT_MS` and verify the selected model is reachable from the Codex CLI itself.
 - **`no composio surface reachable` / connectors flip back to `needs_setup` while OpenLoomi drives Codex** — first confirm the active execution sandbox. On macOS, current OpenLoomi releases map `workspace-write` to `danger-full-access`; restart the updated desktop app if an older process is still using the blocked sandbox. An explicit `read-only` setting still blocks network access. On Linux/Windows, use a Codex profile with network access enabled or select a sandbox appropriate for the host's isolation boundary, then restart OpenLoomi and re-run the connector probe.
+
+---
+
+## Related
+
+- [Agent Runtimes](/docs/reference/agent-runtimes) — runtime index
+- [Codex Plugin](/docs/plugins/codex) — the reverse bridge for Codex CLI
+- [Getting Started](/docs/getting-started) — install + first run
+- [OpenLoomi CLI](/docs/reference/openloomi-ctl) — drive the runtime from a shell

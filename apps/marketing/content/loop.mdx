@@ -557,3 +557,15 @@ If you tap "📝 Edit Draft" on a decision card, you jump straight into Chat in 
 ### Can I add my own kinds of decision cards or new signal sources?
 
 Yes. Loop exposes three per-user extension points — **custom decision types** (a new card label + icon, routed to one of the 14 built-in action runners), **custom channels** (a Composio-backed signal source like Stripe or Linear), and **classifier rules** (deterministic overrides that pin `type` / `actionKind` / a confidence floor when a signal's payload matches a small safe AST of predicates). You can register them through the [`openloomi-loop`](/docs/skills#openloomi-loop) skill in plain English ("register a loop type called `birthday_wish` for birthday greetings", "always route same-day birthdays to `birthday_wish`") or via the `/api/loop/types`, `/api/loop/channels`, and `/api/loop/classifier-rules` HTTP endpoints. State is stored locally in `~/.openloomi/loop/custom-{types,channels,classifier-rules}.json` and applies to the very next tick — no rebuild needed. See the [Extending Loop](#extending-loop-custom-types--channels) section above for the full design, the API reference, and a worked `curl` example.
+
+---
+
+## Related
+
+- [Attention Agent](/docs/attention-agent) — the Loomi widget that surfaces Loop's decision cards
+- [Memory](/docs/memory) — the holistic context Loop reads from and writes to
+- [Connectors](/docs/connectors) — the signal sources that feed Loop's tick
+- [Automation](/docs/automation) — schedule the brief, wrap, and tick jobs
+- [Chat](/docs/chat) — where Edit Draft hands off into the OpenLoomi chat
+- [Privacy & Security](/docs/privacy-security#audit-logs) — where every Loop tick is recorded
+- [Skills](/docs/skills) — the legacy `openloomi-loop` skill interface

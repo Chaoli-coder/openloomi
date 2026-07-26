@@ -1,15 +1,16 @@
 ---
 title: "OpenLoomi 0.5.0"
-description: "OpenLoomi 0.5.0 release notes"
+description: "OpenLoomi 0.5.0 release notes — unified vector search, platform connectors ecosystem, AI skills library"
+icon: "FaBolt"
 ---
 
 # OpenLoomi 0.5.0 - May 15, 2026
 
 OpenLoomi 0.5.0 brings a wave of intelligence and integration upgrades. Unified vector search across your memory knowledge base, a full platform connectors ecosystem with OAuth and contact management, AI-powered skills for UI/UX design and browser automation, richer document previews including PPTX, and a streamlined content structure — all backed by automated CI/CD with Homebrew cask support for seamless distribution.
 
-### Notable Changes
+## Highlights
 
-#### Unified Vector Search
+### Unified Vector Search
 
 Memory now features unified vector search that spans across all memory sources simultaneously. A new `search-all` command lets you query memory, knowledge base, and insights in one shot. Filtering by `--keyword` and `--channel` flags gives you fine-grained control over results, and empty queries gracefully list directory contents.
 
@@ -61,3 +62,12 @@ Additional refinements across the web app:
 - Auth secrets and encryption keys auto-generated on dev startup
 - Citation badges with hover tooltips for source attribution
 - Streaming resilience with exponential backoff retry
+
+## Related
+
+- [Memory](/docs/memory) — the unified vector search introduced in this release
+- [Connectors](/docs/connectors) — the platform connectors ecosystem
+- [Skills](/docs/skills) — the AI skills library
+- [Library](/docs/library) — the enhanced document previews
+- [Changelog](/docs/changelog) — full release history
+- [GitHub Release](https://github.com/melandlabs/openloomi/releases/tag/v0.5.0) — raw build artifacts

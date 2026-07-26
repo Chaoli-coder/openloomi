@@ -15,12 +15,12 @@ export default function Layout({ children }: { children: ReactNode }) {
             enabled: false,
           }}
           searchToggle={{
-            enabled: false,
+            enabled: true,
           }}
           sidebar={{
             enabled: true,
-            defaultOpenLevel: 0,
-            collapsible: false,
+            defaultOpenLevel: 1,
+            collapsible: true,
           }}
           themeSwitch={{
             enabled: false,

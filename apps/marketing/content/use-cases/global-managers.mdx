@@ -6,6 +6,15 @@ icon: "FaLightbulb"
 
 # Global Managers
 
+## At a glance
+
+|                   |                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------- |
+| **Persona**       | Manager running a team across three time zones (Singapore, Berlin, San Francisco) |
+| **Goal**          | Stop waking up to a 500-item inbox                                                |
+| **Prerequisites** | Messaging + email connectors authorized; Loop on at 10-minute default             |
+| **Outcome**       | Brief at 9 AM local time, Wrap at 6 PM, attention bubbles during the day          |
+
 A manager running a team that lives in three time zones — Singapore, Berlin, San Francisco — opens Slack at 9 AM in San Francisco to find that the Singapore teammates have already finished their day, the Berlin team is two hours from lunch, and the overnight pings from Tokyo are piled in three different inboxes.
 
 Every morning used to start the same way: Gmail is opened, Slack is opened, Lark is opened, scrolling continues for 30 minutes trying to figure out what was missed, and only then does the actual work begin. By the time catch-up is complete, half the morning is gone. And worse — the act of catching up generates more messages ("sorry, just saw this"), which the team then has to triage on top of their own work.
@@ -175,3 +184,13 @@ From that moment on:
 Trusted contacts, source toggles, and brief/wrap times are tuned in **Settings → Loop**. Loomi's bubble cadence, quiet hours, and theme are in **Settings → Attention Agent**. If the Brief is wanted in a different time zone or only in certain languages, the time is set in **Settings → Loop → Morning briefing time**; signal prioritisation respects the Interests panel in **Settings → Personalization**.
 
 OpenLoomi's audit log records every execution — how many times Loop has polled, which cards surfaced, which Approves were tapped, which drafts were edited. This way the overnight triage can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the overnight triage engine
+- [Automation](/docs/automation) — schedules the Brief / Wrap rollups
+- [Attention Agent](/docs/attention-agent) — quiet hours + bubble cadence
+- [Connectors](/docs/connectors) — wiring Slack + email
+- [Personalization](/docs/getting-started) — set the morning briefing time zone

@@ -6,6 +6,15 @@ icon: "FaLightbulb"
 
 # Industry Intelligence
 
+## At a glance
+
+|                   |                                                                          |
+| ----------------- | ------------------------------------------------------------------------ |
+| **Persona**       | Analyst tracking AI launches across X, Product Hunt, Reddit, RSS         |
+| **Goal**          | Stop re-researching last week's launches — let Memory carry the research |
+| **Prerequisites** | Custom channels registered for the non-built-in sources; Loop is on      |
+| **Outcome**       | A Friday Brief that ranks the launches worth caring about                |
+
 An analyst tracking AI product launches for a living used to spend Friday mornings skimming 30 X threads, 4 Product Hunt pages, a handful of Reddit threads, and 2 RSS feeds, then trying to remember on Monday which ones actually mattered. Most of the time, they couldn't.
 
 The painful part wasn't the reading. It was the memory. _"I read something about an Anthropic competitor two weeks ago — what was the name?"_ _"There was a Product Hunt launch last Tuesday that I wanted to follow up on, but I've already lost the thread."_ The research happened; the retention didn't.
@@ -202,3 +211,13 @@ Each skill installs on the fly the first time it's asked for.
 > 💡 The Brief and Wrap rollups respect custom channels the same way they respect built-ins — the 9 AM Brief includes the AI-tagged Product Hunt launches from the custom channel without any extra wiring.
 
 OpenLoomi's audit log records every execution — which custom channels fired, which insights the agent wrote to memory, which queries were asked in chat, which signals the Brief rolled up. This way the source-watching can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the engine that polls the custom channels
+- [Connectors](/docs/connectors) — wiring the built-in sources
+- [Memory](/docs/memory) — long-term retention of the launches you've read
+- [Automation](/docs/automation) — the Friday Brief schedule
+- [Skills](/docs/skills) — the x-twitter-api / composio-cli skills this story references

@@ -6,6 +6,15 @@ icon: "FaLightbulb"
 
 # X Content Drafting
 
+## At a glance
+
+|                   |                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------- |
+| **Persona**       | Content creator / community manager running an AI-focused X account                |
+| **Goal**          | Stop drafting from scratch every Sunday — let Loop watch X signals                 |
+| **Prerequisites** | X connector authorized; a few sample posts shared with Memory so the voice carries |
+| **Outcome**       | Drafts in your voice, queued for explicit Approve before anything posts            |
+
 A content creator / community manager who runs an AI-focused X account used to find, by Sunday night, that 5 posts for the week needed drafting, weekend inbounds needed replying to, and all of it had to happen in a voice that sounded like them and not like an LLM. Most weeks, time ran out and the drafts were shorter, more generic, more obviously "a thing a content person wrote on a deadline."
 
 The painful part wasn't the writing — it was the consistency. _"Did I already write a thread about Claude's memory layer? Did I already take a hot take on the latest model release? Is the phrasing I'm using this week the same as the phrasing used in March?"_ The voice is in the head; it just doesn't transfer to a blank X compose box at 11 PM on a Sunday.
@@ -194,3 +203,13 @@ Loop is on by default at a 10-minute scan. To tune trusted contacts, source togg
 > 💡 Past X posts are not in OpenLoomi Memory by default — they live on X. The first time the agent is asked to draft, it may ask to be pointed at past posts (paste a few, or share a thread URL). Once it has a sample, Memory carries the voice across sessions.
 
 OpenLoomi's audit log records every execution — which mentions Loop flagged, which drafts the agent wrote, which Approves were tapped, which posts went out. This way the voice work can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the X-channel signal source
+- [Connectors](/docs/connectors) — wiring the X / Twitter connector
+- [Memory](/docs/memory) — carries your voice across sessions
+- [Attention Agent](/docs/attention-agent) — where high-priority mentions surface
+- [Skills](/docs/skills) — the x-twitter-api skill referenced above

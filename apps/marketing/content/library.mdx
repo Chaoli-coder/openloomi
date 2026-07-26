@@ -128,3 +128,25 @@ Upload meeting notes and ask:
 - PDFs with text (not images) work best
 - Large documents may take longer to process
 - You can upload multiple files at once
+
+---
+
+## Verify
+
+- The uploaded document appears in the **Library** page with the correct file type and size.
+- A question about a specific phrase in the document returns a citation pointing back to the right chunk.
+- Deleting the document removes it from search results without affecting the rest of Memory.
+
+## Troubleshooting
+
+- **Upload stalls.** Confirm the file isn't above the size limit and that the page hasn't lost connection; re-upload if needed.
+- **Image-only PDFs return no answers.** The RAG pipeline extracts text — scanned PDFs need an OCR pass first.
+- **Citations point at the wrong chunk.** Re-upload the source if the original was edited; chunks aren't auto-refreshed.
+
+## Related
+
+- [Memory](/docs/memory) — the Knowledge Base lives inside Memory's `rag_documents` / `rag_chunks` tables
+- [Embedding Providers](/docs/reference/embedding-providers) — choose cloud vs local embeddings for chunk vectors
+- [Chat](/docs/chat) — how Chat uses Library answers
+- [Connectors](/docs/connectors) — auto-fetch documents from connected platforms
+- [Privacy & Security](/docs/privacy-security) — Library data stays local

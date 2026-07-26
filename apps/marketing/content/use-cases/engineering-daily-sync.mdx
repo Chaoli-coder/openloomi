@@ -6,6 +6,15 @@ icon: "FaLightbulb"
 
 # Engineering Daily Sync
 
+## At a glance
+
+|                   |                                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| **Persona**       | Engineering lead coordinating across GitHub, Linear, email, and project docs             |
+| **Goal**          | Stop rewriting dev reports every night — let the daily brief do it                       |
+| **Prerequisites** | GitHub + Linear connectors authorized; Loop is on at the 10-minute default               |
+| **Outcome**       | A nightly dev report, a Linear / GitHub sync, and a PR-review nudge — all approval-gated |
+
 As an engineering lead, the user switches between GitHub, Linear, email, and a stack of project docs all day. By day they handle requirements, technical specs, and the incident that just landed. By night they catch up on what the team shipped today, where the project stands, what new Issues came in, and which PRs are waiting on review.
 
 These tasks aren't hard. They're just tedious. And they get interrupted by more urgent work — the daily report doesn't get written, GitHub Issues don't get synced to Linear, important PRs get buried in notifications, and by the time the lead notices, the problem has been sitting for a day or two.
@@ -285,3 +294,13 @@ OpenLoomi's Tracking panel records every execution:
 - Whether anything failed or was missed
 
 This way the repetitive work can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Automation](/docs/automation) — the scheduler behind the daily brief and issue sync
+- [Loop](/docs/loop) — the engine that turns GitHub / Linear signals into decision cards
+- [Connectors](/docs/connectors) — wiring up GitHub and Linear OAuth
+- [Memory](/docs/memory) — the team context Loop enriches with
+- [Attention Agent](/docs/attention-agent) — where the PR-review bubble lands

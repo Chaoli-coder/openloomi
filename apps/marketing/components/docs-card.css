@@ -1,3 +1,37 @@
+/* Doc card groups — used by the docs landing page */
+.docs-card-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  margin-top: 1.5rem;
+}
+
+.docs-card-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.docs-card-group-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.docs-card-group-heading {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--color-foreground-secondary);
+  letter-spacing: -0.01em;
+}
+
+.docs-card-group-blurb {
+  margin: 0;
+  color: var(--color-foreground-muted);
+  font-size: 0.95rem;
+}
+
 /* Doc card grid layout - ensures equal column widths */
 .docs-card-grid {
   display: grid;
@@ -6,7 +40,7 @@
     minmax(280px, 1fr)
   ); /* All columns equal width */
   gap: 1.5rem;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 }
 
 /* Responsive layout adjustments */
