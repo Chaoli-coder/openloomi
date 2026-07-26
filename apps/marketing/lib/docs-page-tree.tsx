@@ -79,6 +79,7 @@ const DOC_ICON_NAMES = new Map([
   ["/docs/benchmark", "FaChartLine"],
   ["/docs/glossary", "FaBook"],
   ["/docs/use-cases", "FaLightbulb"],
+  ["/docs/reference", "FaBook"],
   ["/docs/changelog", "FaBolt"],
   ["/docs/reference/agent-runtimes", "FaRobot"],
   ["/docs/reference/agent-runtimes/claude", "FaRobot"],
