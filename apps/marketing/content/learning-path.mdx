@@ -1,0 +1,151 @@
+---
+title: "Learning Path"
+description: "Choose the right docs path through OpenLoomi based on how you want to run it — desktop app, Claude Code / Codex plugin, or runtime / API integration."
+icon: "FaRoute"
+---
+
+# Learning Path
+
+OpenLoomi is open-source and can run in three different shapes — a desktop app, a plugin inside Claude Code or Codex CLI, or a runtime / API integration other agents plug into. This page helps you pick the path that matches how you actually work, so you only read what you need.
+
+<Callout type="info">
+  **Start Here:** If you haven't installed OpenLoomi yet, begin with [Getting
+  Started](/docs/getting-started) and finish the **Verify** section before
+  continuing. Everything below assumes you have a working install or plugin.
+</Callout>
+
+<Callout type="info">
+  **First-run setup tip:** On the desktop, the very first launch walks you
+  through picking an AI runtime and signing in. On the plugin path, run
+  `/openloomi:setup` (Claude Code) or `@OpenLoomi Run first-use setup.` (Codex)
+  and confirm the readiness table lands on `READY`.
+</Callout>
+
+## How to Use This Page
+
+- **Know your install shape?** Jump to [By Install Shape](#by-install-shape) and follow the reading order for your tier.
+- **Have a specific goal?** Skip to [By Goal](#by-goal) and find the scenario that matches.
+- **Just browsing?** Check [Key Surfaces at a Glance](#key-surfaces-at-a-glance) for a quick directory of everything OpenLoomi can do.
+
+## By Install Shape
+
+| Shape                         | Goal                                                                 | Recommended Reading                                                                                                                                            | Time Estimate |
+| ----------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **Desktop app**               | Install the app, configure an AI provider, finish your first session | [Getting Started](/docs/getting-started) → [Connectors](/docs/connectors) → [Loop](/docs/loop) → [Attention Agent](/docs/attention-agent)                      | ~30 min       |
+| **Claude Code plugin**        | Drive OpenLoomi from the agent shell you already use                 | [Plugins → Claude](/docs/plugins/claude) → [Memory](/docs/memory) → [Loop](/docs/loop) → [Connectors](/docs/connectors)                                        | ~20 min       |
+| **Codex CLI plugin**          | Drive OpenLoomi from Codex                                           | [Plugins → Codex](/docs/plugins/codex) → [Memory](/docs/memory) → [Loop](/docs/loop) → [Connectors](/docs/connectors)                                          | ~20 min       |
+| **Runtime / API integration** | Pick a runtime and wire OpenLoomi into another agent                 | [Agent Runtimes](/docs/reference/agent-runtimes) → [openloomi-ctl](/docs/reference/openloomi-ctl) → [Embedding Providers](/docs/reference/embedding-providers) | ~45 min       |
+
+## By Goal
+
+Pick the scenario that matches what you're trying to get done. Each one links to the docs in the order you should read them.
+
+### "I want to stop re-reading threads before every reply"
+
+You live in Gmail, Slack, Telegram, iMessage, Lark — and every reply used to start with scrolling back through the last conversation. You want a unified inbox that drafts grounded replies for you to approve.
+
+1. [Getting Started](/docs/getting-started)
+2. [Connectors](/docs/connectors)
+3. [Memory](/docs/memory)
+4. [Loop](/docs/loop)
+5. [Use case → Unified Inbox](/docs/use-cases/unified-inbox-auto-draft)
+
+<Callout type="info">
+  Every draft Loop surfaces carries a confidence score, a reasoning trace, and
+  the four-gesture flow — **Approve / Edit Draft / Later / Skip**. Nothing sends
+  without an explicit tap.
+</Callout>
+
+### "I want a daily Brief + Wrap instead of opening nine apps"
+
+You're a manager / founder / operator across time zones. You don't want a chatbot that waits to be asked — you want a morning brief and an evening wrap that tell you what changed and what needs a decision.
+
+1. [Getting Started](/docs/getting-started)
+2. [Connectors](/docs/connectors)
+3. [Loop](/docs/loop)
+4. [Attention Agent](/docs/attention-agent)
+5. [Use case → Global Managers](/docs/use-cases/global-managers) or [Founders](/docs/use-cases/founders)
+
+### "I want my engineering team's dev reports to write themselves"
+
+You're an engineering lead who keeps rewriting nightly dev reports and triaging GitHub issues by hand. You want OpenLoomi to compile commits, fetch issues, and email the team — while you just approve.
+
+1. [Getting Started](/docs/getting-started)
+2. [Automation](/docs/automation)
+3. [Loop](/docs/loop)
+4. [Connectors](/docs/connectors)
+5. [Use case → Engineering Daily Sync](/docs/use-cases/engineering-daily-sync)
+
+### "I want to plan next sprint from Linear + GitHub + Obsidian in one queue"
+
+You're a PM stitching the next sprint together from 200 tickets across Linear, GitHub issues, Obsidian notes, and last week's screenshots. You want one rolling plan that folds those tools together.
+
+1. [Getting Started](/docs/getting-started)
+2. [Connectors](/docs/connectors)
+3. [Loop](/docs/loop)
+4. [Library](/docs/library) — upload prior PRDs and interview notes
+5. [Use case → Product-Research Iteration](/docs/use-cases/product-research-iteration)
+
+### "I want to wire OpenLoomi into my existing Claude / Codex / Hermes / OpenClaw agent"
+
+You already run an agent shell and want OpenLoomi's holistic context, attention agent, and loop engine as a layer underneath — without a separate desktop app.
+
+1. [Plugins](/docs/plugins)
+2. [Agent Runtimes](/docs/reference/agent-runtimes)
+3. [openloomi-ctl](/docs/reference/openloomi-ctl)
+4. [Embedding Providers](/docs/reference/embedding-providers)
+5. [Privacy & Security](/docs/privacy-security)
+
+### "I want to use OpenLoomi inside Telegram, WhatsApp, iMessage, QQ, or Lark/Feishu"
+
+You don't want another app — you want OpenLoomi to live inside the chat apps you already open every day.
+
+1. [Getting Started](/docs/getting-started)
+2. [Messaging Apps](/docs/messaging-apps)
+3. [Chat](/docs/chat)
+4. [Connectors](/docs/connectors)
+
+## Key Surfaces at a Glance
+
+Not sure what's available? Here's a quick directory of every major OpenLoomi surface.
+
+| Surface                 | What it does                                                                       | Link                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| **Connectors**          | Authorize Gmail, Calendar, Slack, GitHub, Linear, and 1000+ apps via Composio      | [Connectors](/docs/connectors)                             |
+| **Messaging Apps**      | Use OpenLoomi inside Telegram, WhatsApp, iMessage, QQ, Lark/Feishu                 | [Messaging Apps](/docs/messaging-apps)                     |
+| **Memory**              | Local-first tiered store — short / mid / long-term, with a forgetting engine       | [Memory](/docs/memory)                                     |
+| **Loop**                | The proactive engine that polls every 10 minutes and surfaces typed decision cards | [Loop](/docs/loop)                                         |
+| **Attention Agent**     | Loomi Pet — the always-on companion that bubbles the high-confidence cards         | [Attention Agent](/docs/attention-agent)                   |
+| **Chat**                | Plain-language task assignment in the main OpenLoomi window                        | [Chat](/docs/chat)                                         |
+| **Automation**          | Schedule recurring work — daily digests, weekly reports, reminders                 | [Automation](/docs/automation)                             |
+| **Skills**              | Procedural skills the agent installs and reuses                                    | [Skills](/docs/skills)                                     |
+| **Library**             | Upload prior PRDs, interview notes, and reference docs into Memory                 | [Library](/docs/library)                                   |
+| **Plugins**             | Bridge OpenLoomi into Claude Code or Codex CLI                                     | [Plugins](/docs/plugins)                                   |
+| **Agent Runtimes**      | Pick the runtime that executes native agent tasks                                  | [Agent Runtimes](/docs/reference/agent-runtimes)           |
+| **openloomi-ctl**       | Local-first HTTP API for runtime integrations                                      | [openloomi-ctl](/docs/reference/openloomi-ctl)             |
+| **Embedding Providers** | Choose where your memory embeddings are computed                                   | [Embedding Providers](/docs/reference/embedding-providers) |
+| **Privacy & Security**  | How OpenLoomi protects your data                                                   | [Privacy & Security](/docs/privacy-security)               |
+
+## What to Read Next
+
+Based on where you are right now:
+
+- **Just finished installing?** → Read [Connectors](/docs/connectors) to wire up Gmail or Slack so Loop has something to surface.
+- **Connected your first account?** → Read [Loop](/docs/loop) to see how typed decision cards flow from signals to approvals.
+- **Curious what other people build?** → Browse [Use Cases](/docs/use-cases) for engineering, sales, founder, PM, and content workflows.
+- **Want to extend OpenLoomi?** → Read [Plugins](/docs/plugins) and [Agent Runtimes](/docs/reference/agent-runtimes) for the integration paths.
+- **Need exact commands and contract?** → Jump to [openloomi-ctl](/docs/reference/openloomi-ctl) or [Embedding Providers](/docs/reference/embedding-providers).
+
+<Callout type="info">
+  You don't need to read everything. Pick the path that matches your goal,
+  follow the links in order, and you'll be productive quickly. You can always
+  come back to this page to find your next step.
+</Callout>
+
+## Related
+
+- [What is OpenLoomi?](/docs/what-is-openloomi) — the 30-second pitch
+- [Getting Started](/docs/getting-started) — install + first run
+- [Use Cases](/docs/use-cases) — real workflows from real teams
+- [Plugins](/docs/plugins) — bridge OpenLoomi into Claude Code or Codex CLI
+- [Reference](/docs/reference) — runtime, CLI, embedding providers, agent runtimes
