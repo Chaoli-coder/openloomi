@@ -119,7 +119,8 @@ intro.
 
 ### 1. One-paragraph intro
 
-> OpenLoomi is your **local-first AI coworker**. It runs as a desktop
+> OpenLoomi is your **open-source, local-first AI partner**, built to
+> protect your attention. It runs as a desktop
 > app on your Mac, connects to the tools you authorise (Gmail, Slack,
 > GitHub, Google Calendar, Notion, Linear, etc. via Composio, plus
 > native bots for Telegram / WhatsApp / iMessage / Feishu / DingTalk /

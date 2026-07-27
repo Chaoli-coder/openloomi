@@ -1,5 +1,7 @@
 # Codex OpenLoomi Plugin
 
+**Open-source AI coworker, built to protect your attention.**
+
 Run OpenLoomi from inside OpenAI Codex CLI.
 
 [OpenLoomi](https://github.com/melandlabs/openloomi) is a local-first desktop app that holds your memory, runs tasks in the
