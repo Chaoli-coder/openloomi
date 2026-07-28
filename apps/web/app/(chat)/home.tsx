@@ -35,6 +35,7 @@ import { ChatHistorySidePanel } from "@/components/agent/chat-history-side-panel
 import { NewInsightsSidePanel } from "@/components/agent/new-insights-side-panel";
 import { useNewInsightsContext } from "@/components/insights-new-context";
 import type { ChatHistoryResponse } from "@/lib/ai/chat/api";
+import { decodeSearchParamText } from "@/lib/chat/query-text";
 import { mutate } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { AddPlatformDialog } from "@/components/add-platform-dialog";
@@ -94,8 +95,11 @@ export function Home() {
   const urlChatId = searchParams.get("chatId") ?? undefined;
   /** Chat page reads send parameter from URL, automatically sends that message after mounting (e.g., onboarding "Talk with openloomi") */
   const urlSendMessage = searchParams.get("send");
-  const initialMessageToSend =
-    urlSendMessage != null ? decodeURIComponent(urlSendMessage) : undefined;
+  const initialMessageToSend = decodeSearchParamText(urlSendMessage);
+  /** Chat page reads input parameter from URL, pre-fills the composer, and waits for user confirmation */
+  const urlInitialInput = searchParams.get("input");
+  const initialInput = decodeSearchParamText(urlInitialInput);
+  const prefillToken = searchParams.get("prefillToken") ?? undefined;
 
   /** Inbox page (/inbox) and Focus page (/) are distinguished by pathname, no longer use panel parameter */
   const isInboxPage = pathname === "/inbox";
@@ -734,7 +738,11 @@ export function Home() {
                   isMobile && "pb-[80px]",
                 )}
               >
-                <AgentChatPanel initialMessageToSend={initialMessageToSend} />
+                <AgentChatPanel
+                  initialInput={initialInput}
+                  prefillToken={prefillToken}
+                  initialMessageToSend={initialMessageToSend}
+                />
               </div>
             </div>
           );
@@ -750,7 +758,11 @@ export function Home() {
                   isMobile && "pb-[80px]",
                 )}
               >
-                <AgentChatPanel initialMessageToSend={initialMessageToSend} />
+                <AgentChatPanel
+                  initialInput={initialInput}
+                  prefillToken={prefillToken}
+                  initialMessageToSend={initialMessageToSend}
+                />
               </div>
             </div>
           );
@@ -807,6 +819,8 @@ export function Home() {
                   <AgentChatPanel
                     key={effectiveChatId}
                     chatId={effectiveChatId}
+                    initialInput={initialInput}
+                    prefillToken={prefillToken}
                     initialMessageToSend={initialMessageToSend}
                   />
                 </div>

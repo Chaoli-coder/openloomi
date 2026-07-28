@@ -335,6 +335,48 @@ Yes. Loomi ships with two built-in themes (`fox` and `capybara`) and a fully fil
 - **External edits auto-apply** — the config watcher listens for changes and re-paints within ~250 ms; no app restart needed.
 - **`presenting` state** — when a decision moves to `done` and you haven't reviewed it yet, Loomi shows the `presenting` sprite + bubble ("All wrapped up — ready when you are"). Click the bubble to flip back to `happy`.
 
+### Can the right-click menu start agentic tasks?
+
+Yes. Loomi's right-click menu can show local prompt action shortcuts from `~/.openloomi/pet-actions.json`. Each shortcut is a named task prompt that routes into the normal Loomi agent runtime.
+
+The flow is:
+
+1. Define one or more enabled prompt actions in `~/.openloomi/pet-actions.json`.
+2. Right-click Loomi and choose the named shortcut from the **Actions** section.
+3. The widget emits only the selected action id.
+4. Rust re-reads the local config, resolves the matching prompt, frames it as an agent task, and sends it into chat.
+5. The normal Loomi agent runtime decides which available tools, skills, connectors, or local helpers to use.
+6. Privacy-sensitive or destructive actions should still require confirmation inside the agent workflow.
+
+The widget only receives `id` and `label`; the prompt body stays host-side until Rust resolves the selected `actionId`.
+
+Local prompt actions are configured in `~/.openloomi/pet-actions.json`:
+
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "actions": [
+    {
+      "id": "daily-brief",
+      "label": "Prepare daily brief",
+      "prompt": "Prepare a concise daily brief from my available OpenLoomi context. Include open priorities, recent updates, and anything that needs my attention. Ask before contacting external services or changing data.",
+      "enabled": true
+    },
+    {
+      "id": "workspace-summary",
+      "label": "Summarize workspace",
+      "prompt": "Summarize the current workspace or active project context. Identify the main goal, recent changes, blockers, and the next safe steps. Do not modify files unless I explicitly confirm.",
+      "enabled": true
+    }
+  ]
+}
+```
+
+The supported schema is intentionally small: top-level `version` and `enabled`, plus up to 8 valid `actions[]` entries with `id`, `label`, `prompt`, and optional `enabled`. Invalid ids, empty labels, empty prompts, duplicates, disabled actions, and target-only entries are ignored. Missing, empty, malformed, disabled, or unsupported configs render no prompt shortcuts; the Pet falls back to the base menu: **Open Loomi / Settings / Theme / Quit**.
+
+If a shortcut needs real external capability, expose it to the agent through an appropriate tool surface such as a skill, connector, MCP server, CLI, OpenLoomi API route, or trusted loopback helper. The right-click menu itself does not execute shell commands and does not directly call remote services. Fields like `target`, `url`, `method`, or command strings are not executable action definitions for this menu.
+
 ### What's the difference between the Attention Agent and Loop?
 
 - **The Attention Agent** is the **little pet on your desktop**, gently reminding you in your line of sight.

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use tauri::Emitter;
 use tauri::Manager;
-
+pub mod actions;
 mod aux_position;
 mod bubble;
 mod card;
@@ -185,6 +185,15 @@ pub fn get_pet_config(app: tauri::AppHandle) -> PetConfigView {
     let cfg = theme::read_config(&app);
     let custom = theme::list_custom_themes(&cfg);
     theme::build_view(cfg, custom)
+}
+
+/// Returns sanitized user-defined Pet context actions. The widget only
+/// receives menu metadata; prompts stay host-side until the later
+/// agent-runtime dispatch path resolves an action by id.
+#[tauri::command]
+pub fn get_pet_context_actions(app: tauri::AppHandle) -> actions::PetContextActionsView {
+    let cfg = actions::read_config(&app);
+    actions::build_view(&cfg)
 }
 
 /// Updates only `activeTheme` (called by the right-click menu).

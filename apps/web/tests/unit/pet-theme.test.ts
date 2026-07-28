@@ -199,8 +199,16 @@ describe("widget source sanity", () => {
     expect(widgetHtml).toMatch(/invoke\(\s*["']get_pet_config["']/);
   });
 
+  it("widget boots prompt action metadata via get_pet_context_actions", () => {
+    expect(widgetHtml).toMatch(/invoke\(\s*["']get_pet_context_actions["']/);
+  });
+
   it("widget listens for pet:config-changed", () => {
     expect(widgetHtml).toMatch(/listen\(\s*["']pet:config-changed["']/);
+  });
+
+  it("widget listens for pet:actions-changed", () => {
+    expect(widgetHtml).toMatch(/listen\(\s*["']pet:actions-changed["']/);
   });
 
   it("widget listens for pending-count badge updates", () => {
@@ -491,17 +499,39 @@ describe("pet menu interaction (#369)", () => {
     expect(handler).toMatch(/button\.dataset\.op/);
   });
 
-  it("menu wires every operation (open / settings / theme-* / quit)", () => {
+  it("menu wires every operation (open / settings / context action / theme-* / quit)", () => {
     const handler = petMenuClickHandler();
     // Event-emit operations are dispatched on the host bridge; theme
     // switches go through `invoke("set_active_theme", ...)`.
     expect(handler).toMatch(/emit\(\s*["']pet:open-dashboard["']/);
     expect(handler).toMatch(/emit\(\s*["']pet:open-settings["']/);
+    expect(handler).toMatch(/emit\(\s*["']pet:context-action["']/);
+    expect(handler).toMatch(/button\.dataset\.actionId/);
     expect(handler).toMatch(/emit\(\s*["']pet:quit["']/);
+    expect(handler).not.toMatch(/pet:agent-action/);
     expect(handler).toMatch(/invoke\(\s*["']set_active_theme["']/);
     expect(handler).toMatch(
       /theme-\$\{|op\.slice\(\s*["']theme-["']\.length\s*\)/,
     );
+  });
+
+  it("renders dynamic prompt actions without a fixed fallback", () => {
+    expect(stripped).not.toMatch(/data-op="agent-action"/);
+    expect(stripped).toMatch(/pet-actions-section/);
+    expect(stripped).toMatch(/function applyContextActions\(view\)/);
+    expect(stripped).toMatch(/function rebuildContextActionButtons\(\)/);
+    expect(stripped).toMatch(/view\.enabled/);
+    expect(stripped).toMatch(/action\.enabled === false/);
+    expect(stripped).toMatch(/btn\.dataset\.op = "context-action"/);
+    expect(stripped).toMatch(/btn\.dataset\.actionId = action\.id/);
+    expect(stripped).toMatch(/btn\.textContent = action\.label/);
+    expect(stripped).not.toMatch(/dispatch_pet_context_action/);
+    expect(stripped).not.toMatch(/pet:agent-action/);
+  });
+
+  it("does not read prompt bodies into the widget action menu", () => {
+    expect(stripped).not.toMatch(/action\.prompt/);
+    expect(stripped).not.toMatch(/dataset\.prompt/);
   });
 
   it("theme buttons expose data-op so closest() can find them", () => {
@@ -540,5 +570,115 @@ describe("pet menu interaction (#369)", () => {
     if (themeCapyMatch) {
       expect(themeCapyMatch[0]).toMatch(/<span[^>]*class="menu-tick/);
     }
+  });
+});
+
+describe("pet context action bridge (#444)", () => {
+  const mainPath = path.resolve(__dirname, "../../src-tauri/src/main.rs");
+  const bridgePath = path.resolve(
+    __dirname,
+    "../../components/pet/pet-chat-bridge.tsx",
+  );
+  const homePath = path.resolve(__dirname, "../../app/(chat)/home.tsx");
+  const chatPanelPath = path.resolve(
+    __dirname,
+    "../../components/agent/chat-panel.tsx",
+  );
+
+  const mainRs = readFileSync(mainPath, "utf8");
+  const bridgeSource = readFileSync(bridgePath, "utf8");
+  const homeSource = readFileSync(homePath, "utf8");
+  const chatPanelSource = readFileSync(chatPanelPath, "utf8");
+
+  it("sends custom context actions through the agent chat bridge", () => {
+    const contextActionStart = mainRs.indexOf('listen("pet:context-action"');
+    const guideStart = mainRs.indexOf('listen("pet:guide-connect-more"');
+
+    expect(
+      contextActionStart,
+      "pet:context-action listener not found",
+    ).toBeGreaterThan(-1);
+    expect(
+      guideStart,
+      "pet:guide-connect-more listener not found",
+    ).toBeGreaterThan(contextActionStart);
+
+    const contextActionListener = mainRs.slice(contextActionStart, guideStart);
+    expect(contextActionListener).toMatch(/parse_pet_context_action_id\(/);
+    expect(contextActionListener).toMatch(/send_pet_context_action_to_chat\(/);
+
+    expect(mainRs).toMatch(/pet::actions::read_config\(/);
+    expect(mainRs).toMatch(/pet::actions::resolve_action_prompt\(/);
+    expect(mainRs).toMatch(/pet::actions::build_agent_prompt\(/);
+    expect(mainRs).toMatch(
+      /send_pet_prompt_to_chat\(app,\s*["']pet:context-action["']/,
+    );
+    expect(mainRs).not.toMatch(/listen\(\s*["']pet:agent-action["']/);
+    expect(mainRs).not.toMatch(/PET_AGENT_ACTION_DRAFT/);
+  });
+
+  it("keeps connector guidance on the existing send bridge", () => {
+    const guideStart = mainRs.indexOf('listen("pet:guide-connect-more"');
+    const briefStart = mainRs.indexOf('listen("pet:open-brief"', guideStart);
+
+    expect(
+      guideStart,
+      "pet:guide-connect-more listener not found",
+    ).toBeGreaterThan(-1);
+    expect(briefStart, "pet:open-brief listener not found").toBeGreaterThan(
+      guideStart,
+    );
+
+    const guideListener = mainRs.slice(guideStart, briefStart);
+    expect(guideListener).toMatch(/send_pet_prompt_to_chat\(/);
+  });
+
+  it("registers a prefill chat bridge alongside the send bridge", () => {
+    expect(bridgeSource).toMatch(
+      /PREFILL_GLOBAL_KEY\s*=\s*["']__petChatBridgePrefill["']/,
+    );
+    expect(bridgeSource).toMatch(/window\[PREFILL_GLOBAL_KEY\]\s*=/);
+    expect(bridgeSource).toMatch(/prefillToken=\$\{Date\.now\(\)\}/);
+    expect(bridgeSource).toMatch(/window\[SEND_GLOBAL_KEY\]\s*=/);
+  });
+
+  it("routes prefilled input through Home into AgentChatPanel", () => {
+    expect(homeSource).toMatch(
+      /const prefillToken = searchParams\.get\(["']prefillToken["']\)/,
+    );
+    expect(homeSource).toMatch(/initialInput=\{initialInput\}/);
+    expect(homeSource).toMatch(/prefillToken=\{prefillToken\}/);
+  });
+
+  it("decodes chat query drafts through the safe helper", () => {
+    expect(homeSource).toMatch(/decodeSearchParamText\(urlSendMessage\)/);
+    expect(homeSource).toMatch(/decodeSearchParamText\(urlInitialInput\)/);
+    expect(homeSource).not.toMatch(/decodeURIComponent\(urlInitialInput\)/);
+  });
+
+  it("applies prefillToken as editable input without invoking send", () => {
+    const prefillEffectStart = chatPanelSource.indexOf(
+      "lastAppliedPrefillTokenRef",
+    );
+    const inputRefStart = chatPanelSource.indexOf(
+      "// Keep inputRef in sync with input state",
+      prefillEffectStart,
+    );
+
+    expect(prefillEffectStart, "prefillToken effect not found").toBeGreaterThan(
+      -1,
+    );
+    expect(inputRefStart, "inputRef section not found").toBeGreaterThan(
+      prefillEffectStart,
+    );
+
+    const prefillEffect = chatPanelSource.slice(
+      prefillEffectStart,
+      inputRefStart,
+    );
+    expect(prefillEffect).toMatch(/setInput\(initialInput\)/);
+    expect(prefillEffect).toMatch(/localStorage\.setItem/);
+    expect(prefillEffect).toMatch(/next\.delete\(["']prefillToken["']\)/);
+    expect(prefillEffect).not.toMatch(/sendMessage/);
   });
 });

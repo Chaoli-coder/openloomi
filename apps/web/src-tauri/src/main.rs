@@ -34,6 +34,90 @@ mod workspace_artifacts;
 mod permissions;
 mod telegram;
 
+fn escape_js_string(raw: &str) -> String {
+    raw.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+fn deliver_pet_prompt_to_chat(
+    app: &tauri::AppHandle,
+    event_name: &str,
+    bridge_global: &str,
+    prompt: &str,
+) {
+    eprintln!("[{event_name}] listener fired");
+    tray::show_main_window(app);
+    let Some(window) = app.get_webview_window("main") else {
+        eprintln!("[{event_name}] no main webview window");
+        return;
+    };
+
+    let escaped = escape_js_string(prompt);
+    let js = format!(
+        "(function(){{console.log('[Tauri] pet prompt eval landed, polling for bridge...');var n=0;var bridge=\"{}\";var t=setInterval(function(){{n++;if(typeof window[bridge]==='function'){{clearInterval(t);console.log('[Tauri] pet prompt bridge found after '+n+' ticks');window[bridge](\"{}\");}}else if(n>25){{clearInterval(t);console.warn('[Tauri] pet prompt bridge not ready after 5s, prompt dropped');}}}},200);}})()",
+        bridge_global, escaped
+    );
+    match window.eval(&js) {
+        Ok(_) => eprintln!("[{event_name}] eval ok"),
+        Err(e) => eprintln!("[{event_name}] eval err: {e}"),
+    }
+}
+
+fn send_pet_prompt_to_chat(app: &tauri::AppHandle, event_name: &str, prompt: &str) {
+    deliver_pet_prompt_to_chat(app, event_name, "__petChatBridgeSend", prompt);
+}
+
+fn parse_pet_context_action_id(payload: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+    let action_id = value.get("actionId")?.as_str()?.trim();
+    if action_id.is_empty() {
+        None
+    } else {
+        Some(action_id.to_string())
+    }
+}
+
+fn send_pet_context_action_to_chat(app: &tauri::AppHandle, action_id: &str) {
+    let cfg = pet::actions::read_config(app);
+    let action = match pet::actions::resolve_action_prompt(&cfg, action_id) {
+        Ok(action) => action,
+        Err(e) => {
+            eprintln!("[pet:context-action] ignored action '{action_id}': {e}");
+            return;
+        }
+    };
+    let prompt = pet::actions::build_agent_prompt(&action);
+    send_pet_prompt_to_chat(app, "pet:context-action", &prompt);
+}
+
+#[cfg(test)]
+mod pet_context_action_payload_tests {
+    use super::*;
+
+    #[test]
+    fn parses_action_id_payload() {
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "actionId": " clean-disk " }"#),
+            Some("clean-disk".into())
+        );
+    }
+
+    #[test]
+    fn rejects_missing_or_empty_action_id_payload() {
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "id": "clean-disk" }"#),
+            None
+        );
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "actionId": "   " }"#),
+            None
+        );
+        assert_eq!(parse_pet_context_action_id("not json"), None);
+    }
+}
+
 #[cfg(not(debug_assertions))]
 fn resolve_resource_file(
     app: &tauri::AppHandle,
@@ -467,6 +551,7 @@ fn main() {
             // shortcuts. Registered unconditionally so the widget
             // always has a way to discover its theme on cold boot.
             pet::get_pet_config,
+            pet::get_pet_context_actions,
             pet::set_active_theme,
         ])
         .setup(|app| {
@@ -865,57 +950,30 @@ fn main() {
                 }
             });
 
-            // Pet card "Add more connectors" CTA → show the main
-            // window and dispatch a new openloomi:send-chat-message
-            // DOM event with the chat prompt. The new PetChatBridge
-            // mounted in the (chat) layout listens for this event and
-            // forwards it to the chat composer via
-            // useChatContext().sendMessage(). Mirrors the
-            // `pet:open-decision` event-payload pattern (same escape
-            // helper for the JS literal so backslashes / quotes /
-            // newlines can't break the eval). English prompt by
-            // design — loomi-card.html is a static asset with no
-            // runtime i18n, and the agent can translate the response
-            // server-side.
+            // User-defined Pet context actions are prompt templates.
+            // The widget sends only an action id; the host re-reads
+            // `pet-actions.json`, resolves the prompt, frames it as an
+            // agent task, then submits it through the same chat bridge
+            // used by existing Pet-triggered agent flows.
+            let pet_context_action_app = app_handle.clone();
+            app_handle.listen("pet:context-action", move |event| {
+                let Some(action_id) = parse_pet_context_action_id(event.payload()) else {
+                    eprintln!("[pet:context-action] missing actionId payload");
+                    return;
+                };
+                send_pet_context_action_to_chat(&pet_context_action_app, &action_id);
+            });
+
+            // Pet card "Add more connectors" CTA -> show the main
+            // window and send a connector-focused prompt through the
+            // existing chat bridge.
             let guide_app = app_handle.clone();
             app_handle.listen("pet:guide-connect-more", move |_event| {
-                eprintln!("[pet:guide-connect-more] listener fired");
-                tray::show_main_window(&guide_app);
-                if let Some(window) = guide_app.get_webview_window("main") {
-                    let prompt = "Please help me connect more available connectors via Composio \
+                let prompt = "Please help me connect more available connectors via Composio \
 (Gmail, Slack, Google Calendar, GitHub, Linear, Obsidian, etc.). \
 List the platforms I haven't connected yet, then walk me through \
 authorizing each one. Begin with Gmail if it's not connected.";
-                    // Escape the prompt for embedding in a JS string literal.
-                    // (No backslashes / quotes / newlines in this prompt in
-                    // practice, but the helper is copy-pasted from the
-                    // pet:open-decision block for consistency / defense in
-                    // depth.)
-                    let escaped = prompt
-                        .replace('\\', "\\\\")
-                        .replace('"', "\\\"")
-                        .replace('\n', "\\n");
-                    // Call window.__petChatBridgeSend(text) directly,
-                    // retrying every 200ms for up to 5s. We can't use a
-                    // one-shot CustomEvent because the React bridge
-                    // component might not be mounted yet when the eval
-                    // lands (events with no listener are silently lost).
-                    // A global function can be polled until the bridge
-                    // registers it. The leading console.log + title
-                    // change are diagnostic so we can confirm the eval
-                    // is actually executing on the main webview (vs
-                    // silently swallowed).
-                    let js = format!(
-                        "(function(){{console.log('[Tauri] eval landed, polling for bridge...');document.title='[pet] '+document.title;var n=0;var t=setInterval(function(){{n++;if(typeof window.__petChatBridgeSend==='function'){{clearInterval(t);console.log('[Tauri] bridge found after '+n+' ticks');window.__petChatBridgeSend(\"{}\");}}else if(n>25){{clearInterval(t);console.warn('[Tauri] bridge not ready after 5s, prompt dropped');}}}},200);}})()",
-                        escaped
-                    );
-                    match window.eval(&js) {
-                        Ok(_) => eprintln!("[pet:guide-connect-more] eval ok"),
-                        Err(e) => eprintln!("[pet:guide-connect-more] eval err: {e}"),
-                    }
-                } else {
-                    eprintln!("[pet:guide-connect-more] no main webview window");
-                }
+                send_pet_prompt_to_chat(&guide_app, "pet:guide-connect-more", prompt);
             });
 
             // B2b: "Open brief" / "Open wrap" inside the card. Brief and
