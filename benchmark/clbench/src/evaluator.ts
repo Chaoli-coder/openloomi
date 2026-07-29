@@ -6,8 +6,8 @@
  * CL-bench-Life: Everyday life tasks with high reasoning effort.
  */
 
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 
 import type { CLBenchEntry, CLBenchPrediction, RubricResult } from "./types";
@@ -24,6 +24,22 @@ import {
 } from "./metrics";
 
 export { findAvailablePort, DEFAULT_PORTS };
+
+/** Package root, so checkpoints live in the repo regardless of cwd. */
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/**
+ * Detect responses that are transport/auth/quota failures rather than real
+ * answers (e.g. "Failed to authenticate. API Error: 403 ... usage limit").
+ * These must never be treated as valid checkpoints on resume.
+ */
+function isErrorResponse(response: string): boolean {
+  return (
+    response.startsWith("Error:") ||
+    response.includes("Failed to authenticate") ||
+    response.includes("API Error")
+  );
+}
 
 /**
  * Base class for CL-bench evaluators.
@@ -48,15 +64,9 @@ abstract class BaseCLBenchEvaluator {
     this.quickLimit = quickLimit;
     this.resume = resume;
     this.reasoningEffort = reasoningEffort;
-    this.checkpointDir = join(
-      homedir(),
-      ".openloomi",
-      "data",
-      "memory",
-      "bench",
-      "checkpoints",
-      "clbench",
-    );
+    this.checkpointDir =
+      process.env.CLBENCH_CHECKPOINT_DIR ??
+      join(PACKAGE_ROOT, "checkpoints", "clbench");
   }
 
   setPort(port: number): void {
@@ -176,7 +186,7 @@ abstract class BaseCLBenchEvaluator {
 
     // Check for checkpoint (resume support)
     const checkpoint = await this.loadCheckpoint(taskId);
-    if (checkpoint?.response && !checkpoint.response.startsWith("Error:")) {
+    if (checkpoint?.response && !isErrorResponse(checkpoint.response)) {
       console.log(`[CL-bench] Resuming from checkpoint for task ${taskId}`);
       return checkpoint;
     }
@@ -227,7 +237,7 @@ abstract class BaseCLBenchEvaluator {
       await this.saveCheckpoint(taskId, pred);
 
       console.log(
-        `[${taskId}] ${allRubricsPassed ? "✓" : "✗"} Category: ${entry.metadata.context_category}`,
+        `[${taskId}] ${allRubricsPassed ? "PASS" : "FAIL"} Category: ${entry.metadata.context_category}`,
       );
 
       return pred;
@@ -289,3 +299,4 @@ export class CLBenchLifeEvaluator extends BaseCLBenchEvaluator {
     super(port, tokenPath, quickLimit, resume, "high");
   }
 }
+
