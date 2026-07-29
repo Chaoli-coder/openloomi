@@ -5,7 +5,6 @@ import {
   type MemoryGraphNode,
   type MemoryGraphSnapshot,
   type OwnerScope,
-  buildGraphAwareRetrievalDryRun,
   createGraphAwareRetrievalDryRunRetriever,
 } from "@openloomi/memory-consolidation";
 import { describe, expect, it, vi } from "vitest";

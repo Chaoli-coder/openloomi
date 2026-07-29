@@ -299,4 +299,3 @@ export class CLBenchLifeEvaluator extends BaseCLBenchEvaluator {
     super(port, tokenPath, quickLimit, resume, "high");
   }
 }
-
