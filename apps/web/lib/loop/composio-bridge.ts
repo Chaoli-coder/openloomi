@@ -24,9 +24,41 @@
  */
 
 import { invokeAgentPrompt } from "./runner";
-import { writeConnectorSnapshot } from "./connectors";
+import { writeConnectorSnapshot, writeProbeError } from "./connectors";
+import { probeViaCli } from "./composio-cli";
 import { log } from "./store";
-import type { ConnectorEntry } from "./types";
+import type { ConnectorAccount, ConnectorEntry } from "./types";
+
+/**
+ * Structured result of a connector probe (#391).
+ *
+ * The old contract collapsed every failure — transport error, empty SSE
+ * response, malformed JSON, agent HTTP error — into an opaque `null`, so
+ * the cache got no diagnostic and the UI could only render "No sources
+ * connected" whether the user genuinely had nothing connected or the
+ * probe itself was broken. This tagged union preserves the failure mode
+ * so `refreshConnectors` can persist a `lastProbeError` and the API /
+ * card can surface an actionable hint. Mirrors the `LoopDecisionExecution`
+ * tagged-union precedent in `outcomes.ts`.
+ *
+ * CLI-direct fast-path: when the user's local `composio` CLI can answer
+ * the connector question (~200ms), `kind: "ok"` lands with the entries
+ * directly — the agent runtime is never started. The CLI failure kinds
+ * (`cli_not_found`, `cli_unauthorized`, `cli_malformed`) are surfaced as
+ * `lastProbeError` so the UI can show "CLI missing — falling back to
+ * agent" instead of "no sources connected".
+ */
+export type ProbeOutcome =
+  | { kind: "ok"; entries: ConnectorEntry[]; surfaces: string[] }
+  | { kind: "transport_error"; error: string }
+  | { kind: "agent_http_error"; status?: number; error: string }
+  | { kind: "empty_response" }
+  | { kind: "malformed_response"; diagnostic: string }
+  | { kind: "timeout"; durationMs: number }
+  | { kind: "cli_not_found"; error: string }
+  | { kind: "cli_unauthorized"; error: string }
+  | { kind: "cli_no_dev_project"; error: string }
+  | { kind: "cli_malformed"; diagnostic: string };
 
 interface ProbeConnectorPromptOptions {
   /**
@@ -84,9 +116,9 @@ function buildProbePrompt(
   const catalog = toolkits
     .map((t) => {
       if (t.localOnly) {
-        return `  - ${t.id} (${t.label}): local-only — do NOT probe. Report \`{ id: "${t.id}", label: "${t.label}", connected: false, accountCount: 0, lastError: "${t.localOnlyMessage ?? "local-only"}" }\`.`;
+        return `  - ${t.id} (${t.label}): local-only — do NOT probe. Report \`{ id: "${t.id}", label: "${t.label}", connected: false, accountCount: 0, accounts: [], lastError: "${t.localOnlyMessage ?? "local-only"}" }\`.`;
       }
-      return `  - ${t.id} (${t.label}): use the active Composio surface. If active, report \`{ id: "${t.id}", label: "${t.label}", connected: true, accountCount: <int> }\`. If not, report \`{ id: "${t.id}", label: "${t.label}", connected: false, accountCount: 0, lastError: "not connected" }\`.`;
+      return `  - ${t.id} (${t.label}): use the active Composio surface. Enumerate EVERY active connected account for this toolkit (issue #360 — a toolkit can have more than one). If at least one is active, report \`{ id: "${t.id}", label: "${t.label}", connected: true, accountCount: <int>, accounts: [{ id: "<connected_account_id>", label: "<email-or-handle-or-null>", healthy: true }, …] }\` with one \`accounts\` entry per active account and \`accountCount === accounts.length\`. If none, report \`{ id: "${t.id}", label: "${t.label}", connected: false, accountCount: 0, accounts: [], lastError: "not connected" }\`.`;
     })
     .join("\n");
 
@@ -98,13 +130,13 @@ You MUST attempt every surface below, **in order**, even if an earlier surface e
 
   1. **CLI reachable?** — Run \`Bash(composio whoami)\`. This is the cheapest sanity check; if it succeeds, the CLI is on \`$PATH\` and the user's API key is valid. Record this surface as \`"cli"\` in \`surfaces_used\`.
 
-  2. **CLI connections snapshot** — Run \`Bash(composio connections list)\`. It returns JSON of the form \`{ "<toolkit>": [{ "status": "ACTIVE", "word_id": "...", ... }, ...] }\`. Treat entries with \`status === "ACTIVE"\` as healthy connections; everything else as disconnected. Combine this result into the per-toolkit \`connected\` / \`accountCount\` / \`lastError\` fields.
+  2. **CLI connections snapshot** — Run \`Bash(composio connections list)\` (and, for a per-account breakdown, \`Bash(composio manage connected-accounts list --status ACTIVE)\`). It returns JSON of the form \`{ "<toolkit>": [{ "status": "ACTIVE", "word_id": "...", ... }, ...] }\`. Treat entries with \`status === "ACTIVE"\` as healthy connections; everything else as disconnected. Combine this result into the per-toolkit \`connected\` / \`accountCount\` / \`accounts\` / \`lastError\` fields. Each ACTIVE account becomes one \`accounts\` entry with its non-secret \`{ id, label }\` (id = \`connected_account_id\` / \`word_id\`; label = the account email / handle when present). NEVER include tokens or secrets.
 
   3. **\`composio\` skill** — Run \`Skill composio connections list\`. Independent of the CLI; in sandboxed shells (or when \`composio\` is not on \`$PATH\`) this may be the only surface that returns data. If step 1 or 2 already succeeded, still run this step — its result can confirm or contradict the CLI.
 
   4. **No surface reachable** — ONLY reach this step when steps 1, 2, and 3 ALL failed. Report \`surfaces_used: []\` and set every non-local-only entry to \`connected: false\` with \`lastError: "no composio surface reachable"\`.
 
-If multiple surfaces return data, merge them: a toolkit with at least one ACTIVE / healthy report from ANY surface counts as \`connected: true\` with that surface's \`accountCount\`. A later surface's failure does not invalidate an earlier surface's success.
+If multiple surfaces return data, merge them: a toolkit with at least one ACTIVE / healthy report from ANY surface counts as \`connected: true\` with that surface's \`accountCount\` and merged \`accounts\` (dedupe accounts by \`id\`). A later surface's failure does not invalidate an earlier surface's success.
 
 # Toolkits to probe
 
@@ -123,22 +155,24 @@ Emit exactly one SSE \`result\` event with this content:
   "duration_ms": <int>,
   "surfaces_used": ["cli", "skill", "insights", "local-only"],
   "connectors": [
-    { "id": "<toolkit-id>", "label": "<label>", "connected": <bool>, "accountCount": <int>, "lastError": "<optional: short string>" }
+    { "id": "<toolkit-id>", "label": "<label>", "connected": <bool>, "accountCount": <int>, "accounts": [{ "id": "<connected_account_id>", "label": "<email-or-handle-or-null>", "healthy": true }], "lastError": "<optional: short string>" }
   ]
 }
 \`\`\`
 
-The \`connectors\` array MUST contain one entry per toolkit in the catalog above, in the same order, with the \`id\` and \`label\` matching exactly. Do not omit any toolkit.
+The \`connectors\` array MUST contain one entry per toolkit in the catalog above, in the same order, with the \`id\` and \`label\` matching exactly. Do not omit any toolkit. \`accountCount\` MUST equal \`accounts.length\`, and every \`accounts\` entry carries only the non-secret \`{ id, label, healthy }\` — never tokens or credentials.
 
 Do not pull signals, do not classify, do not write to \`~/.openloomi/loop/\` — the bridge persists the snapshot for you. Just emit the \`result\` event and stop.`;
 }
 
 interface ConnectorBlockShape {
+  surfaces_used?: unknown;
   connectors?: Array<{
     id?: unknown;
     label?: unknown;
     connected?: unknown;
     accountCount?: unknown;
+    accounts?: unknown;
     lastError?: unknown;
   }>;
 }
@@ -286,15 +320,132 @@ function findMatchingBrace(text: string, start: number): number {
 }
 
 /**
+ * Fourth extraction pass (#391): walk `res.events` for any event whose
+ * `content` (already-parsed object or stringified JSON) carries a
+ * `connectors` array. Covers agents that wrap the snapshot inside a
+ * `tool_call` / `tool_result` event instead of the final `result` event.
+ * Returns the LAST usable block found (agents emit the final payload
+ * last), or `null` when no event contains one.
+ */
+function extractConnectorsFromEvents(
+  events: unknown[] | undefined,
+): ConnectorBlockShape | null {
+  if (!Array.isArray(events)) return null;
+  let last: ConnectorBlockShape | null = null;
+  for (const evt of events) {
+    if (!evt || typeof evt !== "object") continue;
+    const content = (evt as { content?: unknown }).content;
+    if (!content) continue;
+    if (typeof content === "object") {
+      const obj = content as ConnectorBlockShape;
+      if (Array.isArray(obj.connectors)) last = obj;
+      continue;
+    }
+    if (typeof content === "string") {
+      const parsed = tryParseJsonObject(content);
+      if (parsed) last = parsed;
+    }
+  }
+  return last;
+}
+
+/** Read `surfaces_used` from a parsed block as a clean `string[]`. */
+function readSurfaces(block: ConnectorBlockShape): string[] {
+  if (!Array.isArray(block.surfaces_used)) return [];
+  return block.surfaces_used.filter(
+    (s): s is string => typeof s === "string" && s.length > 0,
+  );
+}
+
+/**
+ * Parse the agent's per-account `accounts` array into a clean,
+ * non-secret `ConnectorAccount[]`. Tolerant of missing / malformed shapes:
+ * anything without a usable `id` is skipped, and only the whitelisted
+ * `{ id, label, healthy, lastError }` fields survive — no token or credential
+ * field the agent may have accidentally included is copied through.
+ * Returns `undefined` when there is nothing usable so the entry stays sparse.
+ */
+function parseAccounts(raw: unknown): ConnectorAccount[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ConnectorAccount[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const id = rec.id ?? rec.connected_account_id ?? rec.word_id;
+    if (typeof id !== "string" || !id.trim() || seen.has(id)) continue;
+    seen.add(id);
+    const account: ConnectorAccount = { id };
+    if (typeof rec.label === "string" && rec.label.trim()) {
+      account.label = rec.label;
+    } else if (typeof rec.email === "string" && rec.email.trim()) {
+      account.label = rec.email;
+    }
+    if (typeof rec.healthy === "boolean") account.healthy = rec.healthy;
+    if (typeof rec.lastError === "string" && rec.lastError) {
+      account.lastError = rec.lastError;
+    }
+    out.push(account);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/**
  * Probe the configured toolkits by asking the agent to inspect the
- * active Composio surface, then persist + return the result. On any
- * failure (transport error, malformed result, timeout) return
- * `null` — the caller is expected to fall back to the cache.
+ * active Composio surface, then persist + return the result.
+ *
+ * Returns a structured {@link ProbeOutcome} (#391) instead of the old
+ * opaque `null`: `{ kind: "ok" }` on success, or one of the failure
+ * kinds (`transport_error` / `agent_http_error` / `empty_response` /
+ * `malformed_response`) so the caller can persist a `lastProbeError`
+ * and the UI can render an actionable hint rather than a false "no
+ * sources connected" empty state. On any failure this also stamps the
+ * cache's `lastProbeError` via `writeProbeError` so the next API read
+ * can surface the reason alongside the (possibly stale) entries.
+ *
+ * Callers that only want the old `ConnectorEntry[] | null` contract can
+ * use {@link probeConnectorStateEntries}.
  */
 export async function probeConnectorState(
   opts: ProbeConnectorPromptOptions = {},
-): Promise<ConnectorEntry[] | null> {
+): Promise<ProbeOutcome> {
   const toolkits = opts.toolkits ?? DEFAULT_TOOLKITS;
+
+  // CLI fast-path — if the user's local `composio` CLI is installed AND
+  // can enumerate accounts, we skip the agentic prompt entirely. This is
+  // ~200ms vs. the agentic path's 60–120s (up to 10 min on cold first
+  // probe). Every CLI failure (`cli_not_found`, `cli_unauthorized`,
+  // `cli_no_dev_project`, `cli_malformed`) falls through to the agentic
+  // path below — the agent can still answer via its own composio skill
+  // surface when the local CLI is broken or missing. Diagnostic persistence
+  // is already handled inside `probeViaCli` for the diagnostic kinds
+  // that benefit from being sticky on the cache; `cli_not_found` is a
+  // clean "no CLI" signal that doesn't need a sticky diagnostic.
+  const cliOutcome = await probeViaCli({ toolkits });
+  if (cliOutcome.kind === "ok") {
+    log(
+      `composio-bridge: CLI fast-path succeeded — ${cliOutcome.entries.length} connector entries, surfaces=${cliOutcome.surfaces.join(",")}`,
+    );
+    return {
+      kind: "ok",
+      entries: cliOutcome.entries,
+      surfaces: cliOutcome.surfaces,
+    };
+  }
+  if (cliOutcome.kind === "cli_not_found") {
+    log(
+      "composio-bridge: CLI fast-path unavailable (composio binary not on $PATH) — falling through to agentic probe",
+    );
+    // Don't write a sticky diagnostic for `cli_not_found` — the CLI
+    // install state is unlikely to flip mid-session, but the user
+    // can re-run refresh and we'll try again. Fall through to
+    // agentic.
+  } else {
+    log(
+      `composio-bridge: CLI fast-path outcome=${cliOutcome.kind} — falling through to agentic probe`,
+    );
+  }
+
   const prompt = buildProbePrompt(toolkits);
 
   log(
@@ -329,61 +480,99 @@ export async function probeConnectorState(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    log(`composio-bridge: probe transport failed: ${msg}`);
-    return null;
+    log(`composio-bridge: probe outcome=transport_error: ${msg}`);
+    writeProbeError("transport_error", msg);
+    return { kind: "transport_error", error: msg };
   }
 
   if (!res.ok) {
+    const msg = res.error ?? `HTTP ${res.status ?? "?"}`;
     log(
-      `composio-bridge: probe returned error: ${res.error ?? `HTTP ${res.status ?? "?"}`}`,
+      `composio-bridge: probe outcome=agent_http_error status=${res.status ?? "?"}: ${msg}`,
     );
-    return null;
+    writeProbeError(
+      "agent_http_error",
+      res.status ? `HTTP ${res.status}: ${msg}` : msg,
+    );
+    return { kind: "agent_http_error", status: res.status, error: msg };
   }
 
-  // The agent has TWO ways to return the snapshot, and the prompt asks
-  // for the structured `result` event path. In practice we see both:
+  // The agent has THREE ways to return the snapshot; the prompt asks
+  // for the structured `result` event path. In practice we see all of
+  // them, so we try each in order of reliability:
   //
   //   - **Preferred**: a `result` SSE event with `content` set to the
-  //     JSON object — the agent's runtime wraps the final structured
-  //     payload this way. `runner.ts` reads `evt.content` into
-  //     `res.result`.
-  //
-  //   - **Fallback**: the agent prints the JSON in its text output
-  //     (because the prompt only said "emit the result event" and the
-  //     short probe doesn't trigger the structured event reliably).
+  //     JSON object — `runner.ts` reads `evt.content` into `res.result`.
+  //   - **Text fallback**: the agent prints the JSON in its text output.
   //     We grep the text tail for a ```json ... ``` block and parse it.
-  //
-  // Try preferred first, fall back to text-mining. This makes the
-  // bridge robust to either agent behavior.
+  //   - **Event fallback** (#391): the agent wrapped the snapshot inside
+  //     a `tool_call` / `tool_result` event rather than the final
+  //     `result`. Walk `res.events` for any event whose `content`
+  //     carries a `connectors` array.
   const fromResult = extractConnectorsFromResult(res.result);
   let raw: ConnectorBlockShape | null = fromResult;
+  let path = "result";
   if (!raw) {
     raw = extractConnectorsFromText(res.text ?? "");
+    if (raw) path = "text-mining";
+  }
+  if (!raw) {
+    raw = extractConnectorsFromEvents(res.events);
+    if (raw) path = "event-walk";
   }
 
   if (!raw || !Array.isArray(raw.connectors) || raw.connectors.length === 0) {
-    // Both extraction paths failed — the agent didn't emit a `result`
-    // event with the snapshot AND didn't print a parseable JSON block
-    // in its text output. Log the tail of each so we can debug what
-    // shape it actually produced.
-    log(
-      `composio-bridge: probe returned no connectors block — text-tail="${(res.text ?? "").slice(-300)}" reasoning-tail="${(res.reasoning ?? "").slice(-150)}"`,
-    );
-    return null;
+    // Distinguish the two failure shapes (#391):
+    //   - `empty_response`: the agent produced NO usable output at all
+    //     (no result, no text, no reasoning) — the exact bug in #391
+    //     where the native Codex runtime returns a hollow envelope.
+    //   - `malformed_response`: the agent DID produce output, but no
+    //     extraction pass found a parseable `connectors` array.
+    const text = res.text ?? "";
+    const reasoning = res.reasoning ?? "";
+    const eventCount = Array.isArray(res.events) ? res.events.length : 0;
+    const hasOutput =
+      text.trim().length > 0 ||
+      reasoning.trim().length > 0 ||
+      res.result != null ||
+      eventCount > 0;
+    if (!hasOutput) {
+      log(
+        `composio-bridge: probe outcome=empty_response — no result/text/reasoning/events`,
+      );
+      writeProbeError(
+        "empty_response",
+        "agent returned no output (empty result / text / reasoning / events)",
+      );
+      return { kind: "empty_response" };
+    }
+    const diagnostic = `events=${eventCount} text-head="${text.slice(0, 200)}"`;
+    log(`composio-bridge: probe outcome=malformed_response — ${diagnostic}`);
+    writeProbeError("malformed_response", diagnostic);
+    return { kind: "malformed_response", diagnostic };
   }
 
   log(
-    `composio-bridge: extracted ${raw.connectors.length} connectors (path=${raw === fromResult ? "result" : "text-mining"})`,
+    `composio-bridge: probe outcome=ok — extracted ${raw.connectors.length} connectors (path=${path})`,
   );
 
   const stamp = new Date().toISOString();
   const entries: ConnectorEntry[] = raw.connectors.map((c) => {
     const id = String(c.id ?? "unknown");
+    const accounts = parseAccounts(c.accounts);
+    // Prefer the enumerated account list as the source of truth for the
+    // count (#360) — an agent that reports `accountCount: 1` but lists two
+    // accounts was wrong about the count, not the accounts. Fall back to the
+    // reported scalar when no account list came back.
+    const accountCount = accounts
+      ? accounts.length
+      : Number(c.accountCount ?? 0);
     return {
       id,
       label: typeof c.label === "string" ? c.label : id,
       connected: Boolean(c.connected),
-      accountCount: Number(c.accountCount ?? 0),
+      accountCount,
+      ...(accounts ? { accounts } : {}),
       ...(typeof c.lastError === "string" && c.lastError
         ? { lastError: c.lastError }
         : {}),
@@ -433,5 +622,24 @@ export async function probeConnectorState(
     // and the next tick will rewrite the cache.
   }
 
-  return entries;
+  const surfaces =
+    readSurfaces(raw).length > 0
+      ? readSurfaces(raw)
+      : entries.filter((e) => e.connected).map((e) => e.id);
+  return { kind: "ok", entries, surfaces };
+}
+
+/**
+ * Backward-compatible thin wrapper (#391): returns the old
+ * `ConnectorEntry[] | null` contract. Existing callers that only care
+ * about "did we get entries or not" keep working unchanged — on a
+ * `kind: "ok"` outcome we return the entries, on any failure kind we
+ * return `null`. New callers that need the failure reason should call
+ * {@link probeConnectorState} directly.
+ */
+export async function probeConnectorStateEntries(
+  opts: ProbeConnectorPromptOptions = {},
+): Promise<ConnectorEntry[] | null> {
+  const outcome = await probeConnectorState(opts);
+  return outcome.kind === "ok" ? outcome.entries : null;
 }

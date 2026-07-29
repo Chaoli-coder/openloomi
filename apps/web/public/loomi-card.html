@@ -141,6 +141,219 @@
         border-color: rgba(255, 255, 255, 0.12);
       }
 
+      /* #365 — compact (idle status) layout. Toggled by the
+         `data-active-mode` attribute on `.card` so the same window
+         can switch between compact and full without rebuilding. The
+         mode attribute is set BEFORE the first paint on
+         `loop:card-mode` (the host emits the event prior to
+         `show_card_window`), so the user never sees the full layout
+         flash before compact renders.
+
+         The layout strips every implementation term that lived on
+         the old connection view ("All endpoints reachable", "Pipeline
+         ready", "Fetching from /api/loop/connectors"). The verbose
+         copy lives in `loop.compactCard.*`; the title + subtitle
+         here are the answer to "what is Loomi doing right now?" and
+         "do I need to do anything?". */
+      .card[data-active-mode="compact"] {
+        padding: 16px 14px 14px;
+        gap: 10px;
+      }
+      .card[data-active-mode="compact"] .card::before {
+        /* Inherit compact padding above; nothing per-mode here. */
+      }
+      .compact-eyebrow {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        align-self: flex-start;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--green-soft);
+        border: 1px solid var(--green-border);
+        color: var(--green-text);
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .compact-eyebrow[data-tone="paused"] {
+        background: var(--orange-softer);
+        border-color: var(--orange-border);
+        color: var(--orange-text);
+      }
+      .compact-eyebrow[data-tone="checking"] {
+        background: var(--blue-soft);
+        border-color: var(--blue-border);
+        color: var(--blue-dark);
+      }
+      .compact-eyebrow[data-tone="failure"] {
+        background: rgba(255, 73, 36, 0.12);
+        border-color: rgba(255, 73, 36, 0.32);
+        color: var(--red);
+      }
+      .compact-eyebrow .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .compact-title {
+        flex: 0 0 auto;
+        font-family: var(--font-display);
+        font-weight: 800;
+        font-size: 19px;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+        margin: 0;
+      }
+      .compact-subtitle {
+        flex: 0 0 auto;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--muted);
+        margin: 0;
+      }
+      .compact-last-checked {
+        flex: 0 0 auto;
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        color: var(--label);
+        letter-spacing: 0.02em;
+        margin: 0;
+      }
+      .compact-sources {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        overflow: auto;
+        padding-right: 2px;
+      }
+      .compact-sources-label {
+        flex: 0 0 auto;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--label);
+      }
+      .compact-source-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: var(--panel-soft);
+        border: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--ink);
+      }
+      .compact-source-row[data-state="paused"] {
+        opacity: 0.62;
+      }
+      .compact-source-row .compact-source-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.22);
+      }
+      .compact-source-row[data-state="off"] .compact-source-dot,
+      .compact-source-row[data-state="failure"] .compact-source-dot {
+        background: var(--red);
+        box-shadow: 0 0 0 2px rgba(255, 73, 36, 0.18);
+      }
+      .compact-source-row[data-state="paused"] .compact-source-dot {
+        background: #94a3b8;
+        box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18);
+      }
+      .compact-source-row[data-state="unknown"] .compact-source-dot {
+        background: #fbbf24;
+        box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.18);
+      }
+      .compact-source-row .compact-source-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+      }
+      .compact-source-row .compact-source-status {
+        flex: 0 0 auto;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: var(--label);
+      }
+      .compact-sources-empty {
+        padding: 8px;
+        text-align: center;
+        font-size: 10.5px;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+      }
+      .compact-footer {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 4px;
+        border-top: 1px solid var(--line);
+      }
+      .compact-footer button {
+        flex: 1 1 0;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        font-family: inherit;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease;
+      }
+      .compact-footer button:hover,
+      .compact-footer button:focus-visible {
+        background: var(--panel-soft);
+        outline: none;
+      }
+      .compact-footer button:focus-visible {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 2px rgba(43, 138, 247, 0.22);
+      }
+      .compact-footer button.primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .compact-footer button.primary:hover,
+      .compact-footer button.primary:focus-visible {
+        background: var(--blue-dark);
+        border-color: var(--blue-dark);
+      }
+      /* Hide the legacy usage chip on compact mode — it lived at
+         the bottom-right of the card flex column and would compete
+         with the compact footer for attention. The compact card
+         has its own "Last checked" line so the token-count info
+         is non-essential here. */
+      .card[data-active-mode="compact"] .usage-strip {
+        display: none !important;
+      }
+
       /* Layout switching — only one section is visible at a time. */
       [data-layout] {
         display: none;
@@ -430,10 +643,10 @@
       }
 
       /* ============================================================
-         Inline draft editor (draft_reply)
+         Inline draft editor (email_reply)
          Hidden by default; toggled on by `setEditMode(true)`. Replaces
          the action footer (and the chrome above it) with a Subject
-         input + Body textarea + Save / Save & Run / Cancel buttons so
+         input + Body textarea + Save / Save & Send / Cancel buttons so
          the user can tweak a Gmail draft before sending. Lives inside
          the [data-layout="decision"] section.
          ============================================================ */
@@ -450,9 +663,7 @@
       /* The page-level `html, body { user-select: none }` (line 75) blocks
          text selection in any descendant input/textarea. Re-enable it
          only for the editor so users can copy/edit text normally. */
-      #dec-editor,
-      #dec-editor-subject,
-      #dec-editor-body {
+      #dec-editor {
         -webkit-user-select: text;
         user-select: text;
       }
@@ -472,6 +683,16 @@
         color: var(--ink);
         background: var(--panel-soft);
         border: 1px solid var(--blue-soft);
+        /* Defensive: the page-level `html, body { user-select: none }`
+           combined with some webview shells' focus-activation races
+           on macOS NSPanel windows can silently drop pointer events on
+           descendants. Force pointer-events: auto on the editable
+           surface itself so the textarea always receives clicks + focus,
+           even if a future rule accidentally sets `pointer-events: none`
+           somewhere upstream. */
+        pointer-events: auto;
+        -webkit-user-select: text;
+        user-select: text;
         border-radius: 8px;
         padding: 8px 10px;
         width: 100%;
@@ -483,7 +704,7 @@
         flex: 1 1 auto;
         min-height: 80px;
         resize: vertical;
-        caret-color: var(--ink);
+        caret-color: currentColor;
       }
       #dec-editor-subject:focus,
       #dec-editor-body:focus {
@@ -522,10 +743,122 @@
       .card.editing #dec-dialogue,
       .card.editing #dec-evidence,
       .card.editing #dec-status,
-      .card.editing #dec-footer {
+      .card.editing #dec-footer,
+      .card.editing #dec-scroll {
         display: none;
       }
       .card.editing [data-layout="decision"] {
+        gap: 6px;
+      }
+
+      /* ============================================================
+         IM reply editor (#dec-editor-im) — body-only variant of
+         #dec-editor for Telegram / Feishu / Lark / WeChat / QQ /
+         DingTalk. No subject input; a recipient pill at the top keeps
+         the "To: @user · Channel" context visible after the chrome is
+         hidden. Toggled via .editing-im on the card root by
+         setEditModeIm().
+         ============================================================ */
+      #dec-editor-im {
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      #dec-editor-im.show {
+        display: flex;
+      }
+      #dec-editor-im,
+      #dec-editor-im-body {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      #dec-editor-im label {
+        font-family: var(--font-body);
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--label);
+      }
+      #dec-editor-im .recipient-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        align-self: flex-start;
+        max-width: 100%;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--blue);
+        background: var(--panel-soft);
+        border: 1px solid var(--blue-soft);
+        border-radius: 999px;
+        padding: 4px 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #dec-editor-im-body {
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--ink);
+        background: var(--panel-soft);
+        border: 1px solid var(--blue-soft);
+        border-radius: 8px;
+        padding: 8px 10px;
+        width: 100%;
+        flex: 1 1 auto;
+        min-height: 80px;
+        resize: vertical;
+        caret-color: currentColor;
+        /* Defensive — see the matching comment on #dec-editor-subject
+           / #dec-editor-body above. Without this, the textarea can
+           silently lose click-to-focus when the parent NSPanel hasn't
+           promoted to key yet (macOS webview focus-activation race). */
+        pointer-events: auto;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      #dec-editor-im-body:focus {
+        outline: none;
+        border-color: var(--blue);
+        background: #fff;
+      }
+      #dec-editor-im-body::placeholder {
+        color: var(--muted);
+        opacity: 0.7;
+      }
+      #dec-editor-im-error {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--red);
+        line-height: 1.3;
+        display: none;
+      }
+      #dec-editor-im-error.show {
+        display: block;
+      }
+      #dec-editor-im-footer {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
+      .card.editing-im #dec-recommendation,
+      .card.editing-im #dec-source-chain,
+      .card.editing-im #dec-body,
+      .card.editing-im #dec-confidence-row,
+      .card.editing-im #dec-dialogue,
+      .card.editing-im #dec-evidence,
+      .card.editing-im #dec-status,
+      .card.editing-im #dec-footer,
+      .card.editing-im #dec-scroll {
+        display: none;
+      }
+      .card.editing-im [data-layout="decision"] {
         gap: 6px;
       }
 
@@ -974,8 +1307,8 @@
       }
 
       /* ============================================================
-         Layout: DECISION  (Forms 4/5/8 · todo / draft_reply /
-                                       review_pr / slack_reply /
+         Layout: DECISION  (Forms 4/5/8 · todo / email_reply /
+                                       review_pr / im_reply /
                                        rsvp / release_plan /
                                        deadline_reminder)
          Demo: .decision-card full structure (source-chain,
@@ -993,6 +1326,27 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
         flex: 0 0 auto;
+      }
+      /* Scrollable middle column for the decision layout. Sits between
+         .source-chain and the action footer, absorbs the leftover
+         vertical space inside [data-layout="decision"], and scrolls
+         internally when the dec-body + dialogue + evidence-pills rows
+         would otherwise push the footer below the 360×420 card frame
+         (Skip / Edit / Send etc. getting clipped against
+         `body { overflow: hidden }`). `min-height: 0` is the critical
+         bit — without it the flex child won't shrink past its content
+         size. The wrapper is hidden in editing mode so the inline
+         draft editor takes its place (see .card.editing rules). */
+      .dec-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        /* Mask the right-edge scrollbar gutter so long evidence lists
+           don't shift the row alignment when scrollbar appears. */
+        scrollbar-gutter: stable;
       }
       .subtitle {
         font-size: 11px;
@@ -1147,7 +1501,7 @@
       /* ---------- Type-specific body content ----------
          Renders one of three things based on decision.type:
            - deadline_reminder: sender + subject + email snippet + countdown
-           - draft_reply: drafted body preview + thread context
+           - email_reply: drafted body preview + thread context
            - anything else: hidden (falls back to evidence pills)
          Lays out as a stack INSIDE the source-chain area so it never
          pushes the recommendation/footer off the 360×420 frame. When
@@ -1267,6 +1621,7 @@
         flex-direction: column;
         gap: 4px;
         min-height: 56px;
+        justify-content: center;
       }
       .evidence-pill .label {
         font-family: var(--font-body);
@@ -1482,6 +1837,47 @@
         font-size: 9.5px;
         font-weight: 600;
         color: var(--muted);
+      }
+
+      /* ============================================================
+         #378 — GitHub-notification digest row layout
+         Used by renderQuietDigest() when `decision.action.params.module`
+         === "github-notifications". Mirrors the web DecisionCard's
+         grouped summary (repo pill + title + summary + link) so the
+         pet bubble and the web card render the same content.
+         ============================================================ */
+      .brief-item .gh-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .brief-item .gh-repo {
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        line-height: 1.2;
+      }
+      .brief-item .bi-link {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--accent, #4f46e5);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .brief-item .bi-link:hover {
+        text-decoration: underline;
+      }
+      .brief-item .bi-link-cell {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex: 0 0 auto;
+        margin-left: 6px;
       }
 
       /* ============================================================
@@ -1750,6 +2146,45 @@
       </section>
 
       <!-- ============================================================
+           LAYOUT: COMPACT  (#365 — idle status card)
+           The compact layout replaces the old "force the connection
+           view on idle" path. It answers the user's two questions
+           ("what is Loomi doing?" / "do I need to do anything?") in
+           plain language, surfaces the watcher poll timestamp as
+           "Last checked", and offers explicit Collapse + Open Loop
+           buttons. No implementation terms in the primary path;
+           the dev panel can still pin the legacy `connection`
+           layout via `pet:dev-form` if a developer needs to inspect
+           the old chrome.
+           ============================================================ -->
+      <section data-layout="compact">
+        <span class="compact-eyebrow" id="compact-eyebrow" data-tone="healthy">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="compact-eyebrow-text">Sync is healthy</span>
+        </span>
+        <h2 class="compact-title" id="compact-title">Everything is working</h2>
+        <p class="compact-subtitle" id="compact-subtitle">
+          Nothing needs your attention. Loomi will open a card when a decision
+          needs you.
+        </p>
+        <p class="compact-last-checked" id="compact-last-checked">
+          Last checked: —
+        </p>
+        <div class="compact-sources" id="compact-sources">
+          <div class="compact-sources-label">Watching</div>
+          <div id="compact-sources-list"></div>
+        </div>
+        <div class="compact-footer">
+          <button type="button" data-action="close" id="compact-collapse">
+            Collapse
+          </button>
+          <button type="button" class="primary" data-action="open-loop">
+            Open Loop
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================
            LAYOUT: NO-API-KEY  (Form 0 · missing provider config)
            Surfaces the "no LLM reachable" state on the pet card, in
            the same visual style as the other six forms. Mirrors the
@@ -1987,42 +2422,54 @@
              deciding. -->
         <div class="subtitle" id="dec-subtitle"></div>
         <div class="source-chain" id="dec-source-chain"></div>
-        <!-- Type-specific body block. Renders one of:
-             - deadline_reminder: sender + subject + email snippet + countdown
-             - draft_reply: drafted body preview + thread context
-             - rsvp: event time + organizer + attendee summary
-             - review_pr: PR title + repo/diffstat + reviewer status
-             - other types: hidden (falls back to evidence pills)
-             Add `.show-body` to #dec (in JS) so the legacy evidence
-             grid is hidden when the body block is taking its slot. -->
-        <div class="dec-body" id="dec-body" hidden></div>
-        <!-- Confidence is already shown in the meta-node row above.
-             Hide the duplicate bottom bar — the percentage and color
-             gradient were both being rendered twice on every decision. -->
-        <div class="confidence-row" id="dec-confidence-row" hidden>
-          <span class="label">Confidence</span>
-          <div class="confidence-track">
-            <div
-              class="confidence-fill"
-              id="dec-confidence-fill"
-              style="--confidence: 72%"
-            ></div>
+        <!-- Scrollable content area. Sits between the source-chain and
+             the action footer, eating any leftover vertical space and
+             scrolling internally when the body / dialogue / evidence
+             rows would otherwise push the footer (Skip / Edit / Send
+             etc.) below the 360×420 card frame. `min-height: 0` is the
+             critical bit — without it the flex child can't shrink past
+             its content size, and the footer ends up clipped against
+             `body { overflow: hidden }`. The wrapper is hidden in
+             editing mode (see .card.editing rules below) so the inline
+             draft editor takes its place. -->
+        <div class="dec-scroll" id="dec-scroll">
+          <!-- Type-specific body block. Renders one of:
+               - deadline_reminder: sender + subject + email snippet + countdown
+               - email_reply: drafted body preview + thread context
+               - rsvp: event time + organizer + attendee summary
+               - review_pr: PR title + repo/diffstat + reviewer status
+               - other types: hidden (falls back to evidence pills)
+               Add `.show-body` to #dec (in JS) so the legacy evidence
+               grid is hidden when the body block is taking its slot. -->
+          <div class="dec-body" id="dec-body" hidden></div>
+          <!-- Confidence is already shown in the meta-node row above.
+               Hide the duplicate bottom bar — the percentage and color
+               gradient were both being rendered twice on every decision. -->
+          <div class="confidence-row" id="dec-confidence-row" hidden>
+            <span class="label">Confidence</span>
+            <div class="confidence-track">
+              <div
+                class="confidence-fill"
+                id="dec-confidence-fill"
+                style="--confidence: 72%"
+              ></div>
+            </div>
+            <span class="value" id="dec-confidence-value">72%</span>
           </div>
-          <span class="value" id="dec-confidence-value">72%</span>
+          <div class="dialogue" id="dec-dialogue">
+            <span class="label">From Loomi</span>
+            <span class="body" id="dec-dialogue-body">…</span>
+          </div>
+          <div class="evidence-pills" id="dec-evidence"></div>
+          <!-- Inline status banner — shows Running… / Sent ✓ / Dismissed ✓
+               inline so the user sees the trail without losing the action
+               context. The toast still fires for redundancy but the
+               banner is the primary signal. -->
+          <div class="status-banner" id="dec-status"></div>
         </div>
-        <div class="dialogue" id="dec-dialogue">
-          <span class="label">From Loomi</span>
-          <span class="body" id="dec-dialogue-body">…</span>
-        </div>
-        <div class="evidence-pills" id="dec-evidence"></div>
-        <!-- Inline status banner — shows Running… / Sent ✓ / Dismissed ✓
-             inline so the user sees the trail without losing the action
-             context. The toast still fires for redundancy but the
-             banner is the primary signal. -->
-        <div class="status-banner" id="dec-status"></div>
         <!-- Inline draft editor — hidden by default. Toggled on for
-             draft_reply when the user clicks ↗ Edit. Replaces the
-             footer (Save & Run / Save / Cancel). The chrome above
+             email_reply when the user clicks ↗ Edit. Replaces the
+             footer (Save & Send / Save / Cancel). The chrome above
              (recommendation / source chain / confidence / dialogue /
              evidence) is hidden by the .card.editing class so the
              textarea has room inside the 360×420 window. Subject
@@ -2070,7 +2517,54 @@
               type="button"
               title="Save the draft and schedule the send"
             >
-              Save &amp; Run
+              Save &amp; Send
+            </button>
+          </div>
+        </div>
+        <!-- IM reply editor — body-only variant of #dec-editor for
+             Telegram / Feishu / Lark / WeChat / QQ / DingTalk. The
+             recipient pill is auto-filled from
+             decision.action.params.channel + .user by setEditModeIm().
+             There is no subject line — IM has no subject. -->
+        <div id="dec-editor-im">
+          <div class="recipient-pill" id="dec-editor-im-recipient">To: …</div>
+          <label for="dec-editor-im-body">Reply</label>
+          <textarea
+            id="dec-editor-im-body"
+            rows="6"
+            placeholder="Write your reply…"
+          ></textarea>
+          <div id="dec-editor-im-error" role="alert"></div>
+          <div id="dec-editor-im-footer">
+            <button
+              class="danger"
+              id="dec-editor-im-cancel"
+              data-editor-action="im-cancel"
+              data-editor-target="im"
+              type="button"
+              title="Discard local edits and close the editor"
+            >
+              Cancel
+            </button>
+            <button
+              class="ghost"
+              id="dec-editor-im-save"
+              data-editor-action="save"
+              data-editor-target="im"
+              type="button"
+              title="Save the draft and close the editor"
+            >
+              Save
+            </button>
+            <button
+              class="primary"
+              id="dec-editor-im-save-run"
+              data-editor-action="save-run"
+              data-editor-target="im"
+              type="button"
+              title="Save the draft and schedule the send"
+            >
+              Save &amp; Send
             </button>
           </div>
         </div>
@@ -2242,7 +2736,12 @@
         </div>
         <div class="brief-list" id="quiet-digest-list"></div>
         <div class="footer single-col">
-          <button class="primary" data-action="dismiss" type="button">
+          <button
+            class="primary"
+            data-action="dismiss"
+            data-quiet-digest
+            type="button"
+          >
             Got it
           </button>
         </div>
@@ -2359,6 +2858,24 @@
         let decision = null;
         let pendingList = [];
         let connectors = [];
+        // #365 — compact-mode state. `compactMode` flips to `true`
+        // when the host emits `loop:card-mode { compact: true }`
+        // (right before opening the card). `chooseLayout()` prefers
+        // the compact layout while this flag is set, and a fresh
+        // `loop:decision` event clears it so the same window can
+        // transition compact → full without a rebuild. `userStatus`
+        // is an optional override published by the host (currently
+        // unused — the renderer derives the eyebrow tone from the
+        // live state machine below) but kept here so a future
+        // watcher payload can pre-classify the surface without
+        // forcing the renderer to re-walk all its inputs.
+        let compactMode = false;
+        let userStatus = null;
+        // Cached values from the enriched `loop:state` payload.
+        // `loopEnabled` switches the dot / eyebrow tone; `lastPolledAt`
+        // is the source of the "Last checked: …" line.
+        let loopEnabled = true;
+        let lastPolledAt = null;
         // AI provider configuration status. Cached result of the
         // `hasUsableConversationApiConfiguration` predicate, evaluated
         // against `/api/preferences/ai`. `null` = not yet fetched,
@@ -2399,12 +2916,13 @@
         // collide on `thinking`. Cleared when the user dismisses the
         // triggering decision, so the card returns to natural routing.
         let devForm = null;
-        // Inline draft-editor state (draft_reply ↗ Edit). `editMode` is
+        // Inline draft-editor state (email_reply ↗ Edit). `editMode` is
         // toggled by setEditMode(); `saving` is true while a PATCH
         // /api/loop/decision/:id is in flight so the editor buttons
         // can't double-fire and the user gets the "Saving…" status
         // banner instead of a blank gap.
         let editMode = false;
+        let editModeIm = false;
         let saving = false;
 
         /** Seconds from `now` until the given ISO timestamp (clamped >= 0). */
@@ -2417,9 +2935,9 @@
 
         const TYPE_ICONS = {
           rsvp: "◐",
-          draft_reply: "✎",
+          email_reply: "✎",
           review_pr: "◇",
-          slack_reply: "▷",
+          im_reply: "ri-chat-ai-line",
           deadline_reminder: "◷",
           release_plan: "❖",
           todo: "▤",
@@ -2428,9 +2946,9 @@
         };
         const TYPE_RECOMMENDATIONS = {
           rsvp: "Send RSVP yes",
-          draft_reply: "Send the drafted reply",
+          email_reply: "Send the email reply",
           review_pr: "Post review summary",
-          slack_reply: "Reply in thread",
+          im_reply: "Draft a quick reply",
           deadline_reminder: "Add calendar reminder",
           release_plan: "Open release plan",
           todo: "Add to today's todos",
@@ -2446,7 +2964,7 @@
         //
         // Why this exists: the legacy footer showed the same generic
         // Open / Dismiss / Run trio for every decision type, which made
-        // RSVP, draft_reply, and review_pr all look identical even though
+        // RSVP, email_reply, and review_pr all look identical even though
         // they ask for very different user input. Mapping each type to
         // its natural buttons (Yes/No/Maybe, Send/Edit/Discard,
         // Approve/Comment, …) means the user sees the action
@@ -2460,6 +2978,16 @@
             // primary Yes on the RIGHT. The two middle slots hold the
             // neutral replies so the user scans left-to-right
             // ("skip / decline / maybe / accept").
+            //
+            // RSVP buttons use dedicated verbs (rsvp_attend /
+            // rsvp_decline / rsvp_maybe) instead of the generic `run`
+            // + `body: {response}` hack. The verb alone expresses the
+            // user intent; the handler maps it to accepted / declined /
+            // tentative and the runner pre-sets `action.params.response`
+            // so the agent prompt carries the chosen verdict forward
+            // (see lib/loop/runner.ts:runDecisionWithRsvpResponse).
+            // Without this, the agent re-asks the user mid-prompt and
+            // can write the wrong response.
             {
               action: "dismiss",
               label: "Skip",
@@ -2467,28 +2995,25 @@
               tip: "Don't reply — leave the invite pending for a later pass",
             },
             {
-              action: "run",
+              action: "rsvp_decline",
               label: "✗ No",
               variant: "ghost",
               tip: "Decline the invite — Loomi sends a polite 'can't make it' reply to the host",
-              body: { response: "no" },
             },
             {
-              action: "run",
+              action: "rsvp_maybe",
               label: "◐ Maybe",
               variant: "ghost",
               tip: "Tentative reply — leaves the response as 'maybe' on the host's side, no calendar block",
-              body: { response: "maybe" },
             },
             {
-              action: "run",
+              action: "rsvp_attend",
               label: "✓ Yes",
               variant: "primary",
               tip: "Confirm attendance — Loomi adds it to your calendar and replies 'yes' to the host",
-              body: { response: "yes" },
             },
           ],
-          draft_reply: [
+          email_reply: [
             {
               action: "dismiss",
               label: "Discard",
@@ -2530,24 +3055,24 @@
               body: { verdict: "approve" },
             },
           ],
-          slack_reply: [
+          im_reply: [
             {
               action: "dismiss",
               label: "Skip",
               variant: "danger",
-              tip: "Don't post — leave the message unread, the draft is discarded",
+              tip: "Don't send — leave the message unanswered, the draft is discarded",
             },
             {
-              action: "open",
+              action: "edit",
               label: "↗ Edit",
               variant: "ghost",
-              tip: "Open the draft in the dashboard to tweak the message before posting",
+              tip: "Edit the reply body inline before sending",
             },
             {
               action: "run",
               label: "▶ Send",
               variant: "primary",
-              tip: "Post the drafted reply to the channel as-is",
+              tip: "Send the email reply (or the edited version if you saved one) as-is",
             },
           ],
           release_plan: [
@@ -2616,9 +3141,9 @@
         ];
         const TYPE_LABELS = {
           rsvp: "RSVP",
-          draft_reply: "DRAFT_REPLY",
+          email_reply: "EMAIL_REPLY",
           review_pr: "REVIEW_PR",
-          slack_reply: "SLACK_REPLY",
+          im_reply: "IM_REPLY",
           deadline_reminder: "DEADLINE",
           release_plan: "RELEASE_PLAN",
           todo: "TODO",
@@ -2695,6 +3220,53 @@
         }
 
         // ---------- Helpers ----------
+        function getTauriInvoke() {
+          const t = window.__TAURI__;
+          if (!t) return null;
+          if (t.core && typeof t.core.invoke === "function") {
+            return t.core.invoke.bind(t.core);
+          }
+          if (t.tauri && typeof t.tauri.invoke === "function") {
+            return t.tauri.invoke.bind(t.tauri);
+          }
+          if (typeof t.invoke === "function") {
+            return t.invoke.bind(t);
+          }
+          return null;
+        }
+
+        function safeHttpsUrl(rawUrl) {
+          if (typeof rawUrl !== "string" || !rawUrl.trim()) return null;
+          try {
+            const url = new URL(rawUrl.trim());
+            if (url.protocol !== "https:") return null;
+            return url.href;
+          } catch (_) {
+            return null;
+          }
+        }
+
+        async function openExternalUrl(rawUrl) {
+          const url = safeHttpsUrl(rawUrl);
+          if (!url) {
+            showToast("Can't open an invalid link.", true);
+            return;
+          }
+          const invoke = getTauriInvoke();
+          if (invoke) {
+            try {
+              await invoke("open_url_custom", { url });
+              return;
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              showToast(`Open failed: ${msg}`, true);
+              return;
+            }
+          }
+          const opened = window.open(url, "_blank", "noopener,noreferrer");
+          if (!opened) window.location.href = url;
+        }
+
         function fmtTs(ts) {
           if (!ts) return "—";
           try {
@@ -2734,6 +3306,18 @@
         };
 
         function chooseLayout() {
+          // #365 — compact mode wins while the host has flagged the
+          // card as the idle status surface. We deliberately route to
+          // "compact" instead of the legacy "connection" layout so
+          // implementation terms ("All endpoints reachable", "Pipeline
+          // ready", "PENDING QUEUE · 0", "Fetching from …") stay out
+          // of the primary path. A fresh `loop:decision` event resets
+          // `compactMode` (see the listener below) and the next
+          // apply() naturally lands on `decision`. We still honour
+          // the missing-API-key gate below — that exception matters
+          // for first-run users regardless of which mode the host
+          // tried to open.
+          if (compactMode && apiConfigured !== false) return "compact";
           // 0. Missing-API-key takes priority over everything else —
           //    without an LLM the loop can't do anything, so the user
           //    needs to be nudged toward the settings page first. This
@@ -2785,12 +3369,22 @@
           // layout — including during transitions where multiple
           // layouts briefly co-exist.
           card.dataset.activeLayout = layout;
+          // #365 — `data-active-mode` lets the compact layout strip
+          // the usage chip and the legacy connection chrome. The
+          // host emits `loop:card-mode { compact: true }` BEFORE
+          // opening the window, so by the time `apply()` runs the
+          // flag is already in sync. We still derive the attribute
+          // from `compactMode` here so a subsequent layout swap
+          // (e.g. compact → decision when a pending decision lands)
+          // also clears the mode marker.
+          card.dataset.activeMode = compactMode ? "compact" : "full";
           // Hide footer / pills on layouts that don't use them — but the
           // footer lives inside each section, so layout-level switching
           // already hides them. Nothing global to do here.
           // Re-render all layouts with current data so layout switches
           // never show stale content.
           renderConnection();
+          renderCompact();
           renderPipeline();
           renderNoise();
           renderDecision();
@@ -2891,7 +3485,7 @@
             const empty = document.createElement("div");
             empty.className = "connector-row";
             empty.innerHTML =
-              '<span class="connector-dot"></span><div><span class="connector-name">Loading…</span><span class="connector-meta">Fetching from /api/loop/connectors</span></div><span class="connector-status off">—</span>';
+              '<span class="connector-dot"></span><div><span class="connector-name">Loading…</span></div><span class="connector-status off">—</span>';
             cl.appendChild(empty);
           } else {
             for (const c of connectors) {
@@ -2957,6 +3551,217 @@
               queue.appendChild(row);
             }
           }
+        }
+
+        // ---------- Compact layout (#365 — idle status) ----------
+        // Pure render of the idle-status surface. Reads the same
+        // `connectors` cache the legacy connection layout uses, plus
+        // the enriched `loop:state` payload (`loopEnabled`,
+        // `lastPolledAt`). No implementation terms appear in any
+        // user-visible string — copy comes from `loop.compactCard.*`
+        // (en-US / zh-Hans) with English fallback for the
+        // standalone-preview path (no Tauri runtime).
+        //
+        // Tone derivation is intentionally simple — the renderer
+        // looks at the connector rows first (any row in `failure` /
+        // `off` state lifts the eyebrow to "failure") and falls back
+        // to the loop-enabled flag when nothing has been probed yet.
+        function renderCompact() {
+          const eyebrow = document.getElementById("compact-eyebrow");
+          const eyebrowText = document.getElementById("compact-eyebrow-text");
+          const titleEl = document.getElementById("compact-title");
+          const subEl = document.getElementById("compact-subtitle");
+          const lastEl = document.getElementById("compact-last-checked");
+          const listEl = document.getElementById("compact-sources-list");
+
+          // 1. Decide the tone.
+          let tone = "healthy";
+          if (!loopEnabled) {
+            tone = "paused";
+          } else if (
+            connectors.some((c) => c && (c.connected === false || c.lastError))
+          ) {
+            tone = "failure";
+          }
+          // `working` only surfaces while the connector probe is in
+          // flight (no rows yet AND not paused). The "checking
+          // your sources" copy reads better than "everything is
+          // working" when the user clicks the pet within the first
+          // ~100ms after boot before /api/loop/connectors resolves.
+          if (tone === "healthy" && connectors.length === 0) {
+            tone = "checking";
+          }
+
+          // 2. Localised copy. The i18n instance is provided by the
+          // dashboard's `i18n-provider.tsx` (already bootstrapped
+          // before this card mounts) — we look it up via the
+          // `__OPENLOOMI_I18N__` global the provider exports. When
+          // running standalone (no provider), `t()` falls back to a
+          // tiny English helper so the card still renders something
+          // readable in a browser preview.
+          const t = compactT;
+          const keys = {
+            healthy: { title: "healthy", sub: "healthy" },
+            checking: { title: "checking", sub: "checking" },
+            paused: { title: "paused", sub: "paused" },
+            failure: {
+              title: "failure",
+              sub: "failure",
+              source:
+                connectors.find((c) => c && !c.connected && c.lastError)
+                  ?.label ||
+                connectors.find((c) => c && !c.connected)?.label ||
+                "Loop",
+            },
+          };
+          const toneKeys = keys[tone];
+
+          if (eyebrow) {
+            eyebrow.dataset.tone = tone;
+          }
+          if (eyebrowText) {
+            eyebrowText.textContent =
+              tone === "healthy"
+                ? t("loop.compactCard.syncHealthy")
+                : t(
+                    `loop.idlePill.${
+                      tone === "checking"
+                        ? "working"
+                        : tone === "paused"
+                          ? "paused"
+                          : "failure"
+                    }`,
+                    { source: toneKeys.source || "" },
+                  );
+          }
+          if (titleEl) {
+            titleEl.textContent = t(
+              `loop.compactCard.title.${toneKeys.title}`,
+              { source: toneKeys.source || "" },
+            );
+          }
+          if (subEl) {
+            subEl.textContent = t(`loop.compactCard.subtitle.${toneKeys.sub}`, {
+              source: toneKeys.source || "",
+            });
+          }
+          if (lastEl) {
+            lastEl.textContent = lastPolledAt
+              ? t("loop.compactCard.lastChecked", {
+                  rel: formatRelative(lastPolledAt),
+                })
+              : t("loop.compactCard.lastCheckedNever");
+          }
+
+          // 3. Sources list.
+          if (listEl) {
+            listEl.innerHTML = "";
+            if (!connectors.length) {
+              const empty = document.createElement("div");
+              empty.className = "compact-sources-empty";
+              empty.textContent = t("loop.compactCard.sourcesEmpty");
+              listEl.appendChild(empty);
+            } else {
+              for (const c of connectors) {
+                const row = document.createElement("div");
+                let rowState = "on";
+                if (!loopEnabled) rowState = "paused";
+                else if (c.connected === false || c.lastError)
+                  rowState = "failure";
+                else if (c.probed !== true) rowState = "unknown";
+                row.className = "compact-source-row";
+                row.dataset.state = rowState;
+                const name = document.createElement("span");
+                name.className = "compact-source-name";
+                name.textContent = c.label || c.id || "—";
+                const dot = document.createElement("span");
+                dot.className = "compact-source-dot";
+                dot.setAttribute("aria-hidden", "true");
+                const status = document.createElement("span");
+                status.className = "compact-source-status";
+                status.textContent =
+                  rowState === "paused"
+                    ? "PAUSED"
+                    : rowState === "failure"
+                      ? "OFF"
+                      : rowState === "unknown"
+                        ? "—"
+                        : "OK";
+                row.appendChild(dot);
+                row.appendChild(name);
+                row.appendChild(status);
+                listEl.appendChild(row);
+              }
+            }
+          }
+        }
+
+        // Tiny i18n helper used by `renderCompact()`. Looks up a key
+        // on the host-provided instance first (`__OPENLOOMI_I18N__`),
+        // then falls back to the en-US locale file shipped with the
+        // dashboard (i18n-provider imports `apps/web/i18n/locales/en-US`).
+        // The standalone-preview branch returns the key so a
+        // missing translation reads obviously wrong in the browser.
+        const COMPACT_FALLBACK = {
+          "loop.compactCard.title.healthy": "Everything is working",
+          "loop.compactCard.title.checking": "Checking your sources",
+          "loop.compactCard.title.paused": "Monitoring is paused",
+          "loop.compactCard.title.failure": "{{source}} needs attention",
+          "loop.compactCard.subtitle.healthy":
+            "Nothing needs your attention. Loomi will open a card when a decision needs you.",
+          "loop.compactCard.subtitle.checking":
+            "Loomi is checking your sources now.",
+          "loop.compactCard.subtitle.paused":
+            "Loop is paused — nothing will surface until you resume.",
+          "loop.compactCard.subtitle.failure":
+            "Loomi couldn't update {{source}} recently. Review the original before continuing.",
+          "loop.compactCard.lastChecked": "Last checked: {{rel}}",
+          "loop.compactCard.lastCheckedNever": "Last checked: never",
+          "loop.compactCard.syncHealthy": "Sync is healthy",
+          "loop.compactCard.sourcesLabel": "Watching",
+          "loop.compactCard.sourcesEmpty": "No sources connected",
+          "loop.idlePill.working": "Checking your connected sources…",
+          "loop.idlePill.paused": "Monitoring paused",
+          "loop.idlePill.failure": "Couldn't reach {{source}} · Review needed",
+        };
+        function compactT(key, vars) {
+          const host =
+            typeof window !== "undefined" ? window.__OPENLOOMI_I18N__ : null;
+          if (host && typeof host.t === "function") {
+            try {
+              const out = host.t(key, vars || {});
+              if (out && out !== key) return interpolate(out, vars || {});
+            } catch (_) {
+              /* fall through to the inline fallback */
+            }
+          }
+          const fallback = COMPACT_FALLBACK[key];
+          if (!fallback) return key;
+          return interpolate(fallback, vars || {});
+        }
+        function interpolate(template, vars) {
+          return template.replace(/\{\{(\w+)\}\}/g, (_m, name) =>
+            vars && Object.prototype.hasOwnProperty.call(vars, name)
+              ? String(vars[name])
+              : "",
+          );
+        }
+        // Render an ISO timestamp as a short relative phrase
+        // ("just now", "12s ago", "3m ago", "2h ago"). Mirrors the
+        // host-side `formatDistanceToNow` but kept inline because
+        // the card HTML is a standalone asset.
+        function formatRelative(iso) {
+          const t = Date.parse(iso);
+          if (Number.isNaN(t)) return iso;
+          const diffSec = Math.max(0, Math.round((Date.now() - t) / 1000));
+          if (diffSec < 5) return "just now";
+          if (diffSec < 60) return diffSec + "s ago";
+          const min = Math.round(diffSec / 60);
+          if (min < 60) return min + "m ago";
+          const hr = Math.round(min / 60);
+          if (hr < 24) return hr + "h ago";
+          const day = Math.round(hr / 24);
+          return day + "d ago";
         }
 
         // ---------- Pipeline layout (Form 2) ----------
@@ -3206,6 +4011,18 @@
             calendar_event: "cal",
             github_pr: "pr",
             slack_message: "slack",
+            telegram: "Telegram",
+            feishu: "Feishu",
+            lark: "Lark",
+            weixin: "WeChat",
+            qq: "QQ",
+            dingtalk: "DingTalk",
+            telegram_message: "telegram",
+            feishu_message: "feishu",
+            lark_message: "lark",
+            weixin_message: "weixin",
+            qq_message: "qq",
+            dingtalk_message: "dingtalk",
           };
           const rawType = decision.source_type || t;
           const nodes = [
@@ -3303,7 +4120,7 @@
           const parts = [];
           // Cluster count from the email/Slack thread dedupe. The tick
           // prompt is expected to populate `context.cluster.size` for
-          // deadline_reminder / draft_reply so the user immediately
+          // deadline_reminder / email_reply so the user immediately
           // knows whether the decision represents one event or many.
           const cluster =
             dec && dec.context && dec.context.cluster
@@ -3469,11 +4286,48 @@
             return;
           }
 
-          // ---------- draft_reply ----------
+          // ---------- email_reply ----------
           // Show the drafted reply body so the user sees what would go
           // out before clicking Run. Saves an edit cycle for the
           // common case where the draft is fine.
-          if (t === "draft_reply") {
+          if (t === "im_reply") {
+            const params = (dec.action && dec.action.params) || {};
+            const draft =
+              (dec.context && dec.context.draft && dec.context.draft.body) ||
+              params.body ||
+              "";
+            const CHAN = {
+              telegram: "Telegram",
+              feishu: "Feishu",
+              lark: "Lark",
+              weixin: "WeChat",
+              qq: "QQ",
+              dingtalk: "DingTalk",
+            };
+            const channel = params.channel
+              ? CHAN[params.channel] || params.channel
+              : "";
+            const user = params.user || params.to || "";
+            const lab = document.createElement("span");
+            lab.className = "label";
+            lab.textContent = "Email reply";
+            bodyEl.appendChild(lab);
+            if (user || channel) {
+              const ctx = document.createElement("div");
+              ctx.className = "snippet";
+              ctx.textContent = `To: ${channel}${user ? ` · ${user}` : ""}`;
+              bodyEl.appendChild(ctx);
+            }
+            const draftEl = document.createElement("div");
+            draftEl.className = "draft";
+            draftEl.textContent = draft || "(empty draft)";
+            bodyEl.appendChild(draftEl);
+            bodyEl.hidden = false;
+            if (decEl) decEl.classList.add("show-body");
+            return;
+          }
+
+          if (t === "email_reply") {
             const draft =
               (dec.context && dec.context.draft && dec.context.draft.body) ||
               (dec.action &&
@@ -3487,7 +4341,7 @@
             if (!draft && !subject) return;
             const lab = document.createElement("span");
             lab.className = "label";
-            lab.textContent = "Drafted reply";
+            lab.textContent = "Email reply";
             bodyEl.appendChild(lab);
             if (subject) {
               const sbj = document.createElement("div");
@@ -3752,7 +4606,7 @@
           }
         }
 
-        // ---------- Inline draft editor (draft_reply) ----------
+        // ---------- Inline draft editor (email_reply) ----------
         // Toggles the subject/body form on the decision layout. When
         // `on` is true:
         //   - re-fetches the decision from /api/loop/decision/:id so
@@ -3837,21 +4691,94 @@
             // Re-render the footer so the Send/Edit/Discard buttons go
             // away (the editor footer is the new action surface).
             renderDecisionFooter();
-            // Focus on next paint so the layout has settled and the
+            // Focus on the next tick so the layout has settled and the
             // textarea is actually focusable. Caret at end so the user
             // can keep typing without manually re-positioning.
-            requestAnimationFrame(() => {
-              if (body && document.activeElement !== body) {
-                body.focus();
-                const len = body.value.length;
-                try {
-                  body.setSelectionRange(len, len);
-                } catch (_) {
-                  /* some input types don't support setSelectionRange */
+            //
+            // Why a setTimeout(60) instead of requestAnimationFrame:
+            // the card window is a Tauri NSPanel (`macos_window::
+            // configure_as_floating_panel`) — `panel.canBecomeKeyWindow`
+            // is false, so `w.set_focus()` in `show_card_window_with`
+            // can't actually promote the window to key on macOS until
+            // a click lands on the webview. requestAnimationFrame fires
+            // before that promotion happens, and `body.focus()` silently
+            // no-ops when the document isn't key, so the user would see
+            // the editor appear but the textarea stays un-focused and
+            // typing goes to the underlying window. A short setTimeout
+            // defers focus until after the first user click has been
+            // dispatched through the webview (see also the click-to-focus
+            // handler on #dec-editor below — it's the safety net for the
+            // case where the user opens the editor without clicking the
+            // window first).
+            //
+            // Defense in depth — keep firing focus() on the editable
+            // surface (try Body first, fall back to Subject) every
+            // 80 ms for up to 6 s until `document.activeElement`
+            // confirms it stuck. The previous one-shot ladder
+            // (0 / 60 / 200 / 500 / 1000 / 1500 ms) capped out at
+            // 1.5 s; cold NSPanel + a brand-new macOS session can stay
+            // non-key for several seconds, and any later Tauri build
+            // add (e.g. setBecomesKeyOnlyOnOrderFront removal on
+            // macOS 14+) silently extends that window. The watchdog
+            // self-cancels the moment focus sticks or the budget
+            // elapses, so it costs zero CPU in the steady state. We
+            // also no-op if Subject / Body don't exist yet (this path
+            // can fire on initial inflate before the markup
+            // settles), and the click-to-focus safety net at the
+            // bottom of this file still runs as the first line of
+            // defense for the user's actual clicks.
+            const tryFocusEditor = () => {
+              if (!body && !subject) return false;
+              const active = document.activeElement;
+              if (active === body || active === subject) return true;
+              // Try Body first (the primary editor surface); if it
+              // doesn't take, Subject.
+              if (body) {
+                body.focus({ preventScroll: true });
+                if (document.activeElement === body) {
+                  const len = body.value.length;
+                  try {
+                    body.setSelectionRange(len, len);
+                  } catch (_) {
+                    /* some input types don't support setSelectionRange */
+                  }
+                  return true;
                 }
               }
-            });
+              if (subject) {
+                subject.focus({ preventScroll: true });
+                if (document.activeElement === subject) return true;
+              }
+              return false;
+            };
+            // Cancel any watchdog left over from a previous setEditMode
+            // cycle (e.g. the user opened, dismissed, and reopened the
+            // editor faster than the previous watchdog's 6s budget).
+            if (window.__loomiEditorFocusTimer) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+            }
+            const watchdogStart = Date.now();
+            window.__loomiEditorFocusTimer = setInterval(() => {
+              if (tryFocusEditor()) {
+                clearInterval(window.__loomiEditorFocusTimer);
+                window.__loomiEditorFocusTimer = null;
+                return;
+              }
+              if (Date.now() - watchdogStart > 6000) {
+                clearInterval(window.__loomiEditorFocusTimer);
+                window.__loomiEditorFocusTimer = null;
+              }
+            }, 80);
           } else {
+            // Editor is closing — cancel the focus watchdog so it
+            // doesn't keep firing focus() on a hidden field (which
+            // would silently steal focus from anywhere else on the
+            // card after a Save / Cancel / Esc).
+            if (window.__loomiEditorFocusTimer) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+            }
             if (err) {
               err.textContent = "";
               err.classList.remove("show");
@@ -3963,21 +4890,426 @@
           }
         }
 
-        // Delegated click handler for the editor's three buttons.
-        // Lives on the card root (same delegation pattern as the rest
-        // of the card) and matches `[data-editor-action]`. Kept
-        // separate from the main click handler so the dispatch is
-        // trivial — no risk of the schedule-fall-through eating an
-        // editor click.
+        // ---------- IM reply editor (im_reply ↗ Edit) ----------
+        // Body-only mirror of setEditMode() for Telegram / Feishu / Lark
+        // / WeChat / QQ / DingTalk. Fills the recipient pill from
+        // action.params.channel + .user and pre-fills the body from
+        // context.draft.body (fallback action.params.body). Toggles the
+        // .editing-im class so the same chrome blocks hide.
+        async function setEditModeIm(on) {
+          editModeIm = !!on;
+          const editor = document.getElementById("dec-editor-im");
+          const recipient = document.getElementById("dec-editor-im-recipient");
+          const body = document.getElementById("dec-editor-im-body");
+          const err = document.getElementById("dec-editor-im-error");
+          if (editor) editor.classList.toggle("show", editModeIm);
+          card.classList.toggle("editing-im", editModeIm);
+          if (editModeIm) {
+            if (decision && decision.id) {
+              try {
+                const res = await fetch(
+                  `${window.__OPENLOOMI_API__ || ""}/api/loop/decision/${encodeURIComponent(decision.id)}`,
+                  { credentials: "include" },
+                );
+                if (res.ok) {
+                  const data = await res.json().catch(() => null);
+                  if (data && data.decision) {
+                    decision = data.decision;
+                  }
+                }
+              } catch (_) {
+                /* fall back to in-memory copy */
+              }
+            }
+            const params =
+              (decision && decision.action && decision.action.params) || {};
+            const CHAN = {
+              telegram: "Telegram",
+              feishu: "Feishu",
+              lark: "Lark",
+              weixin: "WeChat",
+              qq: "QQ",
+              dingtalk: "DingTalk",
+            };
+            const channel = params.channel
+              ? CHAN[params.channel] || params.channel
+              : "";
+            const user = params.user || params.to || "";
+            if (recipient) {
+              recipient.textContent = `To: ${user || "recipient"}${channel ? ` · ${channel}` : ""}`;
+            }
+            const saved = decision?.context?.draft;
+            const seedBody =
+              saved && typeof saved.body === "string"
+                ? saved.body
+                : typeof params.body === "string"
+                  ? params.body
+                  : "";
+            if (body) body.value = seedBody;
+            if (err) {
+              err.textContent = "";
+              err.classList.remove("show");
+            }
+            renderDecisionFooter();
+            // Same NSPanel focus-activation dance as setEditMode() above.
+            // See that comment for why we now use a continuous watchdog
+            // (80 ms poll, 6 s budget) instead of a one-shot ladder. The
+            // previous 0 / 60 / 200 / 500 / 1000 / 1500 ms ladder cap
+            // burned out within 1.5 s, which was too tight on cold
+            // NSPanel promote on macOS 14+ where
+            // `setBecomesKeyOnlyOnOrderFront:` can stay at the panel's
+            // default (non-key) for several seconds. The IM editor
+            // shares the single `window.__loomiEditorFocusTimer` with
+            // the email editor — they're mutually exclusive at any
+            // moment, so cancelling on each setEditMode call is safe.
+            const tryFocusEditorIm = () => {
+              if (!body) return false;
+              if (document.activeElement === body) return true;
+              body.focus({ preventScroll: true });
+              if (document.activeElement !== body) return false;
+              const len = body.value.length;
+              try {
+                body.setSelectionRange(len, len);
+              } catch (_) {
+                /* noop */
+              }
+              return true;
+            };
+            if (window.__loomiEditorFocusTimer) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+            }
+            const watchdogStartIm = Date.now();
+            window.__loomiEditorFocusTimer = setInterval(() => {
+              if (tryFocusEditorIm()) {
+                clearInterval(window.__loomiEditorFocusTimer);
+                window.__loomiEditorFocusTimer = null;
+                return;
+              }
+              if (Date.now() - watchdogStartIm > 6000) {
+                clearInterval(window.__loomiEditorFocusTimer);
+                window.__loomiEditorFocusTimer = null;
+              }
+            }, 80);
+          } else {
+            // Symmetric cleanup to setEditMode()'s else branch — the
+            // shared watchdog handle is the one we just cancelled at
+            // the top of the `if` block, so this is mostly defensive.
+            if (window.__loomiEditorFocusTimer) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+            }
+            if (err) {
+              err.textContent = "";
+              err.classList.remove("show");
+            }
+            renderDecisionFooter();
+          }
+        }
+
+        // Body-only mirror of saveDraft() — PATCHes draft { subject: null,
+        // body } and optionally schedules a Run.
+        async function saveDraftIm(opts) {
+          if (!decision || !decision.id) return;
+          if (saving) return;
+          const thenRun = !!(opts && opts.thenRun);
+          const bodyEl = document.getElementById("dec-editor-im-body");
+          const errEl = document.getElementById("dec-editor-im-error");
+          const body = bodyEl ? bodyEl.value : "";
+          if (body.trim().length === 0) {
+            if (errEl) {
+              errEl.textContent =
+                "Reply is required — write something before saving.";
+              errEl.classList.add("show");
+            }
+            if (bodyEl) bodyEl.focus();
+            return;
+          }
+          saving = true;
+          setStatus("running", "Saving…");
+          const btns = document.querySelectorAll(
+            '[data-editor-action][data-editor-target="im"]',
+          );
+          btns.forEach((b) => (b.disabled = true));
+          try {
+            const res = await fetch(
+              `${window.__OPENLOOMI_API__ || ""}/api/loop/decision/${encodeURIComponent(decision.id)}`,
+              {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  draft: { subject: null, body: body },
+                }),
+              },
+            );
+            if (res.status === 401) {
+              throw new Error("auth required (sign in again)");
+            }
+            if (res.status === 413) {
+              throw new Error("body too long (50k char max)");
+            }
+            if (res.status === 409) {
+              setEditModeIm(false);
+              showToast(
+                "This decision was already handled — closing editor.",
+                true,
+              );
+              return;
+            }
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              throw new Error(
+                `HTTP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`,
+              );
+            }
+            decision.context = decision.context || {};
+            decision.context.draft = { subject: null, body: body };
+            setEditModeIm(false);
+            showToast("Draft saved", false);
+            if (thenRun) {
+              postAction("run", undefined);
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setStatus("error", `Save failed: ${msg}`);
+            if (errEl) {
+              errEl.textContent = `Save failed: ${msg}`;
+              errEl.classList.add("show");
+            }
+          } finally {
+            saving = false;
+            btns.forEach((b) => (b.disabled = false));
+          }
+        }
+
+        // Pet card webviews do not reliably hand target=_blank anchors
+        // to the OS browser. Route trusted external links through the
+        // same Tauri command the main window uses.
+        card.addEventListener("click", (e) => {
+          const link = e.target.closest("[data-external-url]");
+          if (!link) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openExternalUrl(link.dataset.externalUrl || link.href);
+        });
+
+        // Lives on the card root and matches `[data-editor-action]`.
+        // Kept separate from the main action handler so editor clicks
+        // cannot fall through into scheduling.
         card.addEventListener("click", (e) => {
           const btn = e.target.closest("[data-editor-action]");
           if (!btn) return;
           if (btn.disabled) return;
           const which = btn.dataset.editorAction;
+          // Route IM-editor clicks to the body-only saveDraftIm /
+          // setEditModeIm pair; email-editor clicks stay on saveDraft.
+          if (btn.dataset.editorTarget === "im") {
+            if (which === "save-run") saveDraftIm({ thenRun: true });
+            else if (which === "save") saveDraftIm({ thenRun: false });
+            else if (which === "im-cancel") setEditModeIm(false);
+            return;
+          }
           if (which === "save-run") saveDraft({ thenRun: true });
           else if (which === "save") saveDraft({ thenRun: false });
           else if (which === "cancel") setEditMode(false);
         });
+
+        // Click-to-focus fallback on both editor wrappers. The macOS
+        // NSPanel hosting the card doesn't accept keyboard focus until
+        // the user has clicked inside the webview at least once — and
+        // the only click that opens the editor is the "↗ Edit" button,
+        // which lives in the footer (a different DOM subtree). When
+        // the user clicks the editor surface (label, footer padding,
+        // whitespace between elements), the textarea may end up with
+        // focus but the window never promotes to key, so subsequent
+        // keystrokes fall through to the app behind the card.
+        //
+        // Re-firing `focus()` from inside this click handler runs *after*
+        // the NSPanel has promoted (clicks promote the window, then
+        // bubble up to this listener), so the second focus() call is the
+        // one that actually sticks.
+        //
+        // Earlier this handler only re-focused the body textarea on
+        // whitespace clicks and returned early for clicks on inputs /
+        // textareas themselves. That's wrong for the NSPanel case: if
+        // the browser default focus() silently no-ops because the
+        // window hasn't promoted to key yet, we still need to fire
+        // focus() ourselves on the clicked Subject / Body, or the user
+        // sees "Subject and Body are both unclickable". The fix: focus
+        // any input / textarea that was clicked (idempotent if the
+        // browser already focused it), and on whitespace clicks focus
+        // the body textarea. Buttons / labels / recipient pills stay
+        // untouched so we never fight the user's selection.
+        const focusOnEditorSurface = (rootEl, targetEl) => {
+          if (!rootEl) return;
+          const editable =
+            targetEl && targetEl.closest
+              ? targetEl.closest("input,textarea")
+              : null;
+          const isIm = rootEl.id === "dec-editor-im";
+          const body = rootEl.querySelector(
+            isIm ? "#dec-editor-im-body" : "#dec-editor-body",
+          );
+          // Email editor has a Subject input — keep it adjacent for
+          // parity even though the click handler doesn't currently
+          // target it directly (Subject is reached via the same
+          // input/textarea-closest branch above when clicked).
+          const subject = isIm
+            ? null
+            : rootEl.querySelector("#dec-editor-subject");
+          const target =
+            editable && rootEl.contains(editable) ? editable : body;
+          if (!target) return;
+          // The actual root cause of "Subject / Body unclickable"
+          // was the NSPanel class-swap leaving the first-responder
+          // chain pointing at tao's content view without a real
+          // first-responder assignment. That's now fixed in
+          // `macos_window.rs::configure_as_floating_panel` step 3b
+          // (re-thread responder + makeFirstResponder:contentView).
+          // The focus ladder below is a JS-side safety net for
+          // cold-promote timing on macOS 14+, not a workaround for
+          // a missing responder chain.
+          // Hard reset: ask the underlying NSPanel to become key BEFORE
+          // any DOM focus() attempt. On macOS 14+ where
+          // `setBecomesKeyOnlyOnOrderFront:` has been pruned and
+          // `.focusable(true)` alone isn't enough, the textarea/input
+          // never even receives an I-beam cursor on hover (because OS
+          // hit-testing treats the panel as non-interactive for text
+          // input). Calling `setFocus()` on the WebviewWindow bridges
+          // both layers: it runs Tauri's `focus_window` path which
+          // does `makeKeyAndOrderFront:` on the NSWindow under the
+          // hood, and the panel — even an NSPanel — will accept
+          // keyboard events for its first responder as a result.
+          //
+          // We previously tried relying on Tauri's auto-focus on show
+          // (`w.set_focus()` in `pet/card.rs::show_card_window_with`),
+          // but on cold / NSPanel promote that one-shot call lands
+          // before the OS has fully accepted the new window state, so
+          // a subsequent click in the editor still doesn't promote.
+          // Re-firing it on every click inside the editor is cheap
+          // and idempotent.
+          try {
+            const w = getCurrentWindow();
+            if (w && typeof w.setFocus === "function") {
+              w.setFocus();
+            }
+          } catch (_) {
+            /* Tauri bridge not available (dev console, raw HTML) */
+          }
+          // Direct focus() — the click event has already been processed
+          // by the OS, so the window should be ready to promote.
+          target.focus({ preventScroll: true });
+          // #diags editor-focus — log the post-focus state to a
+          // bounded ring buffer (window.__loomiDiag) AND console.
+          // Goal: tell us, after the user has tried clicking the
+          // input, exactly where focus landed and whether the
+          // Tauri bridge existed when we tried setFocus(). Pull
+          // from devtools with `JSON.stringify(window.__loomiDiagTail())`
+          // (window.__loomiDiagTail is exposed right after this
+          // IIFE). Five fields per entry, capped at 50 entries.
+          try {
+            const active = document.activeElement;
+            const tag =
+              active && active.tagName
+                ? active.tagName.toLowerCase()
+                : "(none)";
+            const id = active && active.id ? `#${active.id}` : "";
+            const line =
+              `[loomi-card focus t=${Date.now()}] target=${target.id || target.tagName}` +
+              ` setFocusBridge=${typeof getCurrentWindow === "function" ? "yes" : "no"}` +
+              ` active=${tag}${id}` +
+              ` match=${active === target}` +
+              ` isContentEditable=${active && active.isContentEditable ? "yes" : "no"}` +
+              ` selStart=${active && "selectionStart" in active ? active.selectionStart : "n/a"}`;
+            console.log(line);
+            (window.__loomiDiag = window.__loomiDiag || []).push({
+              ts: Date.now(),
+              line,
+            });
+            if (window.__loomiDiag.length > 50) window.__loomiDiag.shift();
+          } catch (_) {
+            /* best-effort */
+          }
+          if (document.activeElement === target) {
+            if (target === body) {
+              const len = body.value.length;
+              try {
+                body.setSelectionRange(len, len);
+              } catch (_) {
+                /* noop */
+              }
+            }
+            return;
+          }
+          // Direct focus() didn't stick (OS still mid-promote) — kick
+          // off a short burst of retries against just this target,
+          // reusing the shared watchdog slot so any setEditMode()
+          // call can cancel it cleanly. Without this the user sees
+          // the click do nothing — the click has fired, the input has
+          // NOT been focused, and the watchdog never re-arms because
+          // the original setEditMode() watchdog already cancelled
+          // itself when the click landed.
+          if (window.__loomiEditorFocusTimer) {
+            clearInterval(window.__loomiEditorFocusTimer);
+            window.__loomiEditorFocusTimer = null;
+          }
+          const burstStart = Date.now();
+          window.__loomiEditorFocusTimer = setInterval(() => {
+            if (document.activeElement === target) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+              return;
+            }
+            target.focus({ preventScroll: true });
+            if (target === body && document.activeElement === body) {
+              const len = body.value.length;
+              try {
+                body.setSelectionRange(len, len);
+              } catch (_) {
+                /* noop */
+              }
+            }
+            if (Date.now() - burstStart > 3000) {
+              clearInterval(window.__loomiEditorFocusTimer);
+              window.__loomiEditorFocusTimer = null;
+            }
+          }, 60);
+          // Suppress an unused-var warning for `subject`, kept on
+          // purpose to make the email / IM symmetry obvious at the
+          // call site.
+          void subject;
+        };
+        const editorRoot = document.getElementById("dec-editor");
+        const editorImRoot = document.getElementById("dec-editor-im");
+        if (editorRoot) {
+          editorRoot.addEventListener("mousedown", (e) => {
+            focusOnEditorSurface(editorRoot, e.target);
+          });
+        }
+        if (editorImRoot) {
+          editorImRoot.addEventListener("mousedown", (e) => {
+            focusOnEditorSurface(editorImRoot, e.target);
+          });
+        }
+        // #diags — expose a simple tail() helper so devtools or
+        // external probes can pull the ring buffer after the user
+        // has clicked the inputs. Returns { count, activeElement,
+        // lines } — call JSON.stringify(window.__loomiDiagTail())
+        // from the WebKit inspector / a side-channel textarea.
+        window.__loomiDiagTail = (n = 50) => {
+          const buf = window.__loomiDiag || [];
+          return {
+            count: buf.length,
+            activeElement: (() => {
+              const a = document.activeElement;
+              return a && a.tagName
+                ? `${a.tagName.toLowerCase()}${a.id ? "#" + a.id : ""}`
+                : "(none)";
+            })(),
+            lines: buf.slice(-n),
+          };
+        };
 
         // Keyboard shortcuts on the body textarea. The subject input
         // intentionally does NOT get the Cmd+Enter shortcut — pressing
@@ -3995,7 +5327,7 @@
               setEditMode(false);
               return;
             }
-            // Cmd/Ctrl + Enter → Save & Run. Avoids Shift+Enter
+            // Cmd/Ctrl + Enter → Save & Send. Avoids Shift+Enter
             // (newline) and bare Enter (newline) so the natural
             // typing flow is preserved.
             if (
@@ -4021,6 +5353,35 @@
           });
         }
 
+        // Same Esc / Cmd+Enter / Cmd+S wiring for the IM body textarea.
+        const editorImBodyEl = document.getElementById("dec-editor-im-body");
+        if (editorImBodyEl) {
+          editorImBodyEl.addEventListener("keydown", (e) => {
+            if (e.key === "Escape" && !e.isComposing) {
+              e.preventDefault();
+              setEditModeIm(false);
+              return;
+            }
+            if (
+              (e.metaKey || e.ctrlKey) &&
+              e.key === "Enter" &&
+              !e.isComposing
+            ) {
+              e.preventDefault();
+              saveDraftIm({ thenRun: true });
+              return;
+            }
+            if (
+              (e.metaKey || e.ctrlKey) &&
+              (e.key === "s" || e.key === "S") &&
+              !e.isComposing
+            ) {
+              e.preventDefault();
+              saveDraftIm({ thenRun: false });
+            }
+          });
+        }
+
         // ---------- Brief layout (Form 6) ----------
         function renderBrief() {
           // Metrics pull from the brief payload if present, else derive
@@ -4029,7 +5390,8 @@
             conflicts = 0,
             prs = 0;
           for (const d of pendingList) {
-            if (d.source === "gmail" && d.type === "draft_reply") unread++;
+            if (d.source === "gmail" && d.type === "email_reply") unread++;
+            if (d.type === "im_reply") unread++;
             if (d.source === "github" && d.type === "review_pr") prs++;
           }
           if (typeof decision?.metrics === "object" && decision.metrics) {
@@ -4344,11 +5706,18 @@
         // renders an empty list (not a crash) so the user can still
         // dismiss the card. Module id is read from
         // `decision.action.params.module` and shown in the tag chip so
-        // the user can tell ai-news from weather from memory at a glance.
+        // the user can tell ai-news from weather from memory from a
+        // GitHub notification digest at a glance. #378 — github-notifications
+        // renders a bounded, repository-grouped list with validated HTTPS
+        // links ("Open on GitHub") and relabels the dismiss control as
+        // "Mark as read" since the digest carries no executable action.
         function renderQuietDigest() {
           const titleEl = document.getElementById("quiet-digest-title");
           const tagEl = document.getElementById("quiet-digest-tag");
           const listEl = document.getElementById("quiet-digest-list");
+          const dismissBtn = document.querySelector(
+            "[data-action='dismiss'][data-quiet-digest]",
+          );
           if (!titleEl || !tagEl || !listEl) return;
 
           if (!decision || !decision.id || decision.type !== "quiet_digest") {
@@ -4357,6 +5726,7 @@
             titleEl.textContent = "Worth a re-read.";
             tagEl.textContent = "Quiet day filler";
             listEl.innerHTML = "";
+            if (dismissBtn) dismissBtn.textContent = "Got it";
             return;
           }
 
@@ -4371,7 +5741,13 @@
             (decision.action &&
               decision.action.params &&
               decision.action.params.module) ||
+            (decision.context && decision.context.module) ||
             null;
+          const isGithubDigest =
+            moduleId === "github-notifications" ||
+            /github notification|github has/i.test(
+              [decision.title, decision.dialogue].filter(Boolean).join(" "),
+            );
           const moduleLabel =
             moduleId === "ai-news-digest"
               ? "Last 24h in AI / tech"
@@ -4379,8 +5755,18 @@
                 ? "Weather + meetings"
                 : moduleId === "memory-resurface"
                   ? "From your memory"
-                  : "Quiet day filler";
+                  : isGithubDigest
+                    ? "GitHub updates"
+                    : "Quiet day filler";
           tagEl.textContent = moduleLabel;
+
+          // Relabel the dismiss control. GitHub-notification digests
+          // become "Mark as read" since they acknowledge a passive feed,
+          // not an actionable ask. Other quiet_digest modules keep the
+          // existing "Got it" copy that fits them.
+          if (dismissBtn) {
+            dismissBtn.textContent = isGithubDigest ? "Mark as read" : "Got it";
+          }
 
           // Bullets. The contract is `context.items: { title, summary, ref?, url? }[]`.
           // We render title + summary as the visible line; ref/url go
@@ -4393,11 +5779,71 @@
           if (items.length === 0) {
             const empty = document.createElement("div");
             empty.className = "brief-item";
-            empty.innerHTML =
-              '<span class="brief-priority p2">·</span><div><div class="bi-title">Nothing to read</div><div class="bi-sub">The filler ran but had nothing to surface.</div></div><span></span>';
+            if (isGithubDigest) {
+              empty.innerHTML =
+                '<span class="brief-priority p2">·</span>' +
+                '<div><div class="bi-title">GitHub notification details unavailable</div>' +
+                '<div class="bi-sub">OpenLoomi saw unread GitHub notifications, but this card did not receive the item details.</div></div>' +
+                '<span class="bi-link-cell"><a class="bi-link" href="https://github.com/notifications" data-external-url="https://github.com/notifications" target="_blank" rel="noopener noreferrer">Open notifications</a></span>';
+            } else {
+              empty.innerHTML =
+                '<span class="brief-priority p2">·</span><div><div class="bi-title">Nothing to read</div><div class="bi-sub">The filler ran but had nothing to surface.</div></div><span></span>';
+            }
             listEl.appendChild(empty);
             return;
           }
+
+          // #378 — github-notifications digest gets a richer row layout
+          // (repo + title + summary + a validated HTTPS link as
+          // "Open on GitHub"). The link is built only when the URL
+          // already starts with `https://` so the renderer never
+          // produces an executable `<a href="…">` for an unverified
+          // origin. Other quiet_digest modules fall through to the
+          // legacy generic rendering.
+          if (isGithubDigest) {
+            for (const it of items) {
+              const row = document.createElement("div");
+              row.className = "brief-item";
+              const repo = (it && it.repo) || "unknown";
+              const title = (it && it.title) || "GitHub notification";
+              const summary = (it && it.summary) || "";
+              const urlRaw = (it && it.url) || "";
+              const url =
+                typeof urlRaw === "string" &&
+                urlRaw.startsWith("https://github.com/")
+                  ? urlRaw
+                  : null;
+              const href = url || "https://github.com/notifications";
+              const linkText = url ? "Open on GitHub" : "Open notifications";
+              const linkHtml =
+                '<a class="bi-link" href="' +
+                esc(href) +
+                '" data-external-url="' +
+                esc(href) +
+                '" target="_blank" rel="noopener noreferrer">' +
+                linkText +
+                "</a>";
+              row.innerHTML =
+                '<span class="brief-priority p2">·</span>' +
+                '<div class="gh-row">' +
+                '<div class="gh-repo">' +
+                esc(repo) +
+                "</div>" +
+                '<div class="bi-title">' +
+                esc(title) +
+                "</div>" +
+                (summary
+                  ? '<div class="bi-sub">' + esc(summary) + "</div>"
+                  : "") +
+                "</div>" +
+                '<span class="bi-link-cell">' +
+                linkHtml +
+                "</span>";
+              listEl.appendChild(row);
+            }
+            return;
+          }
+
           for (const it of items) {
             const row = document.createElement("div");
             row.className = "brief-item";
@@ -4462,7 +5908,7 @@
         //
         //   The native-agent endpoint is built for long-running SSE:
         //   maxDuration=800s and 30s heartbeats keep the connection
-        //   alive across multi-minute tool calls (a draft_reply that
+        //   alive across multi-minute tool calls (a email_reply that
         //   triggers a Gmail send, an rsvp that walks a calendar event,
         //   etc.). Direct POST to the loop decision route can hit a
         //   `TypeError: Load failed` once the underlying `runDecision`
@@ -4517,12 +5963,12 @@
           } else if (action === "run") {
             const toolHints = {
               rsvp: "Send the RSVP — call the googlecalendar composio tool with `responseStatus: <sub_action.response>` (accepted / declined / tentative) on the event from `action.params.eventId`. Skill: `Skill composio execute GOOGLECALENDAR_EVENTS_MODIFY on googlecalendar with {...}`. CLI: `composio googlecalendar events_modify --json {...}`.",
-              draft_reply:
-                "Send the drafted email — call the gmail composio tool with the subject/body from `context.draft` if present, otherwise draft from `decision.title`. Skill: `Skill composio execute GMAIL_SEND_MESSAGE on gmail with {...}`. CLI: `composio gmail send_message --json {...}`.",
+              email_reply:
+                'Reply to this email. If `context.draft` is already set (user edited it inline), use that subject/body verbatim. If NOT, draft a concise reply (3–6 sentences) grounded in the source signal — mention the sender\'s name and the thread subject, don\'t write a generic placeholder — then PATCH it back to the decision via `curl -sS -X PATCH http://localhost:3515/api/loop/decision/<id> -H \'content-type: application/json\' -d \'{"draft":{"subject":"<...>","body":"<...>"}}\'` so the UI can show the draft before you send. The endpoint rejects empty body (HTTP 400 `draft.body required`). Only AFTER the PATCH succeeds, call the gmail composio tool with the subject/body from `context.draft`. Skill: `Skill composio execute GMAIL_SEND_MESSAGE on gmail with {...}`. CLI: `composio gmail send_message --json {...}`. If the PATCH fails, do NOT send — emit `skipped` with reason=`draft PATCH failed: <msg>`.',
               review_pr:
                 "Post a PR review — call the github composio tool with the verdict from `sub_action.verdict` (approve / comment / request_changes) on PR `params.number` in `params.repo`. Skill: `Skill composio execute GITHUB_CREATE_REVIEW on github with {...}`. CLI: `composio github create_review --json {...}`.",
-              slack_reply:
-                "Post the Slack reply — call the slack composio tool in the channel from `context.channel`, replying in-thread to `params.ts` if present. Skill: `Skill composio execute SLACK_SEND_MESSAGE on slack with {...}`. CLI: `composio slack send_message --json {...}`.",
+              im_reply:
+                "Reply on this IM. If `context.draft.body` is already set (user edited it inline), use that body verbatim. If NOT, draft a short message (1–3 sentences) grounded in the source signal — then PATCH it back via `curl -sS -X PATCH http://localhost:3515/api/loop/decision/<id> -H 'content-type: application/json' -d '{\"draft\":{\"subject\":null,\"body\":\"<...>\"}}'` so the UI can show the draft before you send. The endpoint rejects empty body (HTTP 400 `draft.body required`). Only AFTER the PATCH succeeds, send via the composio toolkit matching `params.channel` (slack / telegram / feishu / lark / weixin / qq / dingtalk). For slack use SLACK_SEND_MESSAGE in `params.chatId`, replying in-thread to `params.threadId` if present. For the others, run `composio search '<channel> send message'` first, then `Skill composio execute <DISCOVERED_SLUG> on <toolkit>` with {chat_id: params.chatId, text: context.draft.body}. Fallback CLI: `composio execute <DISCOVERED_SLUG> -d '<args-json>'`. If the PATCH fails, do NOT send — emit `skipped` with reason=`draft PATCH failed: <msg>`.",
               deadline_reminder:
                 'Create a deadline reminder — default: call the googlecalendar composio tool (skill: `Skill composio execute GOOGLECALENDAR_CREATE_EVENT on googlecalendar` or CLI: `composio googlecalendar create_event`) with `params.message` as the title and `params.notifyAt` → `params.deadlineAt` as the time window (or all-day on `params.deadlineAt`\'s date). If `params.channel === "slack"`, send a DM via the slack composio tool instead. Emit a single SSE `result` event whose `content` describes what you did (include the calendar event id / Slack ts / `skipped: <reason>`) — the system records `completed_at` and `result` automatically.',
               release_plan:
@@ -4610,14 +6056,16 @@
         // until the user clicked ✕ — the mirror-image half of #317.
         function hideCardWindow() {
           const t = window.__TAURI__;
-          const win =
-            t && t.window
-              ? t.window.getCurrentWebviewWindow
-                ? t.window.getCurrentWebviewWindow()
-                : t.window.getCurrentWindow
-                  ? t.window.getCurrentWindow()
-                  : null
-              : null;
+          const win = getCurrentWindow();
+          // Defensive: turn off cursor events before requesting the hide so
+          // the 360×420 region stops intercepting the mouse immediately,
+          // even if the OS-level hide settles asynchronously. The native
+          // show path restores cursor events when the card is shown again.
+          if (win && typeof win.setIgnoreCursorEvents === "function") {
+            try {
+              win.setIgnoreCursorEvents(true);
+            } catch (_) {}
+          }
           // Primary path: hide the window directly. More reliable than
           // the pet:close-card event roundtrip — the OS-level hide takes
           // effect immediately and doesn't depend on the Rust listener.
@@ -4627,15 +6075,6 @@
             } catch (_) {
               /* fall through to the event + fade below */
             }
-          }
-          // Defensive: turn off cursor events so even if the OS-level
-          // hide is delayed, the 360×420 region stops intercepting the
-          // mouse. Reset by the loop:state / loop:decision listeners when
-          // the card re-shows.
-          if (win && typeof win.setIgnoreCursorEvents === "function") {
-            try {
-              win.setIgnoreCursorEvents(true);
-            } catch (_) {}
           }
           // Secondary path: still emit pet:close-card so the Rust host
           // can run its own hide + bubble-restore logic (main.rs).
@@ -4647,6 +6086,67 @@
             card.style.display = "none";
           }, 160);
         }
+
+        // #365 — compact-card action handlers. The compact layout
+        // hosts two buttons (Collapse + Open Loop); the layout itself
+        // lives in the `<section data-layout="compact">` block above.
+        // We wire them once on script load and rely on event
+        // delegation so the listeners survive any future re-render
+        // that swaps the section's innerHTML. The actual close +
+        // open-dashboard paths are unchanged from the legacy × and
+        // "Open Loomi" actions — only the surface that surfaces them
+        // is new.
+        (function wireCompactActions() {
+          const root = document.querySelector('[data-layout="compact"]');
+          if (!root) return;
+          root.addEventListener("click", (e) => {
+            const target =
+              e.target instanceof Element
+                ? e.target.closest("[data-action]")
+                : null;
+            if (!target) return;
+            const action = target.dataset.action;
+            const t =
+              window.__TAURI__ ||
+              (window.__TAURI_INTERNALS__ && {
+                event: { emit: window.__TAURI_INTERNALS__.invoke },
+              });
+            const emit = (name) => {
+              try {
+                if (t && t.event && typeof t.event.emit === "function") {
+                  t.event.emit(name);
+                }
+              } catch (_) {
+                /* swallow — closed window */
+              }
+            };
+            if (action === "close") {
+              e.preventDefault();
+              // Reuse the same hide path the × button uses (which
+              // calls setIgnoreCursorEvents(true), then win.hide(), and
+              // emits pet:close-card so the host restores the bubble).
+              hideCardWindow();
+            } else if (action === "open-loop") {
+              e.preventDefault();
+              // Reset the compact flag so a subsequent open from
+              // the bubble lands in the decision layout, not the
+              // compact surface.
+              compactMode = false;
+              emit("pet:open-dashboard");
+              // #319 symmetry — every exit from the card must BOTH
+              // navigate AND retire the card window. The Rust
+              // `pet:open-dashboard` listener only surfaces the main
+              // window; it does NOT hide the 360×420 always-on-top
+              // card, so without this call the card stays on top of
+              // (or behind) the main window and keeps eating clicks
+              // until the next `loop:decision` flips it to the full
+              // decision layout. hideCardWindow() also emits
+              // pet:close-card so the host runs its bubble-restore
+              // logic, matching the legacy "View details" path.
+              hideCardWindow();
+            }
+          });
+        })();
 
         async function postAction(action, body) {
           if (!decision || !decision.id) {
@@ -4717,7 +6217,7 @@
             return;
           }
           if (action === "edit") {
-            // Inline editor for draft_reply. Opens the subject/body form
+            // Inline editor for email_reply. Opens the subject/body form
             // (replaces the footer) so the user can tweak the draft
             // before clicking ▶ Send. Blocked while a scheduled action
             // is pending — editing the draft mid-flight would race with
@@ -4727,7 +6227,9 @@
               showToast("Cancel the scheduled action first to edit.", true);
               return;
             }
-            setEditMode(true);
+            // email_reply → subject+body editor; im_reply → body-only.
+            if (decision.type === "im_reply") setEditModeIm(true);
+            else setEditMode(true);
             return;
           }
           // Run / Dismiss / Dry / Promote: route through the one-shot
@@ -5197,7 +6699,32 @@
         }, 1000);
 
         // ---------- Connector refresh ----------
+        // #376 — the card webview is built once and reused. A stale
+        // `connectors = []` from an early empty response (or a probe that
+        // hadn't completed by the time the card first mounted) used to
+        // persist for the lifetime of the window — the next compact open
+        // re-shown the existing webview with its old `connectors` array
+        // and rendered "No sources connected" even after the watcher
+        // wrote healthy entries to `~/.openloomi/loop/connectors.json`.
+        //
+        // Fix:
+        //   1. The `loop:card-mode` listener below triggers a refresh on
+        //      every compact / full open so the card always reflects the
+        //      latest snapshot the moment it appears.
+        //   2. `connectorsRefreshToken` lets overlapping requests tell
+        //      which response is freshest: a slow earlier request that
+        //      resolves AFTER a newer one must NOT clobber the newer
+        //      state. The token increments per fetch and a response only
+        //      wins if it still matches.
+        //   3. The function only overwrites `connectors` when the payload
+        //      actually carries an `items` array — a missing or malformed
+        //      response keeps the previously-known list visible. A slow
+        //      or failed refresh therefore never erases the last good
+        //      connector state, which is one of the #376 acceptance
+        //      criteria.
+        let connectorsRefreshInflight = 0;
         async function refreshConnectors() {
+          const token = ++connectorsRefreshInflight;
           try {
             const res = await fetch(
               `${window.__OPENLOOMI_API__ || ""}/api/loop/connectors`,
@@ -5205,11 +6732,34 @@
                 credentials: "include",
               },
             );
-            if (!res.ok) return;
-            const data = await res.json().catch(() => ({}));
-            connectors = Array.isArray(data?.items) ? data.items : [];
+            if (token !== connectorsRefreshInflight) return;
+            if (!res.ok) {
+              // Keep previous list visible — see #376 acceptance
+              // criterion: "A slow or failed refresh does not erase the
+              // last known good connector list."
+              apply();
+              return;
+            }
+            const data = await res.json().catch(() => null);
+            if (token !== connectorsRefreshInflight) return;
+            const items = data && data.items;
+            // Only overwrite `connectors` when the server actually
+            // returned a list shape. A `null` / `undefined` payload
+            // (e.g. an in-flight silent probe that hasn't produced
+            // anything yet) must NOT blank out the previously-known
+            // healthy state.
+            if (Array.isArray(items)) {
+              connectors = items;
+            }
             apply();
-          } catch (_) {}
+          } catch (_) {
+            // Network / CORS failure — same policy as `!res.ok`. Keep
+            // the previous known-good list; let `apply()` repaint the
+            // existing data so the empty-state copy ("No sources
+            // connected") stays hidden until the server explicitly
+            // confirms no sources are connected.
+            if (token === connectorsRefreshInflight) apply();
+          }
         }
 
         // ---------- AI config refresh ----------
@@ -5221,6 +6771,14 @@
         // module). On `false` we also kick the Rust host once via
         // `pet:open-card` so a fresh user sees the missing-key card
         // without having to click the bubble first.
+        // SYNC NOTE: this is an *inline copy* of the React helper
+        // `hasUsableConversationApiConfiguration` in
+        // `apps/web/lib/ai/conversation-api-configuration.ts`. The card
+        // HTML is a standalone Tauri asset with no shared module graph,
+        // so the two predicates must stay in lock-step — when you edit
+        // one, edit the other in the same commit. Otherwise the pet card
+        // and the main chat guard will disagree about whether the user
+        // is configured, and the wrong surface will nag for a key.
         function evaluateAiConfigured(payload) {
           if (!payload || !payload.settings || !payload.systemDefaults)
             return false;
@@ -5232,6 +6790,20 @@
           // Mirrors `hasUsableConversationApiConfiguration` in
           // `apps/web/lib/ai/conversation-api-configuration.ts`.
           if (payload.defaultAgent && payload.defaultAgent !== "claude") {
+            return true;
+          }
+          // Built-in Claude agent: the server probes the user's local
+          // `claude` CLI auth and surfaces it as `nativeRuntime`. If the
+          // probe reports the runtime is ready / authenticated, no
+          // per-user Anthropic key is needed — short-circuit before we
+          // look at `systemDefaults.hasApiKey`, which is a stale
+          // env-var mirror and would falsely mark the user as
+          // configured in Tauri builds launched with an Anthropic key in
+          // their env.
+          if (
+            payload.nativeRuntime?.authenticated ||
+            payload.nativeRuntime?.ready
+          ) {
             return true;
           }
           const userSetting = (payload.settings || []).find(
@@ -5325,33 +6897,11 @@
         const tauri = window.__TAURI__;
         if (tauri && tauri.event && tauri.event.listen) {
           tauri.event.listen("loop:decision", (e) => {
-            // The previous × click set three pieces of state on the card:
-            //   1. setIgnoreCursorEvents(true) on the Tauri window
-            //   2. card.style.opacity = "0" (immediate)
-            //   3. card.style.display = "none" (after 160ms fade)
-            // All three must be cleared here, otherwise the host's
-            // show_card_window() brings the OS window back on screen but
-            // the .card element stays at display:none → blank window
-            // even though a new decision is being routed in. Tauri
-            // window is restored first (so the 360×420 region becomes
-            // mouse-active again), then the CSS inline styles are wiped
-            // so the DOM becomes visible. Order matters: wiping CSS
-            // before the OS window is clickable would flash a frame
-            // of unclickable content on the user's previous click.
-            if (tauri && tauri.window) {
-              try {
-                const w = tauri.window.getCurrentWebviewWindow
-                  ? tauri.window.getCurrentWebviewWindow()
-                  : tauri.window.getCurrentWindow
-                    ? tauri.window.getCurrentWindow()
-                    : null;
-                if (w && typeof w.setIgnoreCursorEvents === "function") {
-                  w.setIgnoreCursorEvents(false);
-                }
-              } catch (_) {
-                /* non-fatal */
-              }
-            }
+            // The previous × click hid the local card DOM. Clear those
+            // inline styles so a later native show renders fresh decision
+            // content. Cursor interactivity is intentionally not restored
+            // here: background events may arrive while the OS window is
+            // hidden, and show_card_window_with() owns that lifecycle.
             // Wipe the × click's CSS hiding. Inline style "" clears
             // the property back to whatever the stylesheet says, which
             // is `display: flex` (see .card rule at the top of this
@@ -5394,20 +6944,37 @@
             // the layout re-renders against the new (non-pending)
             // decision.
             if (
-              editMode &&
+              (editMode || editModeIm) &&
               decision &&
               next &&
               next.id === decision.id &&
               next.status &&
               next.status !== "pending"
             ) {
-              setEditMode(false);
+              if (editMode) setEditMode(false);
+              if (editModeIm) setEditModeIm(false);
               showToast(
                 "This decision was already handled — your unsaved text was discarded",
                 true,
               );
             }
             decision = next;
+            // #365 — a fresh pending decision always transitions the
+            // card out of compact mode, even if the watcher only
+            // re-emitted the same payload. Without this reset the
+            // compact layout would stay sticky for the lifetime of
+            // the window. Set the flag BEFORE apply() so the next
+            // chooseLayout() picks the decision layout (the legacy
+            // `connection` view is no longer reachable from this
+            // path — the user's idle surface lives entirely on the
+            // pet + idle pill now).
+            if (
+              next &&
+              next.id &&
+              (!next.status || next.status === "pending")
+            ) {
+              compactMode = false;
+            }
             apply();
             // If the initial AI-config fetch failed (apiConfigured is
             // still null), every decision event is a chance to retry.
@@ -5427,27 +6994,22 @@
             }
           });
           tauri.event.listen("loop:state", (e) => {
-            // The previous × click set setIgnoreCursorEvents(true) so
-            // the card would stop blocking clicks. Restore it now that
-            // the card has content to show again.
-            if (tauri && tauri.window) {
-              try {
-                const w = tauri.window.getCurrentWebviewWindow
-                  ? tauri.window.getCurrentWebviewWindow()
-                  : tauri.window.getCurrentWindow
-                    ? tauri.window.getCurrentWindow()
-                    : null;
-                if (w && typeof w.setIgnoreCursorEvents === "function") {
-                  w.setIgnoreCursorEvents(false);
-                }
-              } catch (_) {
-                /* non-fatal */
-              }
-            }
             const p = (e && e.payload) || {};
             state =
               (typeof p === "object" && p.state) ||
               (typeof p === "string" ? p : "idle");
+            // #365 — capture the enriched `loop:state` payload
+            // (`enabled` + `last_polled_at`) so `renderCompact()`
+            // can colour the eyebrow and stamp "Last checked".
+            // Both fields are optional on the wire — older hosts
+            // omit them, in which case the cached values stay
+            // (loopEnabled defaults to `true`, lastPolledAt to
+            // `null`). We deliberately do this BEFORE `apply()` so
+            // the renderer sees the freshest values on the same
+            // tick the state advances.
+            if (typeof p.enabled === "boolean") loopEnabled = p.enabled;
+            if (typeof p.last_polled_at === "string")
+              lastPolledAt = p.last_polled_at;
             apply();
             // Re-arm the AI-config fetch when the gate is still open
             // (see loop:decision branch above for the same pattern and
@@ -5459,6 +7021,40 @@
             pendingList = Array.isArray(p.items) ? p.items : [];
             apply();
           });
+          // #365 — compact-mode toggle. The host emits this BEFORE
+          // `show_card_window` so the first paint of the card already
+          // shows the compact layout (no flash of the full decision
+          // chrome). `compact: false` is the reset signal: a fresh
+          // pending decision that re-shows the card in full mode
+          // flips the flag back so subsequent renders pick the right
+          // layout. The renderer's `chooseLayout()` short-circuits
+          // to `compact` while the flag is set.
+          //
+          // #376 — every card open now triggers a connector refresh.
+          // The Tauri card webview is built once and reused (hidden →
+          // shown), so the initial `refreshConnectors()` call at the
+          // bottom of this script only fires on the first mount and
+          // misses snapshot updates that landed while the window was
+          // hidden. Without this re-fetch, a user who opens the card
+          // before the first probe completes would see "No sources
+          // connected" forever — even after the watcher wrote healthy
+          // entries to `~/.openloomi/loop/connectors.json` — until they
+          // restarted OpenLoomi. We fire the refresh for both compact
+          // and full opens so a full-mode decision card also reflects
+          // the latest connector state when it appears.
+          tauri.event.listen("loop:card-mode", (e) => {
+            const p = (e && e.payload) || {};
+            compactMode = !!p.compact;
+            apply();
+            // `void` so the listener returns immediately; the fetch
+            // runs in the background and updates `connectors` via the
+            // in-flight token inside `refreshConnectors()`.
+            void refreshConnectors();
+          });
+          // #365 — capture the enriched `loop:state` payload is
+          // folded into the existing listener above (see the
+          // `enabled` / `last_polled_at` capture there) so we don't
+          // register two handlers for the same event.
           tauri.event.listen("loop:connectors", (e) => {
             const p = (e && e.payload) || {};
             connectors = Array.isArray(p.items || p.connectors)

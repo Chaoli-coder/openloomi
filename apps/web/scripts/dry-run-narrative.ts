@@ -54,7 +54,7 @@ const MOCK_ITEMS: BriefItem[] = [
     reason: "small docs fix, ship-it candidate",
   },
   {
-    kind: "draft_reply",
+    kind: "email_reply",
     id: "dec_reply_sam_launch",
     title: "Reply · Sam re: launch timing",
     action: { kind: "email_reply", params: {} },
@@ -62,10 +62,10 @@ const MOCK_ITEMS: BriefItem[] = [
     reason: "thread flagged 'asap' in subject",
   },
   {
-    kind: "slack_reply",
+    kind: "im_reply",
     id: "dec_slack_quinn",
     title: "Slack · Quinn in #launch",
-    action: { kind: "slack_reply", params: {} },
+    action: { kind: "im_reply", params: { channel: "slack" } },
     priority: 4,
     reason: "@mention 4h ago",
   },

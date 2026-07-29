@@ -59,11 +59,38 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith("/api/landing")) return NextResponse.next();
   if (pathname.startsWith("/api/remote-auth")) return NextResponse.next();
   if (pathname.startsWith("/api/remote-feedback")) return NextResponse.next();
+  // /api/pet/state trusts 127.0.0.1 loopback as its auth boundary (see
+  // `apps/web/app/api/pet/state/route.ts` docstring). Letting it through
+  // here avoids the proxy running `next-auth/jwt` on the request, which
+  // would reject the 2-segment guest token (Tauri `~/.openloomi/token`
+  // format) and surface as a misleading 401 AUTH_REQUIRED in dev mode
+  // and any non-Tauri context.
+  if (pathname.startsWith("/api/pet")) return NextResponse.next();
   if (pathname.startsWith("/api/brave-search")) return NextResponse.next();
   if (pathname.startsWith("/api/password-reset")) return NextResponse.next();
   if (pathname.startsWith("/api/ai")) return NextResponse.next();
+  // /api/native/* exposes provider/agent metadata used by the Codex /
+  // Claude Code bridges and by the desktop app's runtime readiness
+  // probes. The route handler returns configuration data only — no
+  // user data — so it's safe to let through without a session cookie.
+  // Whitelisting here prevents the bridge from receiving a misleading
+  // 401 AUTH_REQUIRED before any provider has been configured (the
+  // status response itself is what tells the bridge whether the AI
+  // provider is set up).
+  if (pathname.startsWith("/api/native")) return NextResponse.next();
   if (pathname.startsWith("/api/preferences")) return NextResponse.next();
   if (pathname.startsWith("/api/integrations")) return NextResponse.next();
+  // /api/loop/* and /api/llm/usage/* are guest-bootstrapping APIs: their
+  // route handlers fall back to `ensureGuestSession()` when the request
+  // has no session cookie, minting an anonymous guest and writing the
+  // NextAuth session cookie on the first response. Letting the request
+  // through here avoids the proxy redirecting the very first call to
+  // /guest-login (which spawns one browser page per parallel API request
+  // and races N concurrent `POST /api/auth/guest` calls into multiple
+  // orphan guest users). See `lib/auth/auto-guest.ts` for the mint path
+  // these routes share with the plugin-side `/api/remote-auth/guest`.
+  if (pathname.startsWith("/api/loop")) return NextResponse.next();
+  if (pathname.startsWith("/api/llm/usage")) return NextResponse.next();
   if (pathname.startsWith("/api/user") || pathname.startsWith("/api/quota"))
     return NextResponse.next();
   if (pathname.startsWith("/api/slack") || pathname.startsWith("/api/discord"))
@@ -206,6 +233,20 @@ export async function proxy(request: NextRequest) {
   if (!token) {
     if (isPublicPath || isStaticAsset) {
       return NextResponse.next();
+    }
+    // API routes must surface a clean 401 Unauthorized instead of a 307
+    // redirect to /guest-login. Non-browser clients (the Codex / Claude
+    // Code bridges, curl, etc.) follow 307s with the original method —
+    // HTTP 307 preserves method and body — so a redirected POST lands
+    // on /guest-login, which only accepts GET, and surfaces as a
+    // misleading 405 Method Not Allowed. The bridge then cannot tell
+    // "needs login" apart from "endpoint gone", which is why the pet
+    // state mirror was reporting `PET_FAILED` status 405.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "unauthorized", code: "AUTH_REQUIRED" },
+        { status: 401 },
+      );
     }
     return buildLoginRedirect();
   }

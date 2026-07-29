@@ -12,7 +12,31 @@ export {
   gateSignal,
   rules,
 } from "./classify";
+export {
+  isLoopMonitored,
+  isDecisionCapable,
+  deriveConnectorCapability,
+  withConnectorCapability,
+  summarizeConnectorCapability,
+  filterComposioOnlyEntries,
+  NATIVE_CHAT_INTEGRATIONS,
+  buildNativeChatConnectorEntries,
+  buildNativeConnectorReadinessEntries,
+  mergeNativeConnectorEntries,
+} from "./connectors-pure";
+export type { NativeAccountLike } from "./connectors-pure";
 export { listConnectors, refreshConnectors } from "./connectors";
+export type { ConnectorCapability } from "./types";
+export {
+  deriveReadiness,
+  deriveRelationship,
+  deriveUrgency,
+  derivePriority,
+  readinessState,
+  stateLabel,
+  canExecute,
+} from "./readiness";
+export type { LoopPriority, Urgency, DecisionState } from "./readiness";
 export { LOOP_HOME, LOOP_PATHS, ensureDirs, migrate } from "./paths";
 export {
   decisions,
@@ -28,9 +52,23 @@ export {
   runDecision,
   dismissDecision,
   promoteDecision,
+  resurrectDecision,
   recordMuteOnDismiss,
 } from "./runner";
 export { run as runTick } from "./tick";
+export {
+  ACTIVATION_SCHEMA_VERSION,
+  readActivationState,
+  computeActivationState,
+  writeActivationState,
+  recordEvent as recordActivationEvent,
+} from "./activation";
+export type {
+  ActivationStage,
+  RecommendedNextAction,
+  ActivationState,
+  ComputeActivationOptions,
+} from "./activation";
 export { runOnce as runWatcher } from "./watcher";
 export { build as buildBrief, buildAndEnqueue as enqueueBrief } from "./brief";
 export { build as buildWrap, buildAndEnqueue as enqueueWrap } from "./wrap";

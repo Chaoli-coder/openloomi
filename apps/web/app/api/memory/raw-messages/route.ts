@@ -1,5 +1,13 @@
 import { auth } from "@/app/(auth)/auth";
+import { botExists } from "@/lib/db/queries";
+import { resolveMemoryGraphCorrectionPolicy } from "@/lib/memory/memory-graph-correction-policy";
 import { upsertRawMessagesToChroma } from "@/lib/memory/chroma-memory-index";
+import {
+  isReservedChatMemoryEvidenceId,
+  isReservedMemoryGraphSummaryId,
+  resolveUntrustedRawMemoryGraphWritePolicy,
+  sanitizeUntrustedMemoryMetadata,
+} from "@/lib/memory/memory-graph-write-policy";
 import {
   getRawMessageManager,
   getRawMessageStorageBackend,
@@ -8,21 +16,30 @@ import {
 import type {
   MemorySummaryRecord,
   RawMessage,
+  RawMessageMemoryGraphCorrectionCommand,
+  RawMessageMemoryGraphRollbackCommand,
   RawMessageQuery,
+  RunMemoryForgettingCycleSerializableShadowDiagnosticsOptions,
 } from "@openloomi/indexeddb";
 import {
-  parseRawMessageGraphEvolutionOptions,
-  storeRawMessagesWithGraphEvolution,
-} from "@openloomi/indexeddb";
-import {
+  MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT,
+  MEMORY_SUMMARY_WRITE_CONFLICT,
   queryMemoryWithFallback,
   runMemoryForgettingCycle,
-} from "@openloomi/indexeddb/forgetting";
-import type { RunMemoryForgettingCycleSerializableShadowDiagnosticsOptions } from "@openloomi/indexeddb/forgetting";
+  runMemoryGraphCorrection,
+  runMemoryGraphRollback,
+  runMemoryGraphRolloutEvaluation,
+  storeRawMessagesWithGraphEvolution,
+} from "@openloomi/indexeddb";
 import { AppError } from "@openloomi/shared/errors";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
+
+const GRAPH_COMMAND_ID_MAX_LENGTH = 512;
+const GRAPH_COMMAND_REASON_MAX_LENGTH = 4096;
+const GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH = 512;
+const GRAPH_CORRECTED_CONTENT_MAX_LENGTH = 64 * 1024;
 
 function normalizeTimestampToMs(value: number | undefined): number | undefined {
   if (!Number.isFinite(value)) {
@@ -40,6 +57,134 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function optionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function isBoundedNonEmptyString(value: unknown, maxLength: number): boolean {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= maxLength
+  );
+}
+
+function isGraphCommandBase(value: unknown): value is Record<
+  string,
+  unknown
+> & {
+  commandId: string;
+  reason: string;
+} {
+  return (
+    isRecord(value) &&
+    isBoundedNonEmptyString(value.commandId, GRAPH_COMMAND_ID_MAX_LENGTH) &&
+    isBoundedNonEmptyString(value.reason, GRAPH_COMMAND_REASON_MAX_LENGTH) &&
+    (value.expectedVersion === undefined ||
+      isBoundedNonEmptyString(
+        value.expectedVersion,
+        GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+      ))
+  );
+}
+
+function isGraphCorrectionCommand(value: unknown): boolean {
+  if (!isGraphCommandBase(value) || !isRecord(value.action)) return false;
+  const action = value.action;
+  if (
+    !isBoundedNonEmptyString(
+      action.clusterId,
+      GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+    )
+  ) {
+    return false;
+  }
+  switch (action.type) {
+    case "correct-summary":
+      return (
+        isBoundedNonEmptyString(
+          action.summaryId,
+          GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+        ) &&
+        isBoundedNonEmptyString(
+          action.correctedContent,
+          GRAPH_CORRECTED_CONTENT_MAX_LENGTH,
+        ) &&
+        (action.correctedSummaryId === undefined ||
+          isBoundedNonEmptyString(
+            action.correctedSummaryId,
+            GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+          ))
+      );
+    case "set-lifecycle":
+      return [
+        "forming",
+        "active",
+        "stable",
+        "decaying",
+        "superseded",
+        "audit-only",
+      ].includes(String(action.lifecycleStatus));
+    case "remove-member":
+      return (
+        isBoundedNonEmptyString(
+          action.nodeId,
+          GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+        ) &&
+        (action.separatedClusterId === undefined ||
+          isBoundedNonEmptyString(
+            action.separatedClusterId,
+            GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+          ))
+      );
+    case "set-representative":
+      return isBoundedNonEmptyString(
+        action.representativeNodeId,
+        GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+      );
+    default:
+      return false;
+  }
+}
+
+function isGraphRollbackCommand(value: unknown): boolean {
+  return (
+    isGraphCommandBase(value) &&
+    isBoundedNonEmptyString(
+      value.summaryId,
+      GRAPH_COMMAND_IDENTIFIER_MAX_LENGTH,
+    )
+  );
+}
+
+function withTrustedGraphCommandContext(
+  command: Record<string, unknown>,
+  userId: string,
+): {
+  trustedContext: {
+    ownerScope: { userId: string };
+    requestedBy: string;
+  };
+  command: Record<string, unknown>;
+} {
+  const {
+    userId: _userId,
+    workspaceId: _workspaceId,
+    tenantId: _tenantId,
+    requestedBy: _requestedBy,
+    ...serverScopedCommand
+  } = command;
+  const trustedContext = {
+    ownerScope: { userId },
+    requestedBy: userId,
+  };
+  if (!isRecord(serverScopedCommand.action)) {
+    return { trustedContext, command: serverScopedCommand };
+  }
+  const { correctedSummaryId: _correctedSummaryId, ...serverScopedAction } =
+    serverScopedCommand.action;
+  return {
+    trustedContext,
+    command: { ...serverScopedCommand, action: serverScopedAction },
+  };
 }
 
 function optionalFiniteNumber(value: unknown): number | undefined {
@@ -160,7 +305,7 @@ async function queryRawMessagesWithFallback(
   const minRaw =
     query.minRawResultsWithoutFallback ?? query.pageSize ?? query.limit ?? 50;
 
-  const result = await queryMemoryWithFallback(manager as any, {
+  const result = await queryMemoryWithFallback(manager, {
     userId,
     keywords: query.keywords,
     startTime: normalizeTimestampToMs(query.startTime),
@@ -238,7 +383,7 @@ async function queryRawMessagesWithFallback(
         embeddingDimensions: item.record.embeddingDimensions,
         embeddingUpdatedAt: item.record.embeddingUpdatedAt,
         metadata:
-          (item.record.metadata as Record<string, any> | undefined) ??
+          (item.record.metadata as Record<string, unknown> | undefined) ??
           undefined,
         createdAt: item.record.timestamp,
         memoryStage: item.record.tier,
@@ -279,21 +424,36 @@ export async function POST(request: NextRequest) {
     return new AppError("unauthorized:api").toResponse();
   }
 
-  if (!isRawMessageStorageAvailable()) {
-    return Response.json(
-      {
-        success: false,
-        reason: "not_available",
-        message: "Raw message storage is not available in this environment.",
-      },
-      { status: 409 },
-    );
-  }
-
   try {
     const body = await request.json();
     const action = typeof body.action === "string" ? body.action : "";
     const userId = session.user.id;
+    if (action === "graphCorrection" || action === "graphRollback") {
+      const policy = resolveMemoryGraphCorrectionPolicy(userId);
+      if (!policy.enabled) {
+        return Response.json(
+          {
+            success: false,
+            reason:
+              action === "graphRollback"
+                ? "memory_graph_rollback_forbidden"
+                : "memory_graph_correction_forbidden",
+            reasonCodes: policy.reasonCodes,
+          },
+          { status: 403 },
+        );
+      }
+    }
+    if (!isRawMessageStorageAvailable()) {
+      return Response.json(
+        {
+          success: false,
+          reason: "not_available",
+          message: "Raw message storage is not available in this environment.",
+        },
+        { status: 409 },
+      );
+    }
     const manager = await getRawMessageManager();
 
     switch (action) {
@@ -306,18 +466,77 @@ export async function POST(request: NextRequest) {
           ).toResponse();
         }
 
+        for (const message of messages as Array<Partial<RawMessage>>) {
+          if (
+            typeof message.messageId !== "string" ||
+            message.messageId.trim().length === 0 ||
+            typeof message.botId !== "string" ||
+            message.botId.trim().length === 0
+          ) {
+            return new AppError(
+              "bad_request:api",
+              "Each message must have a non-empty messageId and botId",
+            ).toResponse();
+          }
+          if (isReservedChatMemoryEvidenceId(message.messageId)) {
+            return Response.json(
+              { success: false, reason: "raw_message_reserved_id" },
+              { status: 409 },
+            );
+          }
+        }
+
+        const botIds = [
+          ...new Set(
+            (messages as Array<Partial<RawMessage>>).map(
+              (message) => message.botId as string,
+            ),
+          ),
+        ];
+        const ownedBots = await Promise.all(
+          botIds.map((id) => botExists({ id, userId })),
+        );
+        if (ownedBots.some((ownedBot) => !ownedBot)) {
+          return new AppError(
+            "forbidden:api",
+            "Raw messages may only reference bots owned by the current user",
+          ).toResponse();
+        }
+
+        const existingMessages = await Promise.all(
+          [
+            ...new Set(
+              (messages as Array<Partial<RawMessage>>).map(
+                (message) => message.messageId as string,
+              ),
+            ),
+          ].map((messageId) => manager.getMessageById(messageId)),
+        );
+        if (
+          existingMessages.some(
+            (existing) => existing !== null && existing.userId !== userId,
+          )
+        ) {
+          return Response.json(
+            { success: false, reason: "raw_message_scope_conflict" },
+            { status: 409 },
+          );
+        }
+
         const now = Math.floor(Date.now() / 1000);
-        const normalized = messages.map((message: Partial<RawMessage>) => ({
-          ...message,
-          userId,
-          createdAt: message.createdAt ?? now,
-        })) as RawMessage[];
+        const normalized = messages.map(
+          ({ metadata, ...message }: Partial<RawMessage>) => ({
+            ...message,
+            metadata: sanitizeUntrustedMemoryMetadata(metadata),
+            userId,
+            createdAt: message.createdAt ?? now,
+          }),
+        ) as RawMessage[];
+        const graphPolicy = resolveUntrustedRawMemoryGraphWritePolicy();
         const stored = await storeRawMessagesWithGraphEvolution({
           storage: manager,
           messages: normalized,
-          graphEvolution: parseRawMessageGraphEvolutionOptions(
-            body.graphEvolution,
-          ),
+          graphEvolution: { enabled: graphPolicy.enabled },
         });
         await upsertRawMessagesToChroma(normalized);
         return Response.json({
@@ -325,6 +544,11 @@ export async function POST(request: NextRequest) {
           stored: stored.ids.length,
           errors: 0,
           graphEvolution: stored.graphEvolution,
+          graphPolicy,
+          graphLifecycle: {
+            status: "disabled",
+            reasonCodes: ["memory_graph_lifecycle_untrusted_raw_baseline_only"],
+          },
         });
       }
 
@@ -408,6 +632,18 @@ export async function POST(request: NextRequest) {
 
       case "upsertSummaries": {
         const summaries = Array.isArray(body.summaries) ? body.summaries : [];
+        if (
+          summaries.some(
+            (summary: Partial<MemorySummaryRecord>) =>
+              typeof summary.summaryId === "string" &&
+              isReservedMemoryGraphSummaryId(summary.summaryId),
+          )
+        ) {
+          return Response.json(
+            { success: false, reason: "memory_summary_reserved_id" },
+            { status: 409 },
+          );
+        }
         await manager.upsertSummaries(
           summaries.map((summary: Partial<MemorySummaryRecord>) => ({
             ...summary,
@@ -419,10 +655,86 @@ export async function POST(request: NextRequest) {
 
       case "forgettingCycle": {
         const result = await runMemoryForgettingCycle(
-          manager as any,
+          manager,
           userId,
           parseForgettingCycleOptions(body.options),
         );
+        return Response.json({
+          success: true,
+          result,
+          graphLifecyclePolicy: {
+            enabled: false,
+            reasonCodes: [
+              "memory_graph_lifecycle_untrusted_action_disabled",
+              "memory_graph_lifecycle_scope_discarded",
+            ],
+          },
+        });
+      }
+
+      case "graphCorrection": {
+        if (!isGraphCorrectionCommand(body.command)) {
+          return new AppError(
+            "bad_request:api",
+            "command object is required",
+          ).toResponse();
+        }
+        const trusted = withTrustedGraphCommandContext(
+          body.command as Record<string, unknown>,
+          userId,
+        );
+        const result = await runMemoryGraphCorrection({
+          storage: manager,
+          trustedContext: trusted.trustedContext,
+          command:
+            trusted.command as unknown as RawMessageMemoryGraphCorrectionCommand,
+        });
+        return Response.json({ success: true, result });
+      }
+
+      case "graphRollback": {
+        if (!isGraphRollbackCommand(body.command)) {
+          return new AppError(
+            "bad_request:api",
+            "command object is required",
+          ).toResponse();
+        }
+        const trusted = withTrustedGraphCommandContext(
+          body.command as Record<string, unknown>,
+          userId,
+        );
+        const result = await runMemoryGraphRollback({
+          storage: manager,
+          trustedContext: trusted.trustedContext,
+          command:
+            trusted.command as unknown as RawMessageMemoryGraphRollbackCommand,
+        });
+        return Response.json({ success: true, result });
+      }
+
+      case "graphRolloutEvaluation": {
+        const options = isRecord(body.options) ? body.options : {};
+        const result = await runMemoryGraphRolloutEvaluation({
+          storage: manager,
+          userId,
+          scenarioId:
+            typeof options.scenarioId === "string"
+              ? options.scenarioId
+              : "memory-graph-runtime-rollout",
+          workspaceId: undefined,
+          tenantId: undefined,
+          queryEmbedding: Array.isArray(options.queryEmbedding)
+            ? options.queryEmbedding.filter(
+                (value: unknown): value is number =>
+                  typeof value === "number" && Number.isFinite(value),
+              )
+            : undefined,
+          pollutedArtifactIds: Array.isArray(options.pollutedArtifactIds)
+            ? options.pollutedArtifactIds.filter(
+                (value: unknown): value is string => typeof value === "string",
+              )
+            : undefined,
+        });
         return Response.json({ success: true, result });
       }
 
@@ -433,6 +745,16 @@ export async function POST(request: NextRequest) {
         ).toResponse();
     }
   } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT ||
+        error.message === MEMORY_SUMMARY_WRITE_CONFLICT)
+    ) {
+      return Response.json(
+        { success: false, reason: error.message },
+        { status: 409 },
+      );
+    }
     console.error("[Raw Messages API] Error:", error);
     return new AppError(
       "bad_request:database",

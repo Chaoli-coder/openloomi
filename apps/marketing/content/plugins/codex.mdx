@@ -1,26 +1,25 @@
 ---
 title: "Codex Plugin"
-description: "Use Codex as your coding surface while OpenLoomi owns memory, connectors, and the local runtime — 13 bridge commands, 8 workflow skills, opt-in Pet mirror hooks"
+description: "Use local OpenLoomi from Codex as a personal assistant and memory layer — ask Codex about your work, hand off follow-ups, and route the OpenLoomi desktop app through your Codex CLI runtime."
 icon: "FaRobot"
 ---
 
 # Codex Plugin
 
-The Codex plugin turns **Codex CLI** into a coding shell for a local **OpenLoomi** runtime. Codex owns the interactive coding surface; OpenLoomi owns personal memory, connectors, the runtime/provider setup, the task loop, and the local privacy boundary. The plugin is a thin bridge — it never reimplements OpenLoomi business logic, every side effect lands on the local HTTP runtime (`127.0.0.1:3414` / `127.0.0.1:3515`), and no command ever prints or forwards your API keys, OAuth tokens, or auth tokens into Codex chat.
+Run OpenLoomi from inside OpenAI Codex CLI. [OpenLoomi](https://github.com/melandlabs/openloomi) is a local-first desktop app that holds your memory, runs tasks in the background, and talks to your connected apps (Gmail, Slack, GitHub, Calendar, Linear, …). This plugin turns Codex into a front-end for that local runtime — you chat with Codex, and Codex hands work off to OpenLoomi instead of doing everything itself.
+
+You keep using Codex the way you already do. OpenLoomi runs next to it, on your machine.
+
+## What you can do with it
+
+- **Ask Codex about your work.** "What did I work on last Tuesday?" — Codex pulls the answer from OpenLoomi's local memory instead of guessing.
+- **Hand tasks off for follow-up.** "Send this to Loomi so it reminds me about it tomorrow" — the task goes into OpenLoomi's loop and pings you when it's ready.
+- **Route Codex through OpenLoomi.** When OpenLoomi answers, it can use your Codex CLI runtime under the hood, so you only configure one runtime.
+- **Trigger OpenLoomi workflows from chat.** Memory, loop, and connectors are all exposed as Codex skills — type `@OpenLoomi …` and go.
+
+OpenLoomi still owns the heavy lifting: local memory storage, connector credentials, scheduled tasks, the desktop UI, secrets. Codex just gets a doorway into all of it.
 
 > Runtime implementation details (how OpenLoomi drives a Codex subprocess internally) live in [Codex CLI Runtime](/docs/reference/agent-runtimes/codex). This page is about the **external** integration — how a Codex CLI user drives OpenLoomi.
-
----
-
-## Overview
-
-The Codex plugin is a **companion integration**, not a replacement for OpenLoomi Desktop. Codex provides the coding surface; OpenLoomi provides the runtime that the bridge calls into. The plugin ships:
-
-- a Node bridge (`scripts/loomi-bridge.mjs`) that exposes 13 commands
-- 8 workflow skills (`openloomi`, `openloomi-install`, `openloomi-loop`, `openloomi-memory`, `openloomi-connectors`, `openloomi-handoff`, `openloomi-api`, `openloomi-feature-guide`) plus `composio`
-- an opt-in Pet mirror that maps Codex lifecycle events onto the OpenLoomi Pet
-
-The recommended first-use path: tell Codex to use OpenLoomi as its runtime by setting `OPENLOOMI_AGENT_PROVIDER=codex` so the OpenLoomi desktop app reuses your existing Codex CLI runtime — no separate AI provider key is required just to run the first Codex plugin workflow.
 
 ---
 
@@ -30,39 +29,283 @@ The OpenLoomi repository root doubles as a Codex marketplace root. It ships `.ag
 
 ### From GitHub
 
-```
-codex plugin marketplace add melandlabs/openloomi
-codex plugin add openloomi@openloomi
+```bash
+codex plugin marketplace add melandlabs/plugins && codex plugin add openloomi@openloomi
 ```
 
-Codex fetches the repository, reads the marketplace manifest, and installs into `~/.codex/plugins/cache/openloomi/openloomi/<version>`. Restart Codex and start a new thread so the cache is refreshed.
+Paste the whole line into a Codex shell — it adds the slim [`melandlabs/plugins`](https://github.com/melandlabs/plugins) marketplace and installs the `openloomi` plugin in one go. Codex fetches the repository, reads the marketplace manifest, and installs into `~/.codex/plugins/cache/openloomi/openloomi/<version>`. Restart Codex and start a new thread so the cache is refreshed, then ask `@OpenLoomi Run first-use setup.` to wire up the desktop app.
 
 ### From a local checkout (developers)
 
-```
-git clone https://github.com/melandlabs/openloomi.git
-cd openloomi
-codex plugin marketplace add .
-codex plugin add openloomi@openloomi
+```bash
+git clone https://github.com/melandlabs/openloomi.git && cd openloomi && codex plugin marketplace add . && codex plugin add openloomi@openloomi
 ```
 
 To pick up local edits to `plugins/codex/`, force Codex to re-snapshot the marketplace:
 
-```
-codex plugin marketplace remove openloomi
-codex plugin marketplace add .
-codex plugin add openloomi@openloomi
+```bash
+codex plugin marketplace remove openloomi && codex plugin marketplace add . && codex plugin add openloomi@openloomi
 ```
 
 ### Requirements
 
 - Codex CLI 0.144+ (anything that supports `codex plugin marketplace`).
 - For GitHub install: network access to `github.com`.
-- For local install: the OpenLoomi repository checked out somewhere writable.
-- OpenLoomi Desktop installed (or a source build that stages `openloomi-ctl`) for any runtime task (`run`, handoff, loop, memory, connectors).
-- Codex CLI configured, OR an AI provider configured in OpenLoomi Desktop as a fallback.
+- For local install: a writable checkout of the OpenLoomi repository.
+- **OpenLoomi Desktop installed** — or a source build that produces the OpenLoomi Desktop app — for anything beyond setup guidance and workflow discovery. Without it, the plugin can still report readiness and walk you through installation, but loop, memory, and connector tasks can't actually run.
+- Codex CLI on your `PATH` (e.g. `brew install --cask codex` or `npm i -g @openai/codex`) if you want OpenLoomi to route through your Codex runtime.
 
-The plugin alone is enough for setup guidance and workflow discovery. If `openloomi-ctl` is missing, the plugin can still report readiness, install instructions, and workflow guidance — but `run` and handoff calls cannot execute.
+---
+
+## Walkthrough
+
+The screenshots below are from a real end-to-end run. Follow them in order — every step is one Codex turn or one desktop app interaction.
+
+### 1. Ask Codex to install the plugin
+
+Ask Codex to install the plugin from the GitHub URL — no copy-pasting commands needed.
+
+> Install the plugin and setup https://github.com/melandlabs/plugins/tree/main/openloomi/codex
+
+### 2. Add the marketplace
+
+For the long-lived install path, add the marketplace once. Codex prompts for a source; enter `melandlabs/plugins`.
+
+```text
+> codex plugin marketplace add melandlabs/plugins
+```
+
+### 3. Or launch Codex pointing at a local checkout
+
+If you're hacking on the plugin (or running from source), point Codex at the directory and your edits are picked up live.
+
+```text
+% codex --plugin-dir plugins/codex
+```
+
+### 4. Discover the skills
+
+Type `@OpenLoomi` — Codex surfaces the skill namespace. The thin `openloomi` skill is the entry point, with sub-skills for `openloomi-install` (install / configure the desktop), `openloomi-pet` (pet state & themes), `openloomi-memory` (memory), `openloomi-loop` (loop dashboard), and `openloomi-connectors` (native connectors).
+
+- `@OpenLoomi` — read-only doorway into the local runtime
+- `@OpenLoomi setup` — install / launch / configure the desktop app
+- `@OpenLoomi status` — stable JSON status
+- `@OpenLoomi pet <state>` — set the Loomi Pet state
+- `@OpenLoomi memory` / `@OpenLoomi memory <query>` — local memory
+- `@OpenLoomi loop` — Loop dashboard snapshot
+
+### 5. Run `@OpenLoomi setup` — readiness table lands in READY and the Loomi Pet appears
+
+The install skill auto-chains install → launch → wait API → guest login. When it finishes, the bridge prints a small readiness table on the left and the Loomi Pet pops onto your desktop on the right in the **fox** theme with a `Loomi is on watch` badge. The pet is the file-watcher-driven widget — it doesn't talk to the bridge; it watches `~/.openloomi/pet-config.json` and the `assets/{fox,capybara}/` folders.
+
+| Item               | Status     |
+| ------------------ | ---------- |
+| Guest login        | Successful |
+| Runtime mode       | packaged   |
+| Version            | 0.8.8      |
+| Local API          | Reachable  |
+| AI provider        | Configured |
+| Execution provider | Ready      |
+| Desktop process    | Running    |
+| Final status       | **READY**  |
+
+### 6. Right-click the Pet to open the context menu
+
+The pet's context menu exposes **Open Loomi / Settings / Actions (if configured) / THEME (Fox ✓, Capybara) / Quit**. Configured prompt actions from `~/.openloomi/pet-actions.json` send a named task prompt into the same Loomi agent runtime. If the actions config is missing, empty, malformed, disabled, or unsupported, no Actions section is rendered. The theme switch is hot-reload — the file watcher picks up `activeTheme` in `pet-config.json` within ~250 ms, and the bridge never writes these files.
+
+To give those prompts real external abilities, expose the ability to the agent runtime: install or build a skill, connect an MCP server, add a connector, or provide a trusted local API/CLI helper. The Pet menu never calls those targets directly; it only routes prompt tasks into OpenLoomi-owned runtime surfaces. See [Attention Agent](/docs/attention-agent#can-the-right-click-menu-start-agentic-tasks) for the local config schema.
+
+### 7. Pick **Capybara** — the theme hot-reloads in place
+
+The pet re-skins immediately. Same 9-state vocabulary (`happy` / `idle` / `juggling` / `needsinput` / `presenting` / `sleeping` / `sweeping` / `thinking` / `working`) — only the artwork changes. The readiness table on the left is unchanged.
+
+#### 7c. Drop in your own theme — `kawaii` cat via `pet-custom/`
+
+The built-in themes are Fox and Capybara, but the pet watcher also auto-discovers any folder under `~/.openloomi/pet-custom/<name>/` with PNG state sprites. Drop a folder in, and the theme appears in the right-click menu within ~250 ms — no bridge call, no restart.
+
+#### 7b. Manually override the Pet state with `@OpenLoomi pet`
+
+The hot-reload pet also accepts manual overrides from Codex. Type `@OpenLoomi pet <state>` and the bridge writes the new state to `~/.openloomi/pet/runtime_state.json`; the file watcher picks it up and the sprite swaps within ~250 ms. Useful for "task done" beats where you want the pet to flip to `happy` between turns.
+
+### 8. `@OpenLoomi status` returns the canonical JSON
+
+For any triage or bug report, paste the JSON output verbatim. The shape never changes: `mode / installed / version / tokenPresent / aiProviderConfigured / nativeRuntime / apiReachable / hooksInstalled / ready / nextAction / reason / source` — with `source: "codex-plugin"` instead of `"claude-plugin"`.
+
+![Step 8 — Codex verifies the live runtime via `lsof -iTCP:3414` + `curl /api/native/providers` and the canonical `OpenLoomi Status` block confirms Running: Yes · PID 2320 · port 3414 · Healthy · Ready](/img/openloomi/plugins/codex/08-openloomi-status-runtime-healthy.png)
+
+### 9. Codex hooks — bundled by default, no install step
+
+Unlike the Claude plugin (where `/openloomi:hooks install` is opt-in), the Codex plugin declares its lifecycle hooks in `plugins/codex/hooks/hooks.json` and they are bundled into every session automatically. The full event surface Codex maps to pet states:
+
+| Codex event         | Pet state set |
+| ------------------- | ------------- |
+| `SessionStart`      | `presenting`  |
+| `UserPromptSubmit`  | `thinking`    |
+| `PreToolUse`        | `working`     |
+| `PermissionRequest` | `needsinput`  |
+| `PostToolUse`       | `thinking`    |
+| `SubagentStart`     | `juggling`    |
+| `SubagentStop`      | `thinking`    |
+| `Stop`              | `happy`       |
+
+Each handler is a thin `node .../scripts/loomi-bridge.mjs state <name> --event <event> --quiet` call with a 5s timeout. The bridge never blocks the Codex turn; if the runtime API is unreachable it logs a single line and exits 0.
+
+### 10. Hooks status — confirm install
+
+The Codex plugin's hooks are always-on, so the equivalent of "hooks status" is just `@OpenLoomi status` — the JSON reports `hooksInstalled: true` and `source: "codex-plugin"` whenever the `hooks/hooks.json` block is present in the loaded plugin.
+
+You should see:
+
+- `hooksInstalled: true`
+- Plugin path: `plugins/codex/hooks/hooks.json`
+- `source: "codex-plugin"`
+- `nativeRuntime: codex` (when OpenLoomi is configured to use Codex as its agent executor)
+
+If `hooksInstalled` is `false`, check that you launched Codex with `--plugin-dir plugins/codex` (or that the marketplace-installed copy shipped the `hooks/` directory).
+
+### 11. Connect your apps with `@OpenLoomi connectors`
+
+The wizard walks you through three independent y/N choices: install the `composio` skill, enable Screen Memory (`Preferences → Chronicle → Screen Memory` in the desktop app), and connect a messaging connector (native 7 platforms via `openloomi-connectors`, or 1000+ via composio).
+
+Before the wizard runs, Codex preflights `openloomi-connectors` — loads its workflow guidance, calls `setup-status`, and probes `GET /api/loop/connectors` to see what the runtime already knows.
+
+![Step 11b — preflight check: `$openloomi:openloomi-connectors` loads `workflow-guidance` + `setup-status`, then `curl /api/loop/connectors` returns the live connector state](/img/openloomi/plugins/codex/11b-connectors-skill-preflight.png)
+
+### 12. After Composio connects — 6 active apps in your workspace
+
+The next Codex turn can list what you're wired up to. In this run: Gmail, Google Calendar, Google Drive, GitHub, Linear, Slack — all through Composio, with the workspace org and test user echoed back.
+
+```text
+Connected via Composio (6 active): Gmail, Google Calendar, Google Drive, GitHub, Linear, Slack
+Org: timi_workspace · Test user: pg-test-…
+```
+
+The probe at this point showed all six toolkits reachable, with a happy Pet sprite reflecting the successful run.
+
+![Step 12 — Composio Connections block after the auth probe: Gmail / Google Calendar / Google Drive / GitHub / Linear / Slack all reported Connected (6 active), with the happy Pet sprite reflecting the success](/img/openloomi/plugins/codex/12-composio-connections-five-active.png)
+
+> **Run note (real data, not a copy)**: the screenshots for **step 12** and **step 14** were captured in two different sessions. Step 12's probe landed cleanly with all six Composio apps connected. Step 14's probe was taken later, after the local Composio surface had gone unreachable (`composio backend unreachable (DNS / ConnectionRefused)`), so the Loop dashboard flipped every connector back to `needs_setup`. That isn't a regression — it's how the dashboard honestly reports a dead connector backend.
+
+### 13. `@OpenLoomi memory` — see what's already in your local memory
+
+The first time the memory skill is invoked in a session, OpenLoomi prints a short welcome banner with example queries ("Search all my memory for Project X" / "Show recent Gmail insights" / "What did I know about John in January?" / "List my knowledge-base documents" / "Remember that I prefer morning meetings" / "Find related insights for insight_xxx"). Codex then re-invokes it a few times to prime the search side before falling through to the digest.
+
+![Step 13a — first invocation of `$openloomi:openloomi-memory`: the welcome banner lists example queries, and Codex hammers the skill a few times before the digest returns](/img/openloomi/plugins/codex/13a-memory-skill-welcome.png)
+
+```text
+> @OpenLoomi memory
+```
+
+The command searches the local memory + knowledge base + insights and returns a digest of what OpenLoomi already knows. In this run, the digest is "**Today's OpenLoomi Insights (UTC 2026-07-19)**" pulled via `list-insights --days=1`, with a **"From Loomi" callout** ("Sarah's signature says 'Head of Product' — memory still says PM" — the same drift the Loop is about to surface as a `CONTACT_UPDATE` card), a **Volume** paragraph (200+ session-hook captures), a **Timeline (latest first)** list (17:06 / 17:05 Codex session `019f7b56` Stop hooks, 16:08 earlier Codex capture, 15:50 Claude Code session `e80da64c` final note "完成, 最后健全性检查", 15:28 Claude Code session `aa64ea6f` TypeScript type check passed, with more Codex captures spread across 14:xx–16:xx UTC), a **Shape of every item** paragraph (`platform = codex | claude-code`, `importance / urgency = General`, `dedupeKey = null`, `description` only carries the hook event, not the transcript), **Takeaways** at the end.
+
+![Step 13 — `Today's OpenLoomi Insights (UTC 2026-07-19)` digest: Volume / Timeline (latest first) / Shape of every item / Takeaways](/img/openloomi/plugins/codex/13-memory-todays-insights.png)
+
+This is the read-only doorway into OpenLoomi's local memory. For a deeper search, pass a query: `@OpenLoomi memory <query>`.
+
+#### 13b. Write to memory from Codex with `add-memory`
+
+Reading is half the story — you can also write. From any Codex turn, invoke `openloomi-memory add-memory "<text>" --file=<path>` and the entry lands in `~/.openloomi/data/memory/<path>`. The actual run captured here used the lower-level `POST /api/insights` route to add "`Tom is my boss (manager → direct report)`" with `type: relationship` and `file: people/tom.md`. The runtime created `~/.openloomi/data/memory/people/tom.md` containing "Tom is my boss. Role: boss. Relationship: manager → direct report." and returned insight ID `b5cde372-eb1b-4698-a4f0-bff6a26496f5`. The entry is immediately searchable via `search-memory "boss"` or `search-all "boss tom"`.
+
+![Step 13b — `POST /api/insights` writes "Tom is my boss (manager → direct report)" to `people/tom.md`; runtime confirms `Insight created successfully` with ID `b5cde372-…` and the file `~/.openloomi/data/memory/people/tom.md` lands on disk](/img/openloomi/plugins/codex/13b-add-memory-tom-boss.png)
+
+### 14. `@OpenLoomi loop` — see the Loop dashboard snapshot
+
+```text
+> @OpenLoomi loop
+```
+
+The command hits `GET /api/loop/state` and returns the Loop dashboard: enabled status + last tick, counts (pending decisions / done / dismissed / signals seen), per-connector health (`needs_setup` / `local-only` / linked), prefs in effect (tick frequency, brief time, quiet-when-empty, desktop notifications, …), and actionable notes (e.g. "all 5 Composio-backed connectors share one failure: the local Composio surface isn't reachable — Loop can't pull signals until you bring the Composio backend back online").
+
+![Step 14 — `Loop Dashboard`: `0 of 6 connected`, Composio backend unreachable (5/6), Obsidian `local-only`, stale `last tick ~24h ago`; prefs `briefTime 09:00 / wrapTime 21:00 / intervalSec 600`; implication = unblock the Composio backend first](/img/openloomi/plugins/codex/14-loop-dashboard.png)
+
+This is purely a dashboard snapshot — the Loop never takes destructive actions from this command. For actions, the Loop pops cards in the desktop app (step 15) and you decide there.
+
+### 15. The Loop starts surfacing decision cards in the desktop app
+
+This is what the system looks like once it's humming. OpenLoomi's **Loop** is the proactive execution brain: it watches your connected signals, classifies them into decision types, and pops a card into the desktop app with the reasoning trace and the actions you can hit.
+
+Every card has the same shape: `Signal` + `Type` + `Received` + `Confidence` at the top, the `From Loomi` explanation, the `Reason 1 / Reason 2` evidence, and the action buttons at the bottom.
+
+The Loop ships with these decision types out of the box:
+
+| Decision type           | What it does                                | Example                                                                               |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `RSVP`                  | Reply Yes / No to a calendar invitation     | "Reverb Q3 review — Wed 10:00 PT, organizer Sarah, conflicts with standup"            |
+| `IM_REPLY`              | Draft a reply to a known contact            | "Alice is bumping the Q3 deck timeline — Thursday is close"                           |
+| `EMAIL_REPLY`           | Pre-draft an outbound email                 | "Sarah needs the Q3 OKR draft status by Friday"                                       |
+| `LINEAR_REVIEW`         | Triage a Linear issue assigned to you       | "LIN-1234 (pet bubble drag-and-drop) is in In Review with you assigned"               |
+| `REQUIREMENT_SYNTHESIS` | Cluster PRs/issues into a requirements doc  | "14 PRs/issues tagged loop/v0.9 — needs a single requirements doc"                    |
+| `RELEASE_PLAN`          | Draft a release plan from merged PRs        | "12 PRs merged since v0.8.8 — time to draft the v0.8.8 release plan"                  |
+| `CONTACT_UPDATE`        | Update a contact record when memory drifts  | "Sarah's signature says 'Head of Product' — memory still says PM"                     |
+| `DOC_UPDATE`            | Refresh a stale doc for the next version    | "docs/getting-started.md is stale (42 days, pre-v0.8.8)"                              |
+| `REVIEW_PR`             | Surface a PR waiting on your review         | "PR #220 (lifestyle image prompts) is waiting on your review"                         |
+| `DEADLINE_REMINDER`     | Surface an upcoming due date                | "v0.8.8 release plan due Friday — 3 PRs blocking the cut"                             |
+| `TODO`                  | Add a follow-up to your todo list           | "Bug: historical self-owned calendar events surface as fake RSVP decisions"           |
+| `DIGEST` (QUIET)        | Consolidate a flood of low-priority signals | "8 GitHub notifications — none urgent individually, but here's the consolidated view" |
+
+A few examples in detail:
+
+![Loop card — IM_REPLY for an Alice follow-up](/img/openloomi/plugins/codex/15-loop-im-reply.png)
+
+![Loop card — IM_REPLY expanded into a full reply composer](/img/openloomi/plugins/codex/16-loop-im-reply-expanded.png)
+
+![Loop card — LINEAR_REVIEW for LIN-1234 "pet bubble drag-and-drop"](/img/openloomi/plugins/codex/17-loop-linear-review.png)
+
+![Loop card — REQUIREMENT_SYNTHESIS for 14 PRs/issues tagged loop/v0.9](/img/openloomi/plugins/codex/18-loop-requirement-synthesis.png)
+
+![Loop card — RELEASE_PLAN for v0.8.8 "classifier-rules UX + custom channels"](/img/openloomi/plugins/codex/19-loop-release-plan.png)
+
+![Loop card — CONTACT_UPDATE for Sarah Chen's new "Head of Product" role](/img/openloomi/plugins/codex/20-loop-contact-update.png)
+
+![Loop card — DOC_UPDATE for docs/getting-started.md (42 days stale)](/img/openloomi/plugins/codex/21-loop-doc-update.png)
+
+![Loop card — EMAIL_REPLY for the Q3 OKR status email](/img/openloomi/plugins/codex/22-loop-draft-reply.png)
+
+![Loop card — EMAIL_REPLY expanded with Subject and Body reply editor](/img/openloomi/plugins/codex/23-loop-draft-reply-expanded.png)
+
+![Loop card — REVIEW_PR for PR #220 "compose lifestyle image prompts"](/img/openloomi/plugins/codex/24-loop-review-pr.png)
+
+![Loop card — TODO for issue #382 "historical RSVPs misclassified"](/img/openloomi/plugins/codex/25-loop-todo.png)
+
+![Loop card — DIGEST (QUIET) consolidating 8 GitHub notifications](/img/openloomi/plugins/codex/26-loop-digest.png)
+
+### 15b. From the card — Dry run / Edit / Run / Dismiss
+
+The action row at the bottom of every card turns a recommendation into a real outcome. The exact buttons depend on the card type:
+
+- **`RSVP`** (calendar invitation): **Attend** (primary) · **Decline** (outline) · **View original** (ghost). Tap Attend or Decline and OpenLoomi fires your `Yes` / `No` straight back through the connected Google Calendar as a `calendar_rsvp` action — no opening the event yourself to click the RSVP buttons.
+- **Reply / update cards** (`IM_REPLY`, `EMAIL_REPLY`, `REVIEW_PR`, `LINEAR_REVIEW`, `REQUIREMENT_SYNTHESIS`, `RELEASE_PLAN`, `CONTACT_UPDATE`, `DOC_UPDATE`, `DEADLINE_REMINDER`, `TODO`): **Dry run** (outline) · **Edit** · **Run** (primary when ready) · **Dismiss** (ghost). `Dry run` previews the exact draft or plan without firing; `Run` schedules the action through the right connector — `email_reply` via Gmail, `im_reply` via Slack / iMessage, `github_review` via the GitHub Reviews API, `linear_review` via Linear, `requirement_synthesis` / `release_plan` / `doc_update` into the local knowledge base, `contact_update` into memory, `todo` into the local todo store.
+- **Quiet digests** (`DIGEST` / `QUIET_DIGEST` / `github_notification`): **Mark as read** only — read-only aggregations, nothing to execute.
+
+Two affordances live outside the action row so they never collide with the decision itself:
+
+- **Card-level Dismiss** sits in the header kebab (three-dot menu). Dismissing a card never accidentally declines a meeting. A mute rule is created for that signal scope, so the same hint won't resurface today.
+- **Cancel scheduled action** appears for ~30 s after you tap Run / Attend / Decline. The action is queued as a cron job before it actually fires — `Cancel` stops it. A per-card audit history (under the technical details) records every attempt with its terminal state (`completed` / `skipped` / `blocked` / `failed` / `cancelled` / `superseded`), so contradictory responses (e.g. RSVP "No" then "Yes") appear side-by-side instead of overwriting each other.
+
+If the underlying connector refuses (the runner returns `blocked` or `failed`), the action row stays open with a one-tap retry — the card never silently flips to `done` when nothing actually happened.
+
+### 16. Register your own decision types
+
+The Loop is extensible. Drop a `PUT /api/loop/types` against the local runtime and your custom card joins the queue.
+
+```bash
+TOKEN=$(cat ~/.openloomi/token | base64 -d)
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  http://localhost:3414/api/loop/types \
+  -d '{
+    "id": "mom_imessage_alert",
+    "label": "Mom iMessage",
+    "icon": "👩",
+    "actionKind": "todo",
+    "description": "Triggers when mom sends an iMessage — surfaces as a high-priority todo so you never miss her"
+  }'
+```
+
+### 17. The custom type fires on the next signal
+
+The next iMessage from mom surfaces the new card with your icon, label, and a high-priority todo action.
+
+![Step 17 — MOM_IMESSAGE_ALERT custom type fires and surfaces a high-priority todo card](/img/openloomi/plugins/codex/28-loop-mom-imessage-alert.png)
 
 ---
 
@@ -102,7 +345,7 @@ The wizard stops early at any step that requires explicit user action:
 
 - **Install** requires `--yes` or `--confirm`. Without it, the wizard returns `setup: "awaiting_user_action"` with `reason: "INSTALL_CONFIRMATION_REQUIRED"`. It will never download OpenLoomi silently.
 - **AI provider configuration is never auto-run.** Secret entry must happen in OpenLoomi-owned UI or interactive CLI surfaces. After the wizard finishes, `status.aiProviderConfigured` may still be `false`; in that case follow the `configure-ai-provider` guidance from the `openloomi-install` sub-skill.
-- **Source checkout (`SOURCE_FOUND_CLI_NOT_BUILT`)** stops the wizard with `nextAction: "build_or_stage_openloomi_ctl"`. The plugin never builds OpenLoomi from source automatically.
+- **Source checkout (`SOURCE_FOUND_APP_NOT_BUILT`)** stops the wizard with `nextAction: "build_or_install_openloomi"`. The plugin never builds OpenLoomi from source automatically.
 
 The wizard returns structured JSON so Codex (or any other caller) can render each step:
 
@@ -120,11 +363,14 @@ The wizard returns structured JSON so Codex (or any other caller) can render eac
   ],
   "status": {
     "installed": true,
-    "ctlPath": "/Applications/OpenLoomi.app/Contents/MacOS/openloomi-ctl",
+    "appPath": "/Applications/OpenLoomi.app",
+    "appRunning": true,
+    "version": "openloomi-desktop 0.8.8",
     "tokenPresent": true,
-    "aiProviderConfigured": false,
+    "executionProviderReady": true,
+    "executionProviderSource": "native_codex_runtime",
     "ready": true,
-    "nextAction": "configure_ai_provider"
+    "nextAction": null
   },
   "message": "OpenLoomi is ready and the desktop app is wired to Codex."
 }
@@ -162,7 +408,7 @@ node plugins/codex/scripts/loomi-bridge.mjs help
 ```json
 {
   "name": "openloomi-codex-bridge",
-  "version": "0.7.5",
+  "version": "0.8.8",
   "pluginPhase": "runtime-provider-readiness",
   "commands": [
     "codex-runtime-info",
@@ -182,21 +428,21 @@ node plugins/codex/scripts/loomi-bridge.mjs help
 }
 ```
 
-| Command                 | Does                                                                                                      | Notable failures                             |
-| ----------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `version`               | Prints bridge identity, plugin phase, and full command list                                               | —                                            |
-| `help`                  | Lists all bridge commands with usage                                                                      | —                                            |
-| `setup-status`          | Stable readiness JSON — see [Readiness contract](#readiness-contract)                                     | `OPENLOOMI_CTL_NOT_FOUND`                    |
-| `setup`                 | End-to-end first-use wizard (see above)                                                                   | `awaiting_user_action`, `step_limit_reached` |
-| `install-instructions`  | Returns platform-specific install guidance without performing the install                                 | —                                            |
-| `install-openloomi`     | Downloads + installs OpenLoomi from the official GitHub release. Requires `--confirm`                     | `INSTALL_CONFIRMATION_REQUIRED`              |
-| `initialize-session`    | Mints a guest/session token via the local API and writes `~/.openloomi/token`                             | `SESSION_INITIALIZATION_REQUIRED`            |
-| `configure-ai-provider` | Handoff to OpenLoomi-owned UI / interactive CLI for AI provider setup (never accepts secrets here)        | `AI_PROVIDER_STATUS_UNAVAILABLE`             |
-| `codex-runtime-info`    | Structured JSON for the Codex-as-default-runtime switch plan, prerequisites, and companion env vars       | —                                            |
-| `set-codex-runtime-env` | Writes `OPENLOOMI_AGENT_PROVIDER=codex` to host GUI env (launchd / environment.d) or prints Windows steps | —                                            |
-| `pet <state>`           | Sets the Pet to a state (`happy`, `thinking`, …); see [Pet mirror](#pet-mirror-hooks)                     | `INVALID_STATE`, `ENDPOINT_MISSING`          |
-| `run`                   | One-shot task through the local OpenLoomi runtime via `openloomi-ctl --one-shot --stdin --json`           | `OPENLOOMI_CTL_INVALID`                      |
-| `workflow-guidance`     | Returns structured guidance for the four workflow skills (`loop`, `memory`, `connectors`, `handoff`)      | —                                            |
+| Command                 | Does                                                                                                      | Notable failures                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `version`               | Prints bridge identity, plugin phase, and full command list                                               | —                                               |
+| `help`                  | Lists all bridge commands with usage                                                                      | —                                               |
+| `setup-status`          | Stable readiness JSON — see [Readiness contract](#readiness-contract)                                     | `INSTALL_REQUIRED`, `OPENLOOMI_API_UNREACHABLE` |
+| `setup`                 | End-to-end first-use wizard (see above)                                                                   | `awaiting_user_action`, `step_limit_reached`    |
+| `install-instructions`  | Returns platform-specific install guidance without performing the install                                 | —                                               |
+| `install-openloomi`     | Downloads + installs OpenLoomi from the official GitHub release. Requires `--confirm`                     | `INSTALL_CONFIRMATION_REQUIRED`                 |
+| `initialize-session`    | Mints a guest/session token via the local API and writes `~/.openloomi/token`                             | `SESSION_INITIALIZATION_REQUIRED`               |
+| `codex-runtime-info`    | Structured JSON for the Codex-as-default-runtime switch plan, prerequisites, and companion env vars       | —                                               |
+| `set-codex-runtime-env` | Writes `OPENLOOMI_AGENT_PROVIDER=codex` to host GUI env (launchd / environment.d) or prints Windows steps | —                                               |
+| `pet <state>`           | Sets the Pet to a state (`happy`, `thinking`, …); see [Pet mirror](#pet-mirror-hooks)                     | `INVALID_STATE`, `ENDPOINT_MISSING`             |
+| `state`                 | Stop-hook helper that archives session context into OpenLoomi memory                                      | always exits 0                                  |
+| `archive`               | Stop-hook payload reader that POSTs `{type: "note", groups: ["codex"]}` to `/api/insights`                | always exits 0                                  |
+| `workflow-guidance`     | Returns structured guidance for the workflow skills (`loop`, `memory`, `connectors`, …)                   | —                                               |
 
 ---
 
@@ -229,22 +475,22 @@ For a permanent shell-side switch on macOS or Linux, append the export to your s
 echo 'export OPENLOOMI_AGENT_PROVIDER=codex' >> ~/.zshrc
 ```
 
-The shell export helps the bridge itself and `openloomi-ctl`; the `set-codex-runtime-env` step is what makes the GUI launchd domain and the desktop session pick the variable up.
+The shell export helps the bridge itself; the `set-codex-runtime-env` step is what makes the GUI launchd domain and the desktop session pick the variable up.
 
 ### Companion env vars
 
 All read by `apps/web`'s native-agent env resolver at startup:
 
-| Variable                                    | Default           | Purpose                                                   |
-| ------------------------------------------- | ----------------- | --------------------------------------------------------- |
-| `OPENLOOMI_AGENT_CODEX_COMMAND`             | `codex`           | Binary to invoke (overrides `PATH` lookup)                |
-| `OPENLOOMI_AGENT_CODEX_MODEL`               | (none)            | Optional model override                                   |
-| `OPENLOOMI_AGENT_CODEX_PROFILE`             | (none)            | Optional `-p <name>`                                      |
-| `OPENLOOMI_AGENT_CODEX_SANDBOX`             | `workspace-write` | `read-only` \| `workspace-write` \| `danger-full-access`  |
-| `OPENLOOMI_AGENT_CODEX_ASK_FOR_APPROVAL`    | `on-request`      | `untrusted` \| `on-failure` \| `on-request` \| `never`    |
-| `OPENLOOMI_AGENT_CODEX_SKIP_GIT_REPO_CHECK` | `true`            | Toggle Codex's working-directory git check                |
-| `OPENLOOMI_AGENT_CODEX_FULL_AUTO`           | `false`           | Set `true` to allow `--full-auto` under bypassPermissions |
-| `OPENLOOMI_AGENT_CODEX_TIMEOUT_MS`          | `120000`          | CLI runtime budget in ms                                  |
+| Variable                                    | Default           | Purpose                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENLOOMI_AGENT_CODEX_COMMAND`             | `codex`           | Binary to invoke (overrides `PATH` lookup)                                                                                                                                                                                                                                                                                              |
+| `OPENLOOMI_AGENT_CODEX_MODEL`               | (none)            | Optional model override                                                                                                                                                                                                                                                                                                                 |
+| `OPENLOOMI_AGENT_CODEX_PROFILE`             | (none)            | Optional `-p <name>`. Use profiles for model selection and Linux/Windows network policy. The runtime persists the choice in `openloomi.config.toml`; per-profile env vars live in `codex-profile-env.plist` (macOS) so the GUI launchd domain inherits them.                                                                            |
+| `OPENLOOMI_AGENT_CODEX_SANDBOX`             | Platform-specific | `read-only` \| `workspace-write` \| `danger-full-access`. Plan is always `read-only`; Linux/Windows execution defaults to `workspace-write`. macOS execution maps the default and explicit `workspace-write` to `danger-full-access` so localhost and remote services remain reachable. Use `read-only` for offline isolated execution. |
+| `OPENLOOMI_AGENT_CODEX_ASK_FOR_APPROVAL`    | `on-request`      | `untrusted` \| `on-failure` \| `on-request` \| `never`                                                                                                                                                                                                                                                                                  |
+| `OPENLOOMI_AGENT_CODEX_SKIP_GIT_REPO_CHECK` | `true`            | Toggle Codex's working-directory git check                                                                                                                                                                                                                                                                                              |
+| `OPENLOOMI_AGENT_CODEX_FULL_AUTO`           | `false`           | Set `true` to allow `--full-auto` under bypassPermissions                                                                                                                                                                                                                                                                               |
+| `OPENLOOMI_AGENT_CODEX_TIMEOUT_MS`          | `120000`          | CLI runtime budget in ms                                                                                                                                                                                                                                                                                                                |
 
 Prerequisites that must hold before the desktop app will actually drive Codex:
 
@@ -259,19 +505,18 @@ Verification after launch: the desktop app's `GET /api/native/providers` should 
 
 The plugin ships these sub-skills under `plugins/codex/skills/`:
 
-| Skill                     | Role                                                                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openloomi`               | Main entry point — triggers on `OpenLoomi` / `Loomi` mention and dispatches to the right sub-skill.                                                   |
-| `openloomi-install`       | Walks install, first-use setup, AI provider setup, and `SESSION_INITIALIZATION_REQUIRED` recovery flows.                                              |
-| `openloomi-loop`          | Run attention-loop and follow-up workflows.                                                                                                           |
-| `openloomi-connectors`    | Check whether Slack, GitHub, Gmail, Calendar, and other sources are configured before acting. Reports status only.                                    |
-| `openloomi-memory`        | Search or write memory through OpenLoomi-owned runtime surfaces. Thin wrapper — does not implement memory storage.                                    |
-| `openloomi-handoff`       | Send the current Codex task to Loomi for follow-up. The Claude Code plugin exposes the same capability through `/openloomi:*` slash commands instead. |
-| `openloomi-api`           | OpenLoomi HTTP API reference (auth, chat, RAG, workspace, integrations, feedback). Triggered by API/backend questions.                                |
-| `openloomi-feature-guide` | Product overview, capabilities, and how-tos for non-developer questions like "what can openloomi do".                                                 |
-| `composio`                | Third-party 1000+ app integration router (Gmail, Slack, GitHub, etc.) via the Composio CLI. Platform-agnostic; not OpenLoomi business logic.          |
+| Skill                     | Role                                                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openloomi`               | Main entry point — triggers on `OpenLoomi` / `Loomi` mention and dispatches to the right sub-skill.                                          |
+| `openloomi-install`       | Walks install, first-use setup, AI provider setup, and `SESSION_INITIALIZATION_REQUIRED` recovery flows.                                     |
+| `openloomi-loop`          | Run attention-loop and follow-up workflows.                                                                                                  |
+| `openloomi-connectors`    | Check whether Slack, GitHub, Gmail, Calendar, and other sources are configured before acting. Reports status only.                           |
+| `openloomi-memory`        | Search or write memory through OpenLoomi-owned runtime surfaces. Thin wrapper — does not implement memory storage.                           |
+| `openloomi-api`           | OpenLoomi HTTP API reference (auth, chat, RAG, workspace, integrations, feedback). Triggered by API/backend questions.                       |
+| `openloomi-feature-guide` | Product overview, capabilities, and how-tos for non-developer questions like "what can openloomi do".                                        |
+| `composio`                | Third-party 1000+ app integration router (Gmail, Slack, GitHub, etc.) via the Composio CLI. Platform-agnostic; not OpenLoomi business logic. |
 
-The `workflow-guidance` bridge command returns structured guidance for the four workflow skills (`openloomi-loop`, `openloomi-memory`, `openloomi-connectors`, `openloomi-handoff`). All other skills are documentation or routing helpers. The plugin must not copy OpenLoomi connector, memory, loop, scheduling, or handoff persistence logic into Codex — runtime implementations stay inside the OpenLoomi desktop runtime.
+The `workflow-guidance` bridge command returns structured guidance for the three workflow skills (`openloomi-loop`, `openloomi-memory`, `openloomi-connectors`). All other skills are documentation or routing helpers. The plugin must not copy OpenLoomi connector, memory, or loop logic into Codex — runtime implementations stay inside the OpenLoomi desktop runtime.
 
 Useful workflow prompts from a Codex thread:
 
@@ -321,17 +566,29 @@ The valid states are: `happy`, `idle`, `juggling`, `needsinput`, `presenting`, `
 | -------------------------- | ------------------------------------------------------------------------------------- |
 | `mode`                     | `packaged` \| `source` \| `unconfigured`                                              |
 | `installed`                | desktop app found                                                                     |
-| `ctlPath`                  | resolved `openloomi-ctl` path                                                         |
+| `appPath`                  | resolved OpenLoomi Desktop app path (e.g. `/Applications/OpenLoomi.app`)              |
+| `appRunning`               | whether the desktop app process is currently running                                  |
 | `version`                  | detected OpenLoomi version                                                            |
 | `tokenPresent`             | a local auth token exists                                                             |
 | `session`                  | `tokenPresent`, `guestBootstrapSupported`, `guestBootstrapMode`                       |
-| `aiProviderConfigured`     | an AI provider is configured                                                          |
+| `aiProviderConfigured`     | a direct OpenAI-compatible or Anthropic-compatible AI provider is configured          |
 | `aiProviderStatus`         | `runtime_configured` \| `unavailable`                                                 |
+| `executionProviderReady`   | direct AI provider or native Codex runtime can execute tasks                          |
+| `executionProviderSource`  | `ai_provider` \| `native_codex_runtime` \| `null`                                     |
+| `nativeRuntimeActive`      | `/api/native/providers` reports Codex as the active default native runtime            |
+| `nativeRuntime`            | summarized `/api/native/providers` probe result                                       |
 | `connectorStatusAvailable` | whether the local API can report connector status                                     |
 | `apiReachable`             | local HTTP API responded                                                              |
 | `ready`                    | everything needed is in place                                                         |
 | `nextAction`               | what to do next (see below)                                                           |
 | `checks`                   | detailed provider / connector / runtime checks (e.g. `aiProviderRuntime.providers[]`) |
+
+`aiProviderConfigured: false` does not necessarily block native Codex CLI
+execution. When `/api/native/providers` reports `defaultAgent: "codex"` and the
+Codex agent metadata is present, `setup-status` may still be `ready: true` with
+`executionProviderSource: "native_codex_runtime"`. Direct AI provider settings
+remain relevant for features that explicitly use OpenLoomi-owned model-provider
+configuration.
 
 ### `nextAction` values
 
@@ -350,19 +607,18 @@ The valid states are: `happy`, `idle`, `juggling`, `needsinput`, `presenting`, `
 
 ### `reason` values
 
-| Reason                            | Meaning                                                                   |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| `READY`                           | All checks passed.                                                        |
-| `OPENLOOMI_CTL_NOT_FOUND`         | Discovery chain exhausted — no `openloomi-ctl` resolved.                  |
-| `OPENLOOMI_CTL_INVALID`           | A binary was found but `--version` failed.                                |
-| `SOURCE_FOUND_CLI_NOT_BUILT`      | Source checkout detected, but no staged `openloomi-ctl`.                  |
-| `INSTALL_REQUIRED`                | No install discovered — `install-openloomi --confirm` is the next step.   |
-| `SESSION_INITIALIZATION_REQUIRED` | OpenLoomi is installed but `~/.openloomi/token` is missing or unreadable. |
-| `READY_SESSION_BOOTSTRAP_PENDING` | Ready except for an automated guest bootstrap — wizard will mint it.      |
-| `AI_PROVIDER_REQUIRED`            | No provider is configured — use `configure-ai-provider`.                  |
-| `AI_PROVIDER_STATUS_UNAVAILABLE`  | Local API not reachable — reported honestly as unavailable, not missing.  |
-| `CONNECTOR_SETUP_REQUIRED`        | One or more connector sources are not configured.                         |
-| `RECURSION_GUARD`                 | The wizard exceeded its 8-transition cap and bailed out safely.           |
+| Reason                                              | Meaning                                                                                  |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `READY`                                             | All checks passed.                                                                       |
+| `OPENLOOMI_APP_INVALID`                             | Discovery resolved a path but it isn't a working OpenLoomi Desktop app.                  |
+| `SOURCE_FOUND_APP_NOT_BUILT`                        | Source checkout detected but the OpenLoomi Desktop app hasn't been built yet.            |
+| `INSTALL_REQUIRED`                                  | No install discovered — `install-openloomi --confirm` is the next step.                  |
+| `OPENLOOMI_API_UNREACHABLE`                         | OpenLoomi is installed but the local HTTP API isn't responding on `127.0.0.1:3414/3515`. |
+| `SESSION_INITIALIZATION_REQUIRED`                   | OpenLoomi is installed but `~/.openloomi/token` is missing or unreadable.                |
+| `CODEX_RUNTIME_ACTIVE` / `_INACTIVE`                | Status of the native Codex runtime the desktop app is currently using.                   |
+| `INSTALL_CONFIRMATION_REQUIRED`                     | Install was requested without `--confirm`.                                               |
+| `CONNECTOR_SETUP_REQUIRED`                          | One or more connector sources are not configured.                                        |
+| `INSTALLER_DOWNLOADED` / `AUTOMATIC_INSTALL_FAILED` | Install artifact download / verification / launch outcome.                               |
 
 OpenLoomi guest mode is supported. A missing token is not treated as a requirement for account registration. The bridge tries two guest endpoints in order:
 
@@ -403,7 +659,7 @@ Example safe output:
   "aiProviderConfigured": false,
   "checked": [
     { "key": "OPENAI_API_KEY", "present": false, "source": "env" },
-    { "key": "ANTHROPIC_API_KEY", "present": true, "source": ".env.local" }
+    { "key": "OPENAI_BASE_URL", "present": true, "source": ".env.local" }
   ]
 }
 ```
@@ -420,12 +676,11 @@ Codex
       → OpenLoomi skill entrypoint
          → loomi-bridge
             → discovery and install layer
-            → first-use AI provider setup layer
+            → first-use native runtime wiring layer
             → readiness layer
             → OpenLoomi skill guidance layer
             → optional Codex hook layer
-            → openloomi-ctl runner
-               → OpenLoomi local runtime
+            → OpenLoomi Desktop runtime (local HTTP API at 127.0.0.1:3414 / :3515)
                   → memory
                   → connectors
                   → loop
@@ -439,13 +694,15 @@ The plugin stays thin. It calls OpenLoomi-owned runtime surfaces instead of copy
 
 ## Troubleshooting
 
-- **`OpenLoomi is not installed`** — install the packaged OpenLoomi Desktop release or provide an explicit `OPENLOOMI_INSTALL_DIR` / `OPENLOOMI_CTL` path for development.
-- **`SOURCE_FOUND_CLI_NOT_BUILT`** — the source checkout was detected, but no staged `openloomi-ctl` exists. The current plugin does not execute the source tree directly; build it (or install the packaged release) and retry.
+- **`OPENLOOMI_APP_INVALID`** — discovery resolved a path but it isn't a working OpenLoomi Desktop app. Reinstall or point `OPENLOOMI_INSTALL_DIR` / `OPENLOOMI_APP` at a valid bundle.
+- **`SOURCE_FOUND_APP_NOT_BUILT`** — the source checkout was detected, but the OpenLoomi Desktop app hasn't been built yet. Build it per `apps/web/src-tauri/README.md`, or install the packaged release.
+- **`OPENLOOMI_API_UNREACHABLE`** — the desktop app is installed but the local HTTP API isn't responding. Launch OpenLoomi Desktop and retry `setup-status`.
 - **`SESSION_INITIALIZATION_REQUIRED`** — OpenLoomi is installed but the local guest/session token could not be created. Open OpenLoomi Desktop once so the local API can mint a guest session, then re-run `setup-status` or `setup`.
 - **`AI_PROVIDER_REQUIRED` / `AI_PROVIDER_STATUS_UNAVAILABLE`** — prefer setting the OpenLoomi desktop runtime to Codex so OpenLoomi can reuse the user's existing Codex CLI runtime. If you choose a separate AI provider fallback, configure it in OpenLoomi Desktop. Secrets must stay in OpenLoomi-owned UI or secure storage. If the local API is unreachable, the plugin reports status as unavailable rather than falsely reporting missing configuration.
 - **`Codex still shows an old plugin version`** — remove and re-add the marketplace, restart Codex, and start a new thread. The cached plugin lives at `~/.codex/plugins/cache/openloomi/openloomi/<version>`.
 - **Pet control returns `ENDPOINT_MISSING`** — non-blocking. The bridge returns a polite notice that the route is pending; Pet control resumes automatically once OpenLoomi ships it.
 - **Pet control returns `API_UNREACHABLE`** — no local API responded on `3414`/`3515`. Start OpenLoomi Desktop and retry.
+- **`composio surface reachable` reports unreachable from a Codex-driven session** — first confirm the active execution sandbox. On macOS, current OpenLoomi releases map `workspace-write` to `danger-full-access`; restart the updated desktop app if an older process is still using the blocked sandbox. An explicit `read-only` setting still blocks network access. On Linux/Windows, use a Codex profile with network access enabled or select a sandbox appropriate for the host's isolation boundary, restart OpenLoomi, and retry.
 
 ---
 
@@ -453,4 +710,7 @@ The plugin stays thin. It calls OpenLoomi-owned runtime surfaces instead of copy
 
 - [Claude Code Plugin](/docs/plugins/claude) — the Claude Code counterpart
 - [Codex CLI Runtime](/docs/reference/agent-runtimes/codex) — the internal runtime
-- [Pet](/docs/pet) · [Onboarding](/docs/onboarding) · [Getting Started](/docs/getting-started) · [Connectors](/docs/connectors) · [Memory](/docs/memory)
+- [Attention Agent](/docs/attention-agent) — the Pet that mirrors plugin lifecycle events
+- [Getting Started](/docs/getting-started) — install + first run
+- [Connectors](/docs/connectors) — what the Codex plugin can reach
+- [Memory](/docs/memory) — what the Codex plugin reads from

@@ -20,7 +20,7 @@ import {
   getTextFromMessage,
 } from "@/lib/utils";
 import { mutate } from "swr";
-import { toast } from "@/components/toast";
+import { dismissToast, toast } from "@/components/toast";
 import { streamNativeAgentResponse } from "@/lib/ai/router/index";
 import { isTauri } from "@/lib/tauri";
 import {
@@ -39,9 +39,58 @@ import {
   pickPreferredArtifactPath,
 } from "@/lib/files/extract-artifact-paths";
 import { formatAgentStreamErrorForUser } from "@/lib/ai/runtime/format-error";
+import { parseCodexInterruptedError } from "@/lib/ai/extensions/agent/codex/interrupt-marker";
+import { createCodexTransportStatusController } from "@/lib/ai/extensions/agent/codex/transport-status";
+import { detectLifestyleImageTrigger } from "@/lib/ai/image-generation/lifestyle-trigger";
 
 // Max retry attempts for stream errors
 const MAX_STREAM_RETRY_ATTEMPTS = 3;
+const LIFESTYLE_IMAGE_CONSENT_STORAGE_KEY =
+  "openloomi:lifestyle-image-consent:v1";
+
+type LifestyleImageGenerationApiResponse = {
+  success: boolean;
+  prompt?: string;
+  sourceSummary?: unknown;
+  warnings?: unknown[];
+  usage?: {
+    provider?: string;
+    model?: string;
+    imageCount?: number;
+    creditsUsed?: number;
+    costMode?: string;
+    quotaMode?: string;
+  };
+  images?: Array<{
+    imageUrl?: string;
+    dataUrl?: string;
+    b64Json?: string;
+    mimeType?: string;
+    revisedPrompt?: string;
+  }>;
+  imageUrl?: string;
+  dataUrl?: string;
+  b64Json?: string;
+  mimeType?: string;
+  error?: string;
+  errorType?: string;
+  imageGeneration?: {
+    provider?: string;
+    model?: string;
+    imageCount?: number;
+    creditsUsed?: number;
+  };
+};
+
+type ChatHistoryCache = {
+  chats?: Array<{
+    id: string;
+    title?: string;
+    createdAt?: Date | string;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+};
 
 // Independent state per chat
 type ChatSessionState = {
@@ -63,6 +112,15 @@ export interface ChatContextValue {
   ) => void;
   sendMessage: (content: any, options?: any) => Promise<void>;
   setSendMessage: (fn: (content: any, options?: any) => Promise<void>) => void;
+  confirmLifestyleImageGeneration: (input: {
+    chatId: string;
+    assistantMessageId: string;
+    prompt: string;
+  }) => Promise<void>;
+  declineLifestyleImageGeneration: (input: {
+    chatId: string;
+    assistantMessageId: string;
+  }) => void;
   stop: () => void;
 
   // Per-chat session states
@@ -127,6 +185,35 @@ export function useChatContext() {
 export function useChatContextOptional(): ChatContextValue | null {
   const context = useContext(ChatContext);
   return context || null;
+}
+
+function hasAcceptedLifestyleImageConsent(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.localStorage.getItem(LIFESTYLE_IMAGE_CONSENT_STORAGE_KEY) ===
+    "accepted"
+  );
+}
+
+function acceptLifestyleImageConsent(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LIFESTYLE_IMAGE_CONSENT_STORAGE_KEY, "accepted");
+}
+
+function getLifestyleImageUrl(
+  response: LifestyleImageGenerationApiResponse,
+): { url: string; mediaType: string } | null {
+  const image = response.images?.[0];
+  const mimeType = image?.mimeType || response.mimeType || "image/png";
+  const url =
+    image?.dataUrl ||
+    image?.imageUrl ||
+    response.dataUrl ||
+    response.imageUrl ||
+    (image?.b64Json ? `data:${mimeType};base64,${image.b64Json}` : null) ||
+    (response.b64Json ? `data:${mimeType};base64,${response.b64Json}` : null);
+
+  return url ? { url, mediaType: mimeType } : null;
 }
 
 export function ChatContextProvider({ children }: { children: ReactNode }) {
@@ -277,6 +364,324 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const saveChatMessageImmediately = useCallback(
+    (message: ChatMessage, chatId: string) => {
+      saveMessagesToDatabase([message], chatId, {
+        immediate: true,
+        skipSync: false,
+      });
+      mutate(
+        (key) => typeof key === "string" && key.startsWith("/api/history"),
+        undefined,
+        { revalidate: true },
+      );
+    },
+    [],
+  );
+
+  const saveUserMessageAndUpdateHistory = useCallback(
+    async (message: ChatMessage, chatId: string) => {
+      const result = await saveMessagesToDatabase([message], chatId, {
+        immediate: true,
+        skipSync: false,
+      });
+      if (!result?.chat) return;
+
+      const chat = result.chat;
+      mutate(
+        (key) => typeof key === "string" && key.startsWith("/api/history"),
+        (data: ChatHistoryCache | undefined) => {
+          if (!data || !data.chats) return data;
+          const existingIndex = data.chats.findIndex(
+            (item) => item.id === chat.id,
+          );
+          if (existingIndex >= 0) {
+            const newChats = [...data.chats];
+            newChats[existingIndex] = {
+              ...newChats[existingIndex],
+              title: chat.title,
+            };
+            return { ...data, chats: newChats };
+          }
+          return {
+            ...data,
+            chats: [
+              ...data.chats,
+              {
+                id: chat.id,
+                title: chat.title,
+                createdAt: chat.createdAt,
+                latestMessageContent: null,
+                latestMessageTime: chat.createdAt,
+                messageCount: 1,
+              },
+            ],
+          };
+        },
+        false,
+      );
+    },
+    [],
+  );
+
+  const generateLifestyleImageReply = useCallback(
+    async ({
+      chatId,
+      prompt,
+      assistantMessageId,
+      sourceUserMessageId,
+    }: {
+      chatId: string;
+      prompt: string;
+      assistantMessageId?: string;
+      sourceUserMessageId?: string;
+    }) => {
+      const replyId = assistantMessageId || generateUUID();
+      const replyCreatedAt = new Date();
+      const loadingText = "Creating your lifestyle image...";
+      const loadingMessage = {
+        role: "assistant" as const,
+        content: loadingText,
+        id: replyId,
+        createdAt: replyCreatedAt,
+        parts: [
+          { type: "text" as const, text: loadingText },
+          {
+            type: "data-lifestyleImageStatus" as const,
+            data: {
+              id: replyId,
+              status: "loading" as const,
+            },
+          },
+        ],
+        metadata: {
+          createdAt: replyCreatedAt.toISOString(),
+          lifestyleImage: {
+            status: "loading",
+            sourceUserMessageId,
+          },
+        },
+      } as ChatMessage;
+
+      setIsSending(true);
+      setIsAgentRunningForChatFn(chatId, true);
+      setMessages((prev) => {
+        const index = prev.findIndex((message) => message.id === replyId);
+        if (index === -1) return [...prev, loadingMessage];
+        const next = [...prev];
+        next[index] = loadingMessage;
+        return next;
+      }, chatId);
+
+      try {
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        let cloudAuthToken: string | null = null;
+        try {
+          cloudAuthToken = getAuthToken();
+        } catch (error) {
+          console.error("[LifestyleImage] Failed to read auth token:", error);
+        }
+        if (cloudAuthToken) {
+          headers.Authorization = `Bearer ${cloudAuthToken}`;
+        }
+
+        const response = await fetch("/api/ai/v1/images/lifestyle/generate", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            chatId,
+            triggerPrompt: prompt,
+            outputFormat: "png",
+            responseFormat: "data_url",
+            imageCount: 1,
+          }),
+        });
+        const data = (await response
+          .json()
+          .catch(() => null)) as LifestyleImageGenerationApiResponse | null;
+
+        if (!response.ok || !data?.success) {
+          throw new Error(
+            data?.error ||
+              `Lifestyle image generation failed (${response.status})`,
+          );
+        }
+
+        const image = getLifestyleImageUrl(data);
+        if (!image) {
+          throw new Error("Image provider returned no displayable image");
+        }
+
+        const successText = "Here is your lifestyle image.";
+        const provider =
+          data.usage?.provider || data.imageGeneration?.provider || "unknown";
+        const model =
+          data.usage?.model || data.imageGeneration?.model || "unknown";
+        const imageCount =
+          data.usage?.imageCount || data.imageGeneration?.imageCount || 1;
+        const creditsUsed =
+          data.usage?.creditsUsed ?? data.imageGeneration?.creditsUsed ?? 0;
+        const successMessage = {
+          role: "assistant" as const,
+          content: successText,
+          id: replyId,
+          createdAt: replyCreatedAt,
+          parts: [
+            { type: "text" as const, text: successText },
+            {
+              type: "file" as const,
+              url: image.url,
+              name: "lifestyle-image.png",
+              mediaType: image.mediaType,
+              source: "lifestyle-image-generation",
+            },
+            {
+              type: "data-lifestyleImageStatus" as const,
+              data: {
+                id: replyId,
+                status: "success" as const,
+                provider,
+                model,
+                imageCount,
+                creditsUsed,
+              },
+            },
+          ],
+          metadata: {
+            createdAt: replyCreatedAt.toISOString(),
+            lifestyleImage: {
+              status: "success",
+              provider,
+              model,
+              imageCount,
+              creditsUsed,
+              costMode: data.usage?.costMode ?? "estimated",
+              quotaMode: data.usage?.quotaMode ?? "record_only",
+              prompt: data.prompt,
+              sourceSummary: data.sourceSummary,
+              warnings: data.warnings,
+              sourceUserMessageId,
+            },
+          },
+        } as ChatMessage;
+
+        setMessages((prev) => {
+          const index = prev.findIndex((message) => message.id === replyId);
+          if (index === -1) return [...prev, successMessage];
+          const next = [...prev];
+          next[index] = successMessage;
+          return next;
+        }, chatId);
+        saveChatMessageImmediately(successMessage, chatId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Lifestyle image generation failed";
+        const failedMessage = {
+          role: "assistant" as const,
+          content: errorMessage,
+          id: replyId,
+          createdAt: replyCreatedAt,
+          parts: [
+            {
+              type: "error" as const,
+              content: errorMessage,
+            },
+            {
+              type: "data-lifestyleImageStatus" as const,
+              data: {
+                id: replyId,
+                status: "error" as const,
+                error: errorMessage,
+              },
+            },
+          ],
+          metadata: {
+            createdAt: replyCreatedAt.toISOString(),
+            lifestyleImage: {
+              status: "error",
+              error: errorMessage,
+              sourceUserMessageId,
+            },
+          },
+        } as ChatMessage;
+
+        setMessages((prev) => {
+          const index = prev.findIndex((message) => message.id === replyId);
+          if (index === -1) return [...prev, failedMessage];
+          const next = [...prev];
+          next[index] = failedMessage;
+          return next;
+        }, chatId);
+        saveChatMessageImmediately(failedMessage, chatId);
+        toast({
+          type: "error",
+          description: errorMessage,
+        });
+      } finally {
+        setIsSending(false);
+        setIsAgentRunningForChatFn(chatId, false);
+      }
+    },
+    [
+      saveChatMessageImmediately,
+      setIsAgentRunningForChatFn,
+      setMessages,
+      setIsSending,
+    ],
+  );
+
+  const confirmLifestyleImageGeneration = useCallback<
+    ChatContextValue["confirmLifestyleImageGeneration"]
+  >(
+    async ({ chatId, assistantMessageId, prompt }) => {
+      acceptLifestyleImageConsent();
+      await generateLifestyleImageReply({
+        chatId,
+        prompt,
+        assistantMessageId,
+      });
+    },
+    [generateLifestyleImageReply],
+  );
+
+  const declineLifestyleImageGeneration = useCallback<
+    ChatContextValue["declineLifestyleImageGeneration"]
+  >(
+    ({ chatId, assistantMessageId }) => {
+      const declinedText = "Lifestyle image generation canceled.";
+      const declinedCreatedAt = new Date();
+      const declinedMessage = {
+        role: "assistant" as const,
+        content: declinedText,
+        id: assistantMessageId,
+        createdAt: declinedCreatedAt,
+        parts: [{ type: "text" as const, text: declinedText }],
+        metadata: {
+          createdAt: declinedCreatedAt.toISOString(),
+          lifestyleImage: {
+            status: "declined",
+          },
+        },
+      } as ChatMessage;
+
+      setMessages((prev) => {
+        const index = prev.findIndex(
+          (message) => message.id === assistantMessageId,
+        );
+        if (index === -1) return prev;
+        const next = [...prev];
+        next[index] = declinedMessage;
+        return next;
+      }, chatId);
+      saveChatMessageImmediately(declinedMessage, chatId);
+    },
+    [saveChatMessageImmediately, setMessages],
+  );
+
   // Create safe sendMessage wrapper, integrating intelligent routing
   const sendMessage: ChatContextValue["sendMessage"] = useCallback(
     async (message, options) => {
@@ -354,6 +759,81 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
         messageContent = t("auth.errors.streamError.analyzeContent");
       }
 
+      const triggerMessageObject =
+        message && typeof message === "object"
+          ? (message as {
+              parts?: ChatMessage["parts"];
+              metadata?: Record<string, unknown>;
+            })
+          : null;
+      const lifestyleTrigger = detectLifestyleImageTrigger(messageContent);
+      if (
+        lifestyleTrigger.matched &&
+        lifestyleTrigger.confidence === "high" &&
+        triggerMessageObject?.metadata?.skipLifestyleImageTrigger !== true
+      ) {
+        const userMessageCreatedAt = new Date();
+        const userMessage = {
+          role: "user" as const,
+          content: messageContent,
+          createdAt: userMessageCreatedAt,
+          parts: triggerMessageObject?.parts || [
+            { type: "text" as const, text: messageContent },
+          ],
+          metadata: {
+            ...triggerMessageObject?.metadata,
+            createdAt: userMessageCreatedAt.toISOString(),
+            lifestyleImageTrigger: {
+              kind: lifestyleTrigger.kind,
+              reason: lifestyleTrigger.reason,
+            },
+          },
+          id: generateUUID(),
+        } as ChatMessage;
+        setMessages((prev) => [...prev, userMessage], chatIdForMessages);
+        await saveUserMessageAndUpdateHistory(userMessage, chatIdForMessages);
+
+        if (!hasAcceptedLifestyleImageConsent()) {
+          const consentMessageId = generateUUID();
+          const consentCreatedAt = new Date(userMessageCreatedAt.getTime() + 1);
+          const consentMessage = {
+            role: "assistant" as const,
+            content: "",
+            id: consentMessageId,
+            createdAt: consentCreatedAt,
+            parts: [
+              {
+                type: "data-lifestyleImageConsent" as const,
+                data: {
+                  id: consentMessageId,
+                  prompt: messageContent,
+                  reason: lifestyleTrigger.reason,
+                  createdAt: new Date().toISOString(),
+                },
+              },
+            ],
+            metadata: {
+              createdAt: consentCreatedAt.toISOString(),
+              lifestyleImage: {
+                status: "consent_required",
+                sourceUserMessageId: userMessage.id,
+              },
+            },
+          } as ChatMessage;
+          setMessages((prev) => [...prev, consentMessage], chatIdForMessages);
+          saveChatMessageImmediately(consentMessage, chatIdForMessages);
+          setIsSending(false);
+          return Promise.resolve();
+        }
+
+        await generateLifestyleImageReply({
+          chatId: chatIdForMessages,
+          prompt: messageContent,
+          sourceUserMessageId: userMessage.id,
+        });
+        return Promise.resolve();
+      }
+
       // Extract image attachments, file attachments, RAG documents and focused insights from message
       const images: ImageAttachment[] = [];
       const fileAttachments: Array<{
@@ -416,33 +896,20 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 }
                 // Method 2: Prefer checking if part has original file object (fallback upload)
                 else if (part.file && part.file instanceof File) {
-                  // Use TUS chunked upload for large files (> 400K) to avoid 413 errors (Vercel function payload limit is 4.5MB, but we want to stay well under that to account for base64 expansion and other message data)
+                  // All images are processed locally via FileReader → base64.
+                  // We previously routed large files through uploadImageTUS(),
+                  // but /api/ai/v1/upload does not exist and we no longer need
+                  // a separate server hop just to read the bytes back.
                   const file = part.file as File;
-                  if (file.size > TUS_SIZE_THRESHOLD) {
-                    // Large file: use TUS chunked upload
-                    const blobUrl = await uploadImageTUS(file);
-                    if (blobUrl) {
-                      images.push({ url: blobUrl, mimeType: part.mediaType });
-                    } else {
-                      toast({
-                        type: "error",
-                        description: `Failed to upload image "${part.name}"`,
-                      });
-                      return;
-                    }
-                  } else {
-                    // Small file: read directly as base64
-                    const base64 = await new Promise<string>(
-                      (resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () =>
-                          resolve(reader.result as string);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                      },
-                    );
-                    base64Data = base64.split(",")[1];
-                  }
+                  const base64 = await new Promise<string>(
+                    (resolve, reject) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve(reader.result as string);
+                      reader.onerror = reject;
+                      reader.readAsDataURL(file);
+                    },
+                  );
+                  base64Data = base64.split(",")[1];
                 }
                 // Method 2: Check message.files array
                 else if (
@@ -453,30 +920,17 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                     (f: any) => f.name === part.name,
                   );
                   if (file && file instanceof File) {
-                    // Use TUS chunked upload for large files
-                    if (file.size > TUS_SIZE_THRESHOLD) {
-                      const blobUrl = await uploadImageTUS(file);
-                      if (blobUrl) {
-                        images.push({ url: blobUrl, mimeType: part.mediaType });
-                      } else {
-                        toast({
-                          type: "error",
-                          description: `Image "${part.name}" upload failed`,
-                        });
-                        return;
-                      }
-                    } else {
-                      const base64 = await new Promise<string>(
-                        (resolve, reject) => {
-                          const reader = new FileReader();
-                          reader.onloadend = () =>
-                            resolve(reader.result as string);
-                          reader.onerror = reject;
-                          reader.readAsDataURL(file);
-                        },
-                      );
-                      base64Data = base64.split(",")[1];
-                    }
+                    // Read directly as base64 — see sibling block above for rationale.
+                    const base64 = await new Promise<string>(
+                      (resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () =>
+                          resolve(reader.result as string);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                      },
+                    );
+                    base64Data = base64.split(",")[1];
                   }
                 }
                 // Method 3: Get via downloadUrl (with validation)
@@ -763,6 +1217,28 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
       // Bug fix: store assistantMessageId for onDone to use instead of index
       const newMessageStartIndex = messages.length;
       const assistantMessageIdForRetry = assistantMessageId;
+      const codexTransportToastId = `codex-transport-${assistantMessageId}`;
+      const codexTransportStatus = createCodexTransportStatusController({
+        show: (status) => {
+          const description =
+            status.phase === "fallback"
+              ? t("chat.codexTransport.fallback")
+              : typeof status.attempt === "number" &&
+                  typeof status.maxAttempts === "number"
+                ? t("chat.codexTransport.retryingWithAttempt", {
+                    attempt: status.attempt,
+                    maxAttempts: status.maxAttempts,
+                  })
+                : t("chat.codexTransport.retrying");
+          toast({
+            id: codexTransportToastId,
+            type: "info",
+            description,
+            duration: Number.POSITIVE_INFINITY,
+          });
+        },
+        clear: () => dismissToast(codexTransportToastId),
+      });
 
       // Used to manage message stream order
       let parts: any[] = [];
@@ -877,8 +1353,13 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             }
           },
           onUpdate: async (data) => {
-            // Ensure state is true when receiving message
-            setIsAgentRunningFn(true);
+            // Ensure state is true when receiving message.
+            // Pass the captured chatIdForAbort so the running flag is set on the
+            // SAME chat that onDone/onError later clears. Without this, updates
+            // default to the current activeChatId, which can drift (e.g. when the
+            // user switches chats mid-stream), leaving the flag stuck true and the
+            // send button locked in the loading/stop state after completion.
+            setIsAgentRunningFn(true, chatIdForAbort ?? undefined);
 
             // Deduplicate based on messageId - avoid duplicate messages
             const messageId = (data as { messageId?: string }).messageId;
@@ -889,6 +1370,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
               }
               receivedMessageIds.add(messageId);
             }
+
+            // Codex WebSocket reconnect and HTTPS fallback notices are one
+            // temporary status for this turn. Terminal result/error messages
+            // clear it before their normal chat handling continues.
+            const handledCodexTransportStatus =
+              codexTransportStatus.handle(data);
 
             // Handle streaming updates
             if (data.type === "text") {
@@ -1214,6 +1701,18 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 }
                 return updated;
               }, chatIdForMessages);
+            } else if (data.type === "retry") {
+              // Other providers may also emit retry messages without Codex's
+              // structured transport phase. Preserve their existing brief
+              // informational notice.
+              if (!handledCodexTransportStatus) {
+                const retryMessage =
+                  data.content || data.message || "Agent is retrying…";
+                toast({
+                  type: "info",
+                  description: retryMessage,
+                });
+              }
             } else if (data.type === "error") {
               console.error("[NativeAgent] Error:", data.message);
               const errorMessage = data.message || "Unknown error";
@@ -1231,6 +1730,25 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 content: userFriendlyMessage,
               };
               parts.push(errorPart);
+
+              // Provider-timeout interruption: surface a structured data part
+              // so the chat UI can render an explicit Continue action that
+              // reuses the preserved workspace. We deliberately skip the
+              // stream-level auto-retry path (handled in onError) by tagging
+              // the part with an interruption payload — see issue #356.
+              const interruption = parseCodexInterruptedError(errorMessage);
+              if (interruption?.canResume) {
+                parts.push({
+                  type: "data-interruption",
+                  data: {
+                    reason: "timeout",
+                    timeoutMs: interruption.timeoutMs,
+                    workspacePath: interruption.workspacePath,
+                    completedArtifacts: interruption.completedArtifacts,
+                    canResume: true,
+                  },
+                } as ChatMessage["parts"][number]);
+              }
 
               setMessages((prev) => {
                 const updated = [...prev];
@@ -1359,6 +1877,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
           },
           modelConfig,
           onDone: async () => {
+            codexTransportStatus.clear();
             // Clear sending lock
             setIsSending(false);
             // Cleanup native agent state - use chatIdForAbort to ensure lock is cleared for correct chat
@@ -1408,6 +1927,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             );
           },
           onError: (error) => {
+            codexTransportStatus.clear();
             // Clear sending lock
             setIsSending(false);
             console.error("[NativeAgent] Stream error:", error);
@@ -1616,6 +2136,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
 
         return Promise.resolve();
       } catch (error) {
+        codexTransportStatus.clear();
         console.error("[NativeAgent] API call failed:", error);
         const errorMessage =
           error instanceof Error ? error.message : String(error);
@@ -1655,7 +2176,16 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
         return Promise.reject(error);
       }
     },
-    [activeChatId, messages, setMessages, t, setIsAgentRunningForChatFn],
+    [
+      activeChatId,
+      messages,
+      setMessages,
+      t,
+      setIsAgentRunningForChatFn,
+      saveUserMessageAndUpdateHistory,
+      saveChatMessageImmediately,
+      generateLifestyleImageReply,
+    ],
   );
 
   // setSendMessage - no longer needed because sendMessage is implemented in context
@@ -2080,6 +2610,8 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
       setMessages,
       sendMessage,
       setSendMessage,
+      confirmLifestyleImageGeneration,
+      declineLifestyleImageGeneration,
       stop,
       // Per-chat states
       isAgentRunning: currentSessionState.isAgentRunning,
@@ -2132,6 +2664,8 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
     switchChatId,
     isSending,
     getIsAgentRunningByChatId,
+    confirmLifestyleImageGeneration,
+    declineLifestyleImageGeneration,
   ]);
 
   return (

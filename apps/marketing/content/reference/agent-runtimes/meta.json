@@ -2,5 +2,11 @@
   "title": "Agent Runtimes",
   "defaultOpen": false,
   "collapsible": true,
-  "pages": ["claude", "codex", "opencode", "hermes", "openclaw"]
+  "pages": [
+    "claude",
+    "codex",
+    "opencode",
+    "hermes",
+    "openclaw"
+  ]
 }

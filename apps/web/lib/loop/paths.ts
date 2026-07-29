@@ -62,6 +62,23 @@ export const LOOP_PATHS = {
    * enforcement after the agentic tick).
    */
   classifierRules: join(LOOP_HOME, "classifier-rules.json"),
+  /**
+   * Activation state machine cache (Issue #351). Atomically written by
+   * `lib/loop/activation.ts` so the Tauri pet watcher can poll progress
+   * (`uninitialized → setup_pending → runtime_ready → source_pending →
+   * check_pending → decision_pending → activated`) without an HTTP
+   * round-trip back into the Next.js server.
+   */
+  activationState: join(LOOP_HOME, "activation_state.json"),
+  /**
+   * SP-4 — daily OS-notification counter. Persisted separately from
+   * `config.json` so the budget write path doesn't race with
+   * `writePreferences`. Holds `{ day, count }` keyed by the
+   * user-local YYYY-MM-DD string (matches `briefTimeToCron` so the
+   * budget rolls over at the same wall-clock midnight the briefs do).
+   * Missing file → treated as `{ day: "", count: 0 }`.
+   */
+  attention: join(LOOP_HOME, "attention.json"),
 } as const;
 
 export function ensureDirs(): void {

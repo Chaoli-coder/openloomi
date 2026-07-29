@@ -1,8 +1,6 @@
 ---
 name: openloomi-connectors
-description: "openloomi Connectors tools - manage platform integrations (OAuth connections, list accounts, check status). Triggers: connect platform, integration status, list accounts, disconnect"
-metadata:
-  version: 0.7.6
+description: "openloomi Connectors tools - manage the native 7 messaging integrations and pair with the composio skill for the 1000+ apps OAuth layer (Slack, Discord, X, Gmail, Outlook, Google Calendar/Drive/Docs, GitHub, Notion, Linear, HubSpot, LinkedIn, Jira, Asana). Triggers: connect platform, integration status, list accounts, disconnect, list-accounts, status, connect, send-reply, native vs composio, 1000+ apps, list connections."
 allowed-tools: Bash(node $SKILL_DIR/scripts/openloomi-connectors.cjs *)
 ---
 
@@ -10,58 +8,47 @@ allowed-tools: Bash(node $SKILL_DIR/scripts/openloomi-connectors.cjs *)
 
 # OpenLoomi Connectors Skill
 
-OpenLoomi Connectors provides access to 26 messaging and productivity platform integrations. It allows AI agents to manage OAuth connections, list connected accounts, check connection status, and disconnect platforms on behalf of the user.
+OpenLoomi Connectors handle two directions: **pulling Signals in** from your authorized platforms and **pushing approved Actions back out** through the same channel. OpenLoomi ships them through two layers:
+
+- **Native (this skill)** — 7 messaging-platform bots maintained directly by OpenLoomi: Telegram, WhatsApp, iMessage, Lark/Feishu, DingTalk, QQ, and WeChat. The `openloomi-connectors` CLI covers OAuth / app-credential / QR / interactive setup, list, status, disconnect, contact query, and message send for these.
+- **Composio (paired `composio` skill)** — a hosted OAuth broker that authorizes ~1000+ apps including Slack, Discord, X, Gmail, Outlook, Google Calendar/Drive/Docs, GitHub, Notion, Linear, HubSpot, LinkedIn, Jira, Asana. Composio handles **"is this user authorised?"** and stores the tokens; OpenLoomi's Loop channels consume the events as Signals (see [Glossary — Composio / Loop channel](https://openloomi.ai/docs/glossary)).
+
+When the user asks "what am I connected to?" or "list my accounts", run **both** — `list-accounts` here **and** the composio connection listing — and present the union. Keep auth, OAuth, and disconnect flows native to each skill.
+
+This skill does **not** manage Loop channels, custom decision types, or classifier rules — those are `openloomi-loop`'s job.
 
 ---
 
 ## What is openloomi?
 
-Most AI assistants function as workflow tools—users give commands, they execute tasks, with no persistent knowledge of who you are or what matters to you.
+OpenLoomi is an **open-source AI coworker, driven by an attention agent** — a desktop app (Loomi) that connects your authorized tools, builds a local knowledge graph of people / projects / decisions, and surfaces the day's decisions as one-tap bubbles you Approve. It runs locally (local-first, AES-256), supports Skills + Plugins so any Agent Runtime (Claude Code, Codex, OpenCode, Hermes, OpenClaw) can plug into the same resident desktop. See `openloomi-feature-guide` for the full picture.
 
-**openloomi takes a fundamentally different approach: it operates as a proactive digital partner** that watches, learns, remembers, and acts on your behalf. The difference is architectural.
+### Continuous sync
 
-### How It Works
+Connectors are the **per-platform input** that Loop reads on every tick. When you authorize a platform, OpenLoomi continuously syncs (with your permission):
 
-When users connect messaging platforms and integrations to openloomi, they sync with permission:
 - Raw messages and communications
 - Meetings and calendar events
 - Emails and tweets
 - Voice calls
-- Notes and captured ideas
+- Notes, screen captures, and captured ideas
 
-This aggregated data becomes "the single source of truth for openloomi's brain."
-
-### The Continuous Sync Loop
-
-openloomi runs a background agent on a continuous sync loop, actively gathering information from all connected sources. An agent without this loop can only respond based on stale context. With it, every conversation—and every moment—makes openloomi smarter and more aligned with you.
+The aggregated stream feeds OpenLoomi's Memory and the Signals Loop polls on every tick — so an unprompted reminder, a contextual reply draft, or a Decision Card arrives with full historical grounding instead of starting from scratch.
 
 ---
 
-## Supported Platforms (26)
+## Supported Platforms (7)
+
+The CLI `list-platforms` returns these 7 platforms. Other connectable
+platforms (Slack, Discord, X, Gmail, Outlook, LinkedIn, Google Calendar,
+Google Drive, Google Docs, HubSpot, Notion, etc.) are managed via the
+desktop UI or the `composio` skill — see "Platform Connection Methods"
+below for details.
 
 | ID | Display Name | Aliases |
 |----|-------------|---------|
 | `telegram` | Telegram | tg |
 | `whatsapp` | WhatsApp | |
-| `slack` | Slack | |
-| `discord` | Discord | |
-| `gmail` | Gmail | google_mail |
-| `outlook` | Outlook | outlook_mail |
-| `linkedin` | LinkedIn | |
-| `instagram` | Instagram | |
-| `twitter` | X/Twitter | x, tweet, tweets, 推特 |
-| `google_calendar` | Google Calendar | gcal |
-| `outlook_calendar` | Outlook Calendar | |
-| `teams` | Microsoft Teams | microsoft_teams |
-| `facebook_messenger` | Facebook Messenger | messenger |
-| `google_drive` | Google Drive | gdrive |
-| `google_docs` | Google Docs | gdocs |
-| `hubspot` | HubSpot | |
-| `notion` | Notion | |
-| `github` | GitHub | gh |
-| `asana` | Asana | |
-| `jira` | Jira | |
-| `linear` | Linear | |
 | `imessage` | iMessage | |
 | `feishu` | Lark/Feishu | lark, 飞书 |
 | `dingtalk` | DingTalk | 钉钉 |
@@ -159,8 +146,6 @@ Exchange OAuth code for Discord access.
 
 | Platform | Endpoint |
 |----------|----------|
-| GitHub | `GET /api/auth/callback/github` |
-| Google | `GET /api/auth/callback/google` |
 | Feishu | `POST /api/feishu/listener/init` |
 | DingTalk | `POST /api/dingtalk/listener/init` |
 | QQ Bot | `POST /api/qqbot/listener/init` |
@@ -266,13 +251,6 @@ Aliases are case-insensitive and support both English and Chinese:
 | Alias | Platform |
 |-------|----------|
 | `tg` | telegram |
-| `gh` | github |
-| `gc` | gmail |
-| `x` | twitter |
-| `tweet`, `tweets`, `推特` | twitter |
-| `gcal` | google_calendar |
-| `gdrive` | google_drive |
-| `gdocs` | google_docs |
 | `wechat`, `微信` | weixin |
 | `lark`, `飞书` | feishu |
 | `钉钉` | dingtalk |
@@ -317,6 +295,11 @@ node $SKILL_DIR/scripts/openloomi-connectors.cjs list-platforms
 # List all connected accounts (includes botId for send-reply)
 node $SKILL_DIR/scripts/openloomi-connectors.cjs list-accounts
 
+# Cross-source audit: openloomi-native + composio-linked accounts (run together, present union)
+node $SKILL_DIR/scripts/openloomi-connectors.cjs list-accounts
+# In parallel, invoke the `composio` skill (e.g. `composio list-connections` via composio-cli,
+# or `mcp__composio__COMPOSIO_MANAGE_CONNECTIONS` with action: "list")
+
 # Check connection status for a platform
 node $SKILL_DIR/scripts/openloomi-connectors.cjs status telegram
 
@@ -337,7 +320,7 @@ node $SKILL_DIR/scripts/openloomi-connectors.cjs send-reply --botId=bot_xxx --re
 
 | Command | Description |
 |---------|-------------|
-| `list-platforms` | List all 26 supported platforms with IDs and aliases |
+| `list-platforms` | List all 7 supported platforms with IDs and aliases |
 | `list-accounts` | List all connected integration accounts (includes `botId`) |
 | `status <platform>` | Check if a platform is connected (e.g., telegram, slack) |
 | `connect <platform> [options]` | Connect a platform (OAuth, App Password, or App Credentials) |
@@ -367,6 +350,7 @@ node $SKILL_DIR/scripts/openloomi-connectors.cjs send-reply --botId=bot_xxx --re
 4. Disconnecting - "disconnect my discord", "remove whatsapp"
 5. Querying contacts - "show my contacts", "find John in contacts"
 6. Sending messages - "send email to John", "reply to that message"
+7. Cross-source account audit - "show everything I'm connected to (openloomi + composio)", "list all linked accounts across both" → run `list-accounts` here **and** the `composio` skill in parallel, then present the union
 
 **Execution Flow:**
 

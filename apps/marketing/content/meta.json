@@ -4,21 +4,21 @@
     "index",
     "what-is-openloomi",
     "getting-started",
-    "attention-agent",
-    "chat",
     "connectors",
     "messaging-apps",
     "automation",
+    "chat",
     "skills",
     "library",
     "memory",
     "loop",
+    "attention-agent",
     "plugins",
-    "privacy-security",
-    "benchmark",
-    "glossary",
     "use-cases",
-    "changelog",
-    "reference"
+    "benchmark",
+    "privacy-security",
+    "glossary",
+    "reference",
+    "changelog"
   ]
 }

@@ -449,7 +449,8 @@ describe("native agent provider env resolver", () => {
     expect(command.args).not.toContain("--ask-for-approval");
     expect(command.args).not.toContain("--skip-git-repo-check");
     expect(command.args).toContain("--full-auto");
-    expect(command.args.at(-1)).toBe("fix the failing tests");
+    expect(command.args).not.toContain("fix the failing tests");
+    expect(command.stdin).toBe("fix the failing tests");
   });
 
   it("rejects unsupported Codex sandbox env values and silently ignores ASK_FOR_APPROVAL", () => {
@@ -490,7 +491,9 @@ describe("native agent provider env resolver", () => {
       providerConfig: request.providerConfig,
     });
     expect(command.args).toContain("--sandbox");
-    expect(command.args).toContain("workspace-write");
+    expect(command.args).toContain(
+      process.platform === "darwin" ? "danger-full-access" : "workspace-write",
+    );
     expect(command.args).toContain("--skip-git-repo-check");
     expect(command.args).not.toContain("--full-auto");
   });

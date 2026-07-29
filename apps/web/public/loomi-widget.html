@@ -102,7 +102,6 @@
         transform: translate(-50%, -50%);
         transform-origin: 50% 95%;
         display: block;
-        pointer-events: auto;
         -webkit-user-drag: none;
         user-drag: none;
         animation: pet-bob 3.4s ease-in-out infinite;
@@ -127,10 +126,91 @@
         font-size: 12px;
         font-weight: 700;
         line-height: 1;
-        pointer-events: none;
       }
       .pending-badge.visible {
         display: flex;
+      }
+
+      /* #365 — idle status pill. Anchored at the same top-right corner
+         as `.pending-badge`, but slightly offset so a populated
+         pending badge (count > 0) doesn't collide with it. The pill
+         is keyboard-focusable (Enter / Space emit `pet:open-status`)
+         so the user can reach the compact card without a mouse.
+         Hidden by default; `applyIdlePill()` toggles `.visible`
+         based on `currentState === "idle"` AND pendingCount === 0.
+         The 14×14 dot mirrors the loop's enabled flag: green when
+         live, amber when paused, red when the watcher reported a
+         failure on a source (future-proofed — the watcher doesn't
+         currently emit per-source failure state, so today the dot
+         is either green or amber). */
+      .idle-pill {
+        position: absolute;
+        z-index: 6;
+        top: 7px;
+        right: 7px;
+        display: none;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        padding: 0 10px 0 8px;
+        border-radius: 11px;
+        background: rgba(15, 23, 42, 0.78);
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        outline: none;
+        -webkit-user-select: none;
+        user-select: none;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        white-space: nowrap;
+        max-width: 156px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: background 0.15s ease;
+      }
+      .idle-pill.visible {
+        display: inline-flex;
+      }
+      .idle-pill:hover,
+      .idle-pill:focus-visible {
+        background: rgba(15, 23, 42, 0.92);
+      }
+      .idle-pill:focus-visible {
+        box-shadow:
+          0 0 0 2px rgba(43, 138, 247, 0.6),
+          0 4px 10px rgba(0, 0, 0, 0.28);
+      }
+      /* When the pending badge is also visible (a queued decision
+         just landed), nudge the pill down so the two chrome pieces
+         stack instead of overlapping. The badge takes its own slot
+         at the same top-right; we shift the pill below it. */
+      .pending-badge.visible ~ .idle-pill {
+        top: 35px;
+      }
+      .idle-pill .idle-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.28);
+      }
+      .idle-pill[data-enabled="false"] .idle-dot {
+        background: #f59e0b;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.28);
+      }
+      .idle-pill[data-enabled="failure"] .idle-dot {
+        background: #ef4444;
+        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.28);
+      }
+      .idle-pill .idle-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       /* State-specific animations — kept in sync with the demo's
@@ -260,6 +340,8 @@
         position: fixed;
         z-index: 9999;
         min-width: 96px;
+        max-width: calc(100vw - 8px);
+        box-sizing: border-box;
         /* The pet window is 168×168 but the menu (theme picker + a
            few shortcuts) is ~250px tall, so we cap the height and let
            it scroll rather than clip the Quit button. `calc(100vh -
@@ -316,6 +398,8 @@
         border-radius: 6px;
         cursor: pointer;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       #pet-menu button:hover,
       #pet-menu button:focus-visible {
@@ -355,10 +439,30 @@
   <body>
     <img class="fox" id="fox" data-state="idle" alt="Loomi" draggable="false" />
     <span class="pending-badge" id="pending-badge" aria-hidden="true"></span>
+    <!-- #365 — idle status affordance. The pill is hidden by default
+         and made visible by `applyIdlePill()` when state === "idle"
+         AND no pending decisions exist. Clicking (or pressing
+         Enter / Space while focused) emits `pet:open-status`, which
+         the host turns into a `show_card_compact_window` call. The
+         longer "View status" suffix lives on the right side and
+         truncates with an ellipsis if the user's locale is wider
+         than 156px. -->
+    <span
+      class="idle-pill"
+      id="idle-pill"
+      role="status"
+      aria-live="polite"
+      tabindex="0"
+      data-enabled="true"
+    >
+      <span class="idle-dot" aria-hidden="true"></span>
+      <span class="idle-label" id="idle-pill-label">Loomi is on watch</span>
+    </span>
 
     <div id="pet-menu" role="menu" aria-hidden="true">
       <button type="button" data-op="open" role="menuitem">Open Loomi</button>
       <button type="button" data-op="settings" role="menuitem">Settings</button>
+      <!-- User-defined prompt action buttons injected by applyContextActions(view). -->
       <hr />
       <div class="menu-separator">Theme</div>
       <button type="button" data-op="theme-fox" role="menuitem">
@@ -435,13 +539,42 @@
         // `~/.openloomi/pet-custom/` directory. Refreshed on every
         // config event. The widget renders one menu button per entry.
         let customThemes = [];
+        // Prompt-based context actions loaded from the host. The
+        // widget keeps only display metadata; prompts stay host-side.
+        let contextActions = [];
 
         const fox = document.getElementById("fox");
         const pendingBadge = document.getElementById("pending-badge");
+        // #365 — idle status pill refs. The pill shows when the pet
+        // is genuinely idle (no pending work AND state === "idle")
+        // so the user can discover Loomi's status without clicking
+        // the fox. `idlePillLabel` is the inner span we re-fill with
+        // i18n copy; the parent `.idle-pill` element carries the
+        // `data-enabled` attribute that drives the dot colour.
+        const idlePill = document.getElementById("idle-pill");
+        const idlePillLabel = document.getElementById("idle-pill-label");
         // Tracked alongside `fox.dataset.state` so the click handler can
         // branch on it (e.g. `needs-setup` → `pet:open-ai-settings`
         // instead of the default `pet:open-dashboard`).
         let currentState = "idle";
+        // #365 — bookkeeping for the idle pill. `pendingCount` is
+        // populated from the existing `loop:pending-count` listener;
+        // `loopEnabled` comes from the enriched `loop:state` payload
+        // (see the listener added below). Defaults match the
+        // bootstrap state (idle sprite, no pending, loop live).
+        let pendingCount = 0;
+        let loopEnabled = true;
+        // #365 — pill copy. Standalone-preview fallback (no i18n
+        // runtime) keeps the pill legible when this file is opened
+        // directly in a browser. When running inside Tauri the
+        // host-driven i18n bootstrap (see the host-side
+        // `i18n-provider.tsx`) can override the text via the
+        // `__loomiIdlePill` global if/when we wire that, but the
+        // English fallback is good enough for the standalone path
+        // because it never sits next to a real watcher.
+        const IDLE_PILL_FALLBACK = "Loomi is on watch";
+        const IDLE_PILL_PAUSED_FALLBACK = "Monitoring paused";
+        const IDLE_PILL_WORKING_FALLBACK = "Checking sources…";
 
         // Resolve a sprite URL/path for an (theme, state) pair.
         // Priority:
@@ -489,6 +622,64 @@
           // Re-paint with the current state under the new theme so
           // the user sees the change immediately.
           if (currentState) setState(currentState);
+        }
+
+        function normalizeContextAction(action) {
+          if (!action || typeof action !== "object") return null;
+          const id = typeof action.id === "string" ? action.id.trim() : "";
+          const label =
+            typeof action.label === "string"
+              ? action.label.replace(/\s+/g, " ").trim()
+              : "";
+          if (!id || !label || action.enabled === false) return null;
+          return { id: id, label: label };
+        }
+
+        function applyContextActions(view) {
+          contextActions =
+            view && view.enabled && Array.isArray(view.actions)
+              ? view.actions.map(normalizeContextAction).filter(Boolean)
+              : [];
+          rebuildContextActionButtons();
+        }
+
+        function rebuildContextActionButtons() {
+          const menu = document.getElementById("pet-menu");
+          if (!menu) return;
+          let section = document.getElementById("pet-actions-section");
+          if (!contextActions.length) {
+            if (section) section.remove();
+            return;
+          }
+          if (!section) {
+            section = document.createElement("div");
+            section.id = "pet-actions-section";
+            section.setAttribute("role", "none");
+            const rule = document.createElement("hr");
+            const heading = document.createElement("div");
+            heading.className = "menu-separator";
+            heading.textContent = "Actions";
+            section.appendChild(rule);
+            section.appendChild(heading);
+            const anchor = menu.querySelector("[data-op='settings']");
+            if (anchor) {
+              anchor.insertAdjacentElement("afterend", section);
+            } else {
+              menu.insertBefore(section, menu.firstChild);
+            }
+          }
+          section
+            .querySelectorAll("button[data-op='context-action']")
+            .forEach((el) => el.remove());
+          for (const action of contextActions) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.setAttribute("role", "menuitem");
+            btn.dataset.op = "context-action";
+            btn.dataset.actionId = action.id;
+            btn.textContent = action.label;
+            section.appendChild(btn);
+          }
         }
 
         // Add menu buttons for any custom theme names not already
@@ -585,8 +776,66 @@
 
         function setPendingCount(value) {
           const count = Math.max(0, Number(value) || 0);
+          pendingCount = count;
           pendingBadge.textContent = count > 99 ? "99+" : String(count);
           pendingBadge.classList.toggle("visible", count > 0);
+          // Recompute the idle pill on every count change — the pill
+          // must hide the moment any pending decision lands so it
+          // doesn't sit on top of the red badge. Mirrors the rule
+          // the click handler uses (`isIdle()`).
+          applyIdlePill();
+        }
+
+        // #365 — true when the pet has no actionable work to show.
+        // Combines the sprite state (we only call ourselves "idle"
+        // when the watcher actually emitted `idle`) with the live
+        // pending count. `needs-setup` is intentionally excluded —
+        // it's a setup prompt, not a calm idle, and the right-click
+        // menu / dashboard are the better escape hatches there.
+        function isIdle() {
+          return (
+            currentState === "idle" &&
+            pendingCount === 0 &&
+            currentState !== "needs-setup"
+          );
+        }
+
+        // #365 — paint the idle pill. Called on every state / pending
+        // change. Visibility comes from `isIdle()`; the dot colour
+        // comes from `loopEnabled` (false → amber dot, signalling
+        // "paused"); copy falls back to the English constants above
+        // when no i18n runtime is available (standalone preview).
+        function applyIdlePill() {
+          if (!idlePill) return;
+          idlePill.classList.toggle("visible", isIdle());
+          idlePill.dataset.enabled = loopEnabled ? "true" : "false";
+          if (idlePillLabel) {
+            // Pick the copy that matches the current dot colour so
+            // paused users see "Monitoring paused" rather than the
+            // generic "on watch" line.
+            const text = loopEnabled
+              ? IDLE_PILL_FALLBACK
+              : IDLE_PILL_PAUSED_FALLBACK;
+            idlePillLabel.textContent = text;
+          }
+        }
+
+        // #365 — emit `pet:open-status` so the host shows the compact
+        // card. Triggered by Enter / Space on the focused pill, by a
+        // click, or by the pet's own pointerup when idle. The
+        // long-press fallback path is intentionally NOT wired here:
+        // holding the pill should not open the right-click menu
+        // because the pill already offers the only action it
+        // supports.
+        function openStatusFromPill(event) {
+          if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          const t = window.__TAURI__;
+          if (t && t.event && t.event.emit) {
+            t.event.emit("pet:open-status");
+          }
         }
 
         // ---- Custom right-click menu ----------------------------------
@@ -651,17 +900,26 @@
         window.addEventListener("blur", closePetMenu);
 
         petMenu.addEventListener("click", function (e) {
-          const op = e.target && e.target.dataset && e.target.dataset.op;
+          // #369 — resolve the operation from the nearest
+          // `button[data-op]` rather than `e.target.dataset.op`
+          // directly. Theme buttons render their ✓ tick as a nested
+          // `<span class="menu-tick">`, so clicking the tick (or any
+          // whitespace between it and the label) lands `e.target` on
+          // an element without `data-op` and the operation was being
+          // silently dropped. `closest()` walks up to the owning
+          // button so any descendant still routes to the right action.
+          const button =
+            e.target && e.target.closest
+              ? e.target.closest("button[data-op]")
+              : null;
+          const op = button && button.dataset ? button.dataset.op : null;
           if (!op) return;
           closePetMenu();
           const t = window.__TAURI__;
           if (!t) return;
-          // Theme switcher + custom shortcuts go through core.invoke
-          // (commands) rather than event.emit — the host writes the
-          // new theme to disk and broadcasts the change back via
-          // `pet:config-changed`. Open / Settings / Quit remain event
-          // emits because they are transient UI gestures, not state
-          // changes.
+          // Theme switching is persisted by a host command. Prompt
+          // context actions only emit their id; the host resolves the
+          // prompt later so task contents never live in the widget DOM.
           if (op.startsWith("theme-")) {
             const themeName = op.slice("theme-".length);
             if (t.core && t.core.invoke) {
@@ -677,22 +935,30 @@
             return;
           }
           if (!t.event || !t.event.emit) return;
+          if (op === "context-action") {
+            const actionId = button.dataset ? button.dataset.actionId : "";
+            if (actionId) {
+              t.event.emit("pet:context-action", { actionId: actionId });
+            }
+            return;
+          }
           if (op === "open") t.event.emit("pet:open-dashboard");
           else if (op === "settings") t.event.emit("pet:open-settings");
           else if (op === "quit") t.event.emit("pet:quit");
         });
 
         // ---- Drag (whole window) vs click (no drag) --------------------
-        // In Tauri: call `getCurrentWebviewWindow().startDragging()` so the
-        //   168×168 window itself follows the pointer. The native drag is
-        //   OS-mediated and survives the cursor leaving the window, so the
-        //   user can fling the pet across multiple monitors.
+        // In Tauri: use the native OS drag so the whole transparent
+        // window moves normally. Rust keeps the final position inside
+        // the visible monitor bounds and cancels the current native drag
+        // if a boundary clamp was needed.
         // In standalone: no-op drag (the page is the stage). The click
-        //   branch is silently disabled because there is nothing to open.
+        // branch is silently disabled because there is nothing to open.
         let downX = 0,
           downY = 0,
           downTime = 0;
         let dragged = false;
+        let dragPointerId = null;
         // Long-press fallback for issue #314. Some macOS / Tauri builds
         // (and any standalone browser preview that doesn't get Tauri's
         // builder-side `accept_first_mouse`) silently drop the very
@@ -728,12 +994,42 @@
           return null;
         }
 
+        function startNativeDrag(win) {
+          if (win && typeof win.startDragging === "function") {
+            try {
+              win.startDragging();
+            } catch (_) {
+              /* native drag is best-effort */
+            }
+          }
+        }
+
+        function clearPointerGesture() {
+          document.body.classList.remove("dragging");
+          document.body.classList.remove("longpress");
+          try {
+            clearTimeout(longpressTimer);
+          } catch (_) {}
+          longpressTimer = null;
+          dragPointerId = null;
+        }
+
         function onPointerDown(e) {
+          // #369 — pointer events that originate inside `#pet-menu`
+          // must not reach the global drag/click handlers. Otherwise
+          // `startDragging()` would lurch the window while the user
+          // is mid-click on a menu item, and the matching `pointerup`
+          // would re-emit `pet:open-dashboard`, masking whatever
+          // operation the menu actually requested. The menu owns its
+          // own click semantics (Open Loomi / Settings / theme picker
+          // / Quit) so we bail before any bookkeeping happens.
+          if (petMenu && petMenu.contains(e.target)) return;
           if (e.button !== 0) return; // primary button only
-          downX = e.clientX;
-          downY = e.clientY;
+          downX = e.screenX;
+          downY = e.screenY;
           downTime = Date.now();
           dragged = false;
+          dragPointerId = e.pointerId;
           longpressActive = false;
           contextmenuFiredSinceDown = false;
           document.body.classList.add("dragging");
@@ -753,30 +1049,17 @@
             }
             longpressTimer = null;
           }, LONGPRESS_MS);
-          // Immediately hand off to Tauri's native drag. The OS will move
-          // the window and dispatch the corresponding pointermove/up events
-          // on the new position. If the user releases without moving, the
-          // pointerup distance will be ~0 and we treat it as a click.
-          const w = getCurrentWindow();
-          if (w && typeof w.startDragging === "function") {
-            // startDragging returns a Promise; we don't await — the
-            // pointermove/up handlers will pick up the new position via
-            // the window's natural event flow.
-            try {
-              w.startDragging();
-            } catch (_) {
-              /* fall through */
-            }
-          }
+          startNativeDrag(getCurrentWindow());
           try {
             document.body.setPointerCapture(e.pointerId);
           } catch (_) {}
         }
 
         function onPointerMove(e) {
-          if (dragged) return;
+          if (dragPointerId !== e.pointerId) return;
           if (
-            Math.hypot(e.clientX - downX, e.clientY - downY) > DRAG_THRESHOLD
+            !dragged &&
+            Math.hypot(e.screenX - downX, e.screenY - downY) > DRAG_THRESHOLD
           ) {
             dragged = true;
             // A real drag breaks the long-press hold — drop the dots
@@ -793,20 +1076,33 @@
         }
 
         function onPointerUp(e) {
-          document.body.classList.remove("dragging");
-          document.body.classList.remove("longpress");
-          try {
-            clearTimeout(longpressTimer);
-          } catch (_) {}
-          longpressTimer = null;
+          // #369 — symmetric to `onPointerDown`. A release inside the
+          // open menu is a menu operation, not a pet click. Without
+          // this guard the click-vs-drag branch below would emit
+          // `pet:open-dashboard` immediately after the menu fires its
+          // own event (e.g. `pet:open-settings`), opening the
+          // dashboard on top of the settings page the user just
+          // requested. Housekeeping is safe to skip here because
+          // `onPointerDown` returned early too — no capture was taken,
+          // no body classes were added, no longpress timer was armed.
+          if (petMenuOpen && petMenu && petMenu.contains(e.target)) return;
+          if (dragPointerId !== e.pointerId) return;
           try {
             document.body.releasePointerCapture(e.pointerId);
           } catch (_) {}
           // Click only fires if the pointer didn't travel far — anything
           // beyond DRAG_THRESHOLD counts as a drag, not a click.
-          if (dragged) return;
-          if (Math.hypot(e.clientX - downX, e.clientY - downY) > DRAG_THRESHOLD)
+          if (dragged) {
+            clearPointerGesture();
             return;
+          }
+          if (
+            Math.hypot(e.screenX - downX, e.screenY - downY) > DRAG_THRESHOLD
+          ) {
+            clearPointerGesture();
+            return;
+          }
+          clearPointerGesture();
 
           // Long-press fallback (issue #314). If the user held the pet
           // without moving for ≥ LONGPRESS_MS, surface the in-widget
@@ -826,8 +1122,27 @@
             // that's the case, route the click straight to AI settings
             // — opening the dashboard would just land the user on the
             // guest-login redirect with no immediate path forward.
+            // The needs-setup override must run BEFORE the
+            // plugin-mode shortcut so a plugin-launched session on a
+            // fresh install can still reach AI settings.
             if (currentState === "needs-setup") {
               t.event.emit("pet:open-ai-settings");
+            } else if (isIdle() || launchMode === "plugin") {
+              // #365 — idle pet click now opens the compact status
+              // card instead of dumping the user onto the dashboard.
+              // The right-click menu still offers "Open Loomi" as the
+              // escape hatch to the main app for users who want to
+              // land on /loop directly.
+              //
+              // Plugin-launched sessions short-circuit here too: when a
+              // Claude/Codex plugin already owns the chat
+              // conversation, opening the main window alongside the
+              // pet creates two dialogs for the same chat. The pet
+              // becomes a launcher for the compact status card; the
+              // user can still reach the main window via the
+              // right-click menu or the card's "Open in dashboard"
+              // CTA — both unchanged.
+              t.event.emit("pet:open-status");
             } else {
               t.event.emit("pet:open-dashboard");
             }
@@ -838,20 +1153,81 @@
         document.body.addEventListener("pointermove", onPointerMove);
         document.body.addEventListener("pointerup", onPointerUp);
         document.body.addEventListener("pointercancel", onPointerUp);
+        document.body.addEventListener("lostpointercapture", function (e) {
+          if (dragPointerId === e.pointerId) {
+            clearPointerGesture();
+          }
+        });
+        window.addEventListener("blur", function () {
+          if (dragPointerId !== null) clearPointerGesture();
+        });
 
         // ---- Tauri bridge ----------------------------------------------
         // Only attach the listener when running inside Tauri. When the
         // widget is opened standalone in a browser tab for preview, the
         // `__TAURI__` global is undefined and we silently no-op.
         const t = window.__TAURI__;
+        // Launch mode handshake. Default `standalone` so the click
+        // routing above (`onPointerUp`) keeps its long-standing
+        // behaviour on hosts that don't speak the new events yet.
+        // When a plugin launched the desktop (env var
+        // `OPENLOOMI_LAUNCH_MODE=plugin`), the host's reply flips this
+        // to `"plugin"` and the click short-circuits to
+        // `pet:open-status` (compact card) instead of
+        // `pet:open-dashboard`.
+        //
+        // We pull the value (`emit("pet:request-launch-mode")` →
+        // host emits `pet:launch-mode` back) rather than waiting for
+        // an unsolicited push. The push variant can drop the first
+        // message if the host's `listen()` registers after our
+        // `event.listen()` is already in place; the pull is a single
+        // round-trip and resolves deterministically.
+        let launchMode = "standalone";
+        if (t && t.event && t.event.listen) {
+          t.event.listen("pet:launch-mode", (e) => {
+            launchMode =
+              (e && e.payload) === "plugin" ? "plugin" : "standalone";
+          });
+          if (t.event.emit) {
+            t.event.emit("pet:request-launch-mode");
+          }
+        }
         if (t && t.event && t.event.listen) {
           t.event.listen("loop:state", (e) => {
             const p = (e && e.payload) || {};
             if (p.state) setState(p.state);
+            // #365 — read the enriched fields so the idle pill can
+            // switch its dot colour and so future updates can
+            // surface the last-polled timestamp. Both fields are
+            // optional on the wire — older hosts simply omit them.
+            if (typeof p.enabled === "boolean") {
+              loopEnabled = p.enabled;
+              applyIdlePill();
+            }
           });
           t.event.listen("loop:pending-count", (e) => {
             const p = (e && e.payload) || {};
             setPendingCount(p.count);
+          });
+        }
+
+        // #365 — wire the idle pill. Click + Enter / Space while
+        // focused emit `pet:open-status`. The handler stops
+        // propagation so the same event doesn't bubble up to the
+        // body's pointerdown (which would otherwise start a drag).
+        if (idlePill) {
+          idlePill.addEventListener("click", openStatusFromPill);
+          idlePill.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" || e.key === " ") {
+              openStatusFromPill(e);
+            }
+          });
+          // Prevent the pill from initiating a window drag when the
+          // user presses-and-holds it. Without `mousedown` capture
+          // the body handler would still see the gesture and try
+          // to `startDragging()` the whole window.
+          idlePill.addEventListener("pointerdown", function (e) {
+            e.stopPropagation();
           });
         }
         // `pet:config-changed` fires whenever the host reloads the
@@ -866,6 +1242,10 @@
           t.event.listen("pet:config-changed", (e) => {
             const p = (e && e.payload) || null;
             if (p) applyConfig(p);
+          });
+          t.event.listen("pet:actions-changed", (e) => {
+            const p = (e && e.payload) || null;
+            if (p) applyContextActions(p);
           });
         }
 
@@ -884,6 +1264,14 @@
             })
             .catch((err) => {
               console.warn("[loomi] get_pet_config failed", err);
+            });
+          t.core
+            .invoke("get_pet_context_actions")
+            .then((view) => {
+              if (view) applyContextActions(view);
+            })
+            .catch((err) => {
+              console.warn("[loomi] get_pet_context_actions failed", err);
             });
         }
       })();

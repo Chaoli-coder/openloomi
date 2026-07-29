@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const crypto = require('node:crypto');
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const crypto = require("node:crypto");
 
-const MARKER = '_openloomi_plugin';
-const PLUGIN_BLOCK_KEY = '__openloomi_claude_plugin_hooks__';
+const MARKER = "_openloomi_plugin";
+const PLUGIN_BLOCK_KEY = "__openloomi_claude_plugin_hooks__";
 
 function settingsPath() {
-  return path.join(os.homedir(), '.claude', 'settings.json');
+  return path.join(os.homedir(), ".claude", "settings.json");
 }
 
 function readJsonSafe(p) {
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    return JSON.parse(fs.readFileSync(p, "utf8"));
   } catch {
     return {};
   }
@@ -29,27 +29,64 @@ function atomicWriteJson(filePath, obj) {
 }
 
 function loadHooksTemplate() {
-  const pluginDir = path.resolve(__dirname, '..');
-  const hooksFile = path.join(pluginDir, 'hooks', 'hooks.json');
-  return readJsonSafe(hooksFile);
+  const pluginDir = path.resolve(__dirname, "..");
+  const hooksFile = path.join(pluginDir, "hooks", "hooks.json");
+  return { pluginDir, template: readJsonSafe(hooksFile) };
+}
+
+// Resolve `${CLAUDE_PLUGIN_ROOT}` placeholders in a hook command to the
+// plugin's absolute path. Claude Code only injects this env var when hooks
+// are loaded directly from a plugin manifest; when we install them into
+// user-level `~/.claude/settings.json` we have to substitute ourselves or
+// the placeholder expands to empty and Node tries to resolve
+// `/scripts/loomi-bridge.mjs` from the filesystem root.
+function substitutePluginRoot(command, pluginDir) {
+  if (
+    typeof command !== "string" ||
+    !command.includes("${CLAUDE_PLUGIN_ROOT}")
+  ) {
+    return command;
+  }
+  // Wrap the substituted path in double quotes so paths with spaces parse
+  // correctly under the shell. The original template has the placeholder
+  // unquoted (e.g. `node ${CLAUDE_PLUGIN_ROOT}/scripts/...`), so quote just
+  // the path component by replacing the placeholder with `"<pluginDir>"`.
+  const quoted = `"${pluginDir}"`;
+  return command.split("${CLAUDE_PLUGIN_ROOT}").join(quoted);
+}
+
+function materializeHookEntry(entry, pluginDir) {
+  // Deep-clone so we don't mutate the shared template, then rewrite each
+  // inner command's placeholder to an absolute path.
+  const cloned = JSON.parse(JSON.stringify(entry));
+  if (cloned && Array.isArray(cloned.hooks)) {
+    cloned.hooks = cloned.hooks.map((h) => {
+      if (h && typeof h.command === "string") {
+        return { ...h, command: substitutePluginRoot(h.command, pluginDir) };
+      }
+      return h;
+    });
+  }
+  return cloned;
 }
 
 function install({ yes }) {
   const settingsFile = settingsPath();
   const settings = readJsonSafe(settingsFile);
-  if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
+  if (!settings.hooks || typeof settings.hooks !== "object")
+    settings.hooks = {};
 
   // Legacy cleanup: drop the old nested block from previous broken versions.
   if (settings.hooks[PLUGIN_BLOCK_KEY]) {
     delete settings.hooks[PLUGIN_BLOCK_KEY];
   }
 
-  const tpl = loadHooksTemplate();
-  const templateHooks = (tpl?.hooks) || {};
+  const { pluginDir, template: tpl } = loadHooksTemplate();
+  const templateHooks = tpl?.hooks || {};
   if (Object.keys(templateHooks).length === 0) {
     return {
       ok: false,
-      error: 'No hooks loaded from template',
+      error: "No hooks loaded from template",
       path: settingsFile,
     };
   }
@@ -63,15 +100,26 @@ function install({ yes }) {
     const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = [];
     for (const entry of entries) {
-      const cmd0 = (entry?.hooks?.[0]?.command) || '';
+      const cmd0 = substitutePluginRoot(
+        entry?.hooks?.[0]?.command || "",
+        pluginDir,
+      );
       const isDup = settings.hooks[event].some(
-        (e) => e && e[MARKER] === true && e.hooks && e.hooks.some((h) => h && h.command === cmd0)
+        (e) =>
+          e &&
+          e[MARKER] === true &&
+          e.hooks &&
+          e.hooks.some((h) => h && h.command === cmd0),
       );
       if (isDup) {
         already++;
         continue;
       }
-      settings.hooks[event].push(Object.assign({}, entry, { [MARKER]: true }));
+      settings.hooks[event].push(
+        Object.assign({}, materializeHookEntry(entry, pluginDir), {
+          [MARKER]: true,
+        }),
+      );
       added++;
     }
   }
@@ -85,7 +133,7 @@ function install({ yes }) {
       events: Object.keys(templateHooks),
       added,
       alreadyInstalled: already,
-      note: 'Per-event merge into settings.hooks (Claude Code schema-compliant).',
+      note: "Per-event merge into settings.hooks (Claude Code schema-compliant).",
     },
   };
 }
@@ -94,7 +142,7 @@ function uninstall() {
   const settingsFile = settingsPath();
   const settings = readJsonSafe(settingsFile);
   let removed = false;
-  if (settings.hooks && typeof settings.hooks === 'object') {
+  if (settings.hooks && typeof settings.hooks === "object") {
     // Always strip the legacy nested block from older broken versions.
     if (settings.hooks[PLUGIN_BLOCK_KEY]) {
       delete settings.hooks[PLUGIN_BLOCK_KEY];
@@ -112,7 +160,12 @@ function uninstall() {
         if (entry[MARKER]) return false;
         if (entry.hooks && Array.isArray(entry.hooks)) {
           const inner = entry.hooks.filter(
-            (h) => !(h && typeof h.command === 'string' && h.command.includes('loomi-bridge.mjs'))
+            (h) =>
+              !(
+                h &&
+                typeof h.command === "string" &&
+                h.command.includes("loomi-bridge.mjs")
+              ),
           );
           if (inner.length === 0) return false;
           entry.hooks = inner;
@@ -140,10 +193,17 @@ function status() {
       const arr = hooks[event];
       if (!Array.isArray(arr)) continue;
       for (const entry of arr) {
-        if (entry?.[MARKER]) { installed = true; break; }
+        if (entry?.[MARKER]) {
+          installed = true;
+          break;
+        }
         if (entry && Array.isArray(entry.hooks)) {
           for (const h of entry.hooks) {
-            if (h && typeof h.command === 'string' && h.command.includes('loomi-bridge.mjs')) {
+            if (
+              h &&
+              typeof h.command === "string" &&
+              h.command.includes("loomi-bridge.mjs")
+            ) {
               installed = true;
               break;
             }
@@ -160,7 +220,7 @@ function status() {
     path: settingsFile,
     marker: MARKER,
     legacyBlockKey: PLUGIN_BLOCK_KEY,
-    schema: 'per-event',
+    schema: "per-event",
   };
 }
 
@@ -170,19 +230,23 @@ function printResult(obj) {
 }
 
 const sub = process.argv[2];
-if (sub === 'install') {
-  printResult(install({ yes: process.argv.includes('--yes') }));
-} else if (sub === 'uninstall') {
+if (sub === "install") {
+  printResult(install({ yes: process.argv.includes("--yes") }));
+} else if (sub === "uninstall") {
   printResult(uninstall());
-} else if (sub === 'status') {
+} else if (sub === "status") {
   printResult(status());
 } else {
   process.stdout.write(
     JSON.stringify(
-      { ok: false, code: 'UNKNOWN_SUBCOMMAND', valid: ['install', 'uninstall', 'status'] },
+      {
+        ok: false,
+        code: "UNKNOWN_SUBCOMMAND",
+        valid: ["install", "uninstall", "status"],
+      },
       null,
-      2
-    ) + os.EOL
+      2,
+    ) + os.EOL,
   );
   process.exit(1);
 }

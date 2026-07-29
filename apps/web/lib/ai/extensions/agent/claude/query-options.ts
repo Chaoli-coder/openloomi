@@ -1,12 +1,17 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentConfig, AgentOptions } from "@openloomi/ai/agent/types";
+import type {
+  AgentConfig,
+  AgentOptions,
+  AgentSupplementalInputSource,
+} from "@openloomi/ai/agent/types";
 
 import {
-  createBusinessToolsMcpServer,
   type McpServerConfig,
+  createBusinessToolsMcpServer,
 } from "@/lib/ai/mcp";
 
 import { createCanUseToolOption } from "./permissions";
+import { createClaudeSupplementalInputHooks } from "./runtime";
 import type { ClaudeRuntimeLogger } from "./skills";
 
 // Baseline tool surface for Claude Code sessions. Extra tool groups, such as
@@ -67,6 +72,7 @@ export function createClaudeQueryOptions({
   settings,
   allowedTools,
   agentOptions,
+  supplementalInput,
   abortController,
   env,
   config,
@@ -76,7 +82,6 @@ export function createClaudeQueryOptions({
   logger,
   spawnClaudeCodeProcess,
   systemPrompt,
-  stderrLabel,
   permissionMode,
   permissionLogMode,
   tools,
@@ -92,6 +97,7 @@ export function createClaudeQueryOptions({
     AgentOptions,
     "permissionMode" | "onPermissionRequest" | "disallowedTools"
   >;
+  supplementalInput?: AgentSupplementalInputSource;
   abortController: AbortController;
   env: Record<string, string>;
   config: AgentConfig;
@@ -101,7 +107,6 @@ export function createClaudeQueryOptions({
   logger: ClaudeRuntimeLogger;
   spawnClaudeCodeProcess: NonNullable<Options["spawnClaudeCodeProcess"]>;
   systemPrompt: string;
-  stderrLabel?: string;
   permissionMode?: AgentOptions["permissionMode"];
   permissionLogMode: "run" | "execute";
   tools?: Options["tools"];
@@ -109,6 +114,11 @@ export function createClaudeQueryOptions({
   includePartialMessages?: boolean;
 }): Options {
   const effectivePermissionMode = permissionMode || "bypassPermissions";
+  const supplementalHooks = createClaudeSupplementalInputHooks({
+    supplementalInput,
+    sessionId,
+    logger,
+  });
 
   return {
     cwd,
@@ -133,14 +143,11 @@ export function createClaudeQueryOptions({
     ...(maxTurns !== undefined ? { maxTurns } : {}),
     ...(includePartialMessages !== undefined ? { includePartialMessages } : {}),
     ...(isDev ? { debug: true, debugFile: debugFilePath } : {}),
-    stderr: (data: string) => {
-      const label = stderrLabel ? ` ${stderrLabel}` : "";
-      // Keep stderr on the shared logger instead of stdout so CLI JSON output
-      // stays machine-readable.
-      logger.error(`[Claude ${sessionId}]${label} STDERR: ${data}`);
-    },
+    // The SDK does not wire its stderr callback when a custom spawner is
+    // supplied, so per-call sites capture stderr through the spawner.
     spawnClaudeCodeProcess,
     systemPrompt,
+    ...(supplementalHooks ? { hooks: supplementalHooks } : {}),
     ...createCanUseToolOption({
       sessionId,
       options: agentOptions,

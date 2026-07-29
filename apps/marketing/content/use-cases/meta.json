@@ -1,12 +1,13 @@
 {
   "title": "Use Cases",
+  "defaultOpen": true,
+  "collapsible": true,
   "pages": [
-    "proactive-decisions",
+    "engineering-daily-sync",
+    "unified-inbox-auto-draft",
     "product-research-iteration",
     "industry-intelligence",
     "x-content-automation",
-    "engineering-daily-sync",
-    "email-auto-draft",
     "global-managers",
     "founders",
     "salespeople"

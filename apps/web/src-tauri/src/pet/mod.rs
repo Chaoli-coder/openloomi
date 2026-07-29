@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use tauri::Emitter;
 use tauri::Manager;
-
+pub mod actions;
 mod aux_position;
 mod bubble;
 mod card;
@@ -27,13 +27,17 @@ pub use aux_position::{
     set_card_manual_position, spawn_position_poller,
 };
 pub use bubble::{build_bubble_window, hide_bubble_window, show_bubble_window, BUBBLE_H, BUBBLE_W};
-pub use card::{build_card_window, hide_card_window, show_card_window, CARD_H, CARD_W};
+pub use card::{
+    build_card_window, hide_card_window, show_card_compact_window, show_card_window, CARD_H, CARD_W,
+};
 pub use config_watcher::spawn_config_watcher;
 pub use dev_panel::{
     build_dev_panel_window, close_dev_panel_for_exit, dev_panel_requested, hide_dev_panel_window,
     show_dev_panel_window, DEV_PANEL_H, DEV_PANEL_W,
 };
-pub use state::{handle_runtime_state_event, publish_baseline_state};
+pub use state::{
+    handle_runtime_state_event, publish_baseline_state, publish_baseline_state_with_meta,
+};
 pub use theme::{
     read_config, write_config, PetConfig, PetConfigView, BUILTIN_THEMES, DEFAULT_THEME,
 };
@@ -183,6 +187,15 @@ pub fn get_pet_config(app: tauri::AppHandle) -> PetConfigView {
     theme::build_view(cfg, custom)
 }
 
+/// Returns sanitized user-defined Pet context actions. The widget only
+/// receives menu metadata; prompts stay host-side until the later
+/// agent-runtime dispatch path resolves an action by id.
+#[tauri::command]
+pub fn get_pet_context_actions(app: tauri::AppHandle) -> actions::PetContextActionsView {
+    let cfg = actions::read_config(&app);
+    actions::build_view(&cfg)
+}
+
 /// Updates only `activeTheme` (called by the right-click menu).
 /// Re-reads + re-emits so the widget can paint the new theme without
 /// a restart. Returns the fresh view so the JS side can update its
@@ -234,5 +247,31 @@ mod review_seen_tests {
         // clock somehow gave us the same millisecond, so we just
         // assert the call didn't panic.
         let _ = last_review_seen_secs_ago();
+    }
+
+    /// Window labels are the keys used by `tauri-plugin-window-state`
+    /// to read / write `.window-state.json`. They must be unique and
+    /// non-empty so the denylist in `main.rs` can reliably exclude
+    /// the transient aux windows without colliding with the Pet label
+    /// (which is intentionally kept in the state round-trip so its
+    /// drag position persists across launches — see issue #341).
+    #[test]
+    fn window_labels_are_unique_and_nonempty() {
+        let labels = [PET_LABEL, PET_BUBBLE_LABEL, PET_CARD_LABEL, PET_DEV_LABEL];
+        for label in labels {
+            assert!(!label.is_empty(), "window label must not be empty");
+        }
+        // No two labels may collide; the state plugin keys its
+        // JSON by label, so a collision would silently merge two
+        // windows' state.
+        for i in 0..labels.len() {
+            for j in (i + 1)..labels.len() {
+                assert_ne!(
+                    labels[i], labels[j],
+                    "window labels must be unique ({:?} vs {:?})",
+                    labels[i], labels[j]
+                );
+            }
+        }
     }
 }

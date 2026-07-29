@@ -30,16 +30,36 @@ import {
 import { CODEX_METADATA } from "./metadata";
 import { parseCodexJsonLine } from "./parser";
 import { addConversationContext } from "../prompt-context";
+import {
+  CODEX_INTERRUPTED_MARKER,
+  formatCodexInterruptedError,
+  parseCodexInterruptedError,
+  type CodexInterruptedContext,
+} from "./interrupt-marker";
+import { preflightCodexRuntime } from "./runtime-preflight";
+
+// Re-exported from `./interrupt-marker` so legacy import paths
+// (`@/lib/ai/extensions/agent/codex`) keep working without pulling
+// `./command.ts` (which depends on `cross-spawn` / `node:child_process`)
+// into client bundles. Client code should import directly from
+// `./interrupt-marker` to stay server-safe.
+export {
+  CODEX_INTERRUPTED_MARKER,
+  formatCodexInterruptedError,
+  parseCodexInterruptedError,
+  type CodexInterruptedContext,
+};
 
 /**
  * Codex CLI runtime adapter. Wraps `codex exec --json` (NDJSON event stream)
  * and projects the Codex item lifecycle into OpenLoomi AgentMessage events.
  *
  * The agent follows the same planning / execution contract as the OpenCode
- * adapter: planning forces `read-only` sandbox and disables `--full-auto`,
- * execution defaults to `workspace-write`, and `--full-auto` only fires when
- * both OpenLoomi permissionMode is `bypassPermissions` and the provider
- * config explicitly opts in.
+ * adapter: planning forces `read-only` sandbox and disables `--full-auto`.
+ * Execution defaults to `workspace-write` on Linux/Windows and
+ * `danger-full-access` on macOS so local and remote services remain reachable.
+ * `--full-auto` only fires when both OpenLoomi permissionMode is
+ * `bypassPermissions` and the provider config explicitly opts in.
  */
 export class CodexAgent extends BaseAgent {
   readonly provider: AgentProvider = "codex";
@@ -253,14 +273,30 @@ export class CodexAgent extends BaseAgent {
       providerConfig: this.config.providerConfig,
     });
 
+    await preflightCodexRuntime({
+      command: command.command,
+      cwd,
+      model: this.config.model,
+      providerConfig,
+      signal: signal ?? options?.abortController?.signal,
+    });
+
     let closeEvent: Extract<CodexCliEvent, { type: "close" }> | undefined;
     let sawRuntimeError = false;
     let inputTokens = 0;
     let outputTokens = 0;
     let sawUsage = false;
+    // Tracks tool_use ids that have started but not yet produced a tool_result,
+    // plus workspace artifacts produced by completed file_change items. Both
+    // are surfaced on provider timeout so the chat UI can transition in-flight
+    // tool parts to a terminal state and offer an explicit Continue action
+    // that reuses the same workspace instead of restarting from scratch.
+    const inFlightToolIds = new Set<string>();
+    const completedArtifacts = new Set<string>();
 
     for await (const event of runCodexCli(command.command, command.args, {
       cwd,
+      stdin: command.stdin,
       env: providerConfig.env,
       signal: signal ?? options?.abortController?.signal,
       timeoutMs: providerConfig.timeoutMs,
@@ -276,7 +312,41 @@ export class CodexAgent extends BaseAgent {
             continue;
           }
           if (message.type === "error") {
+            // Transient Codex retry/transport-fallback notices are projected
+            // to `type: "retry"` by the parser, not `type: "error"`, so they
+            // intentionally skip this branch and fall through to the default
+            // yield. They must not flip `sawRuntimeError`, which would
+            // suppress the final `result` even when the run ultimately
+            // succeeds (issues #385 and #436).
             sawRuntimeError = true;
+          }
+          if (message.type === "tool_use") {
+            const useId = message.id ?? message.toolUseId;
+            if (useId) {
+              inFlightToolIds.add(useId);
+            }
+            yield this.withMessageId(message);
+            continue;
+          }
+          if (message.type === "tool_result") {
+            const useId = message.toolUseId ?? message.id;
+            if (useId) {
+              inFlightToolIds.delete(useId);
+            }
+            // file_change tool results summarise the changed paths. Codex
+            // emits them as part of the same item lifecycle as the tool_use,
+            // so we capture them at completion time, not at start time, to
+            // avoid reporting a path the CLI later reported as failed.
+            if (message.output && typeof message.output === "string") {
+              for (const line of message.output.split(/\r?\n/)) {
+                const match = line.match(/^(?:create|update)\s+(.+)$/);
+                if (match) {
+                  completedArtifacts.add(match[1].trim());
+                }
+              }
+            }
+            yield this.withMessageId(message);
+            continue;
           }
           yield this.withMessageId(message);
         }
@@ -287,6 +357,37 @@ export class CodexAgent extends BaseAgent {
     }
 
     if (!closeEvent) {
+      return;
+    }
+
+    // Provider timeout: surface an interrupted state so the UI can mark
+    // in-flight tool parts as terminal and offer a Continue action that
+    // reuses the same workspace. We deliberately yield synthetic tool_result
+    // events for every tool_use that never received a result, then a single
+    // structured error message carrying the workspace path and any
+    // artifacts that did manage to land before the deadline.
+    if (closeEvent.timedOut) {
+      for (const toolUseId of inFlightToolIds) {
+        yield {
+          type: "tool_result",
+          toolUseId,
+          output:
+            "Tool execution was interrupted because the run reached the provider timeout.",
+          isError: true,
+          messageId: this.generateMessageId(),
+        };
+      }
+
+      const interruptedMessage = formatCodexInterruptedError({
+        timeoutMs: closeEvent.timeoutMs ?? providerConfig.timeoutMs ?? 0,
+        workspacePath: cwd,
+        completedArtifacts: Array.from(completedArtifacts),
+      });
+      yield {
+        type: "error",
+        message: interruptedMessage,
+        messageId: this.generateMessageId(),
+      };
       return;
     }
 
@@ -353,6 +454,14 @@ function formatCodexExitError(
     ? `Codex CLI exited with code ${closeEvent.exitCode}: ${output}`
     : `Codex CLI exited with code ${closeEvent.exitCode}`;
 }
+
+/**
+ * The marker, formatter, and parser now live in `./interrupt-marker` so
+ * client bundles (e.g. `components/chat-context.tsx`) can import the
+ * parser without pulling in the Codex CLI subprocess layer. They are
+ * re-exported above for backward compatibility with existing
+ * `@/lib/ai/extensions/agent/codex` consumers.
+ */
 
 function resolveHome(filePath: string) {
   if (filePath === "~") {

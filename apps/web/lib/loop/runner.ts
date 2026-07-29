@@ -25,7 +25,13 @@ import {
   muteKeyFor,
   mutes,
 } from "./store";
-import type { LoopDecision } from "./types";
+import { deriveReadiness } from "./readiness";
+import { parseExecutionOutcome } from "./outcomes";
+import type {
+  ExecutionOutcome,
+  LoopDecision,
+  LoopDecisionExecution,
+} from "./types";
 
 /**
  * Resolve the URL of the native agent endpoint.
@@ -135,6 +141,12 @@ async function postNativeAgent(
         let buf = "";
         const textChunks: string[] = [];
         const reasoningChunks: string[] = [];
+        // #358 — capture every parsed SSE event so the runner's outcome
+        // parser can ask "did any tool call happen?" after the stream
+        // closes. Without this the heuristic always sees `events: []` and
+        // would default to `skipped / no external action performed` even
+        // when the agent did emit a tool_call event earlier.
+        const events: unknown[] = [];
         let result: unknown = null;
         for (;;) {
           const { value, done } = await reader.read();
@@ -149,6 +161,7 @@ async function postNativeAgent(
               if (payload) {
                 try {
                   const evt = JSON.parse(payload) as SseEvent;
+                  events.push(evt);
                   opts.onEvent?.(evt);
                   if (evt.type === "text" && typeof evt.content === "string") {
                     textChunks.push(evt.content);
@@ -174,6 +187,7 @@ async function postNativeAgent(
           text: textChunks.join(""),
           reasoning: reasoningChunks.join(""),
           result,
+          events,
         });
       })
       .catch((err: Error) => resolve({ ok: false, error: err.message }));
@@ -203,6 +217,23 @@ function buildPrompt(decision: LoopDecision, mode: "dry" | "run"): string {
   if (Array.isArray(decision.context?.why) && decision.context.why.length) {
     parts.push("", "Why:", ...decision.context.why.map((w) => `- ${w}`));
   }
+  // #358 — final instruction. The runner uses this SSE `result` event to
+  // decide whether the user-visible action actually happened. A clean HTTP
+  // 200 from the agent is not enough — the verdict MUST reflect the
+  // external side-effect (or explicit lack of one). `pure_reasoning`
+  // decisions (brief / wrap / todo prose) still emit `executed` so the
+  // `done` bucket counts them; refusing without a reason is `skipped`;
+  // connector errors are `failed`.
+  parts.push(
+    "",
+    "End with a single SSE `result` event whose `content` is JSON of this exact shape:",
+    '  {"outcome":"executed"|"skipped"|"blocked"|"failed","reason":"...","evidence":{...}}',
+    "- `executed` — the external side-effect happened (calendar event created, email sent, PR reviewed, etc.). Include connector-specific evidence ids in `evidence` (eventId, messageId, reviewId, toolCallId).",
+    "- `skipped` — the agent deliberately chose not to act (missing consent, not actionable, you-just-wrote-prose). Provide a short `reason`.",
+    "- `blocked` — execution was prevented by a precondition the agent couldn't satisfy (auth, rate limit). Provide a short `reason` so the user can fix it.",
+    "- `failed` — the agent tried but hit an error (connector 401, network). Provide a short `reason`.",
+    "Plain-text reasoning should still be emitted (as `text` events) — the system records it alongside the verdict.",
+  );
   if (decision.action?.kind === "deadline_notify") {
     parts.push(
       "",
@@ -214,7 +245,76 @@ function buildPrompt(decision: LoopDecision, mode: "dry" | "run"): string {
       '- If `params.channel === "slack"`, send a DM to the user instead via the slack toolkit',
       "  (skill: `Skill composio execute SLACK_SEND_MESSAGE on slack with {...}`",
       '   or CLI: `composio slack send_message --json {...}`) with text "<params.message> — due <params.deadlineAt>".',
-      "- Emit a single SSE `result` event whose `content` describes what you did — the system will record `completed_at` and `result` automatically. Include the calendar event id (or `skipped: <reason>` if you could not execute) so the user has a trail.",
+      '- Emit a single SSE `result` event whose `content` is JSON `{"outcome":"executed","reason":"...","evidence":{"eventId":"..."}}` so the system records the calendar event id. If you cannot execute, emit `{"outcome":"skipped","reason":"..."}` instead.',
+    );
+  }
+  // #363 — when the user has already chosen their RSVP response
+  // (Attend / Decline), `action.params.response` is set and the agent
+  // must honour it instead of asking again or rewriting it.
+  if (
+    decision.type === "rsvp" &&
+    decision.action?.params &&
+    typeof (decision.action.params as Record<string, unknown>).response ===
+      "string"
+  ) {
+    const r = (decision.action.params as Record<string, unknown>).response;
+    parts.push(
+      "",
+      "User has already chosen the RSVP response.",
+      `- params.response is set by the user via Attend / Decline to "${r}". Do not change it.`,
+      "- Execute the calendar_rsvp action with this response and emit a single SSE `result` event whose `content` is JSON",
+      '  {"outcome":"executed","reason":"...","evidence":{"eventId":"..."}}',
+      '- If you cannot execute (auth, network), emit `{"outcome":"blocked"|"failed","reason":"..."}` instead so the card can retry.',
+    );
+  }
+  // email_reply / im_reply with no `context.draft` yet — FALLBACK path.
+  // The agentic tick (`tick-prompt.ts`) is supposed to bake the draft
+  // body into `context.draft` at ingest time so the card shows it from
+  // the moment the decision surfaces. This branch only fires when the
+  // decision came in without a draft (non-agentic TS classifier path,
+  // legacy ingest, or an agent that forgot the draft). Without the PATCH
+  // the pet card and web UI render an empty draft body and the user has
+  // no way to tell what was sent until they dig into the agent logs.
+  // The user-edited-draft branch further below handles the case where
+  // the user already filled the body via the inline editor — there we
+  // just inject verbatim.
+  if (
+    (decision.action?.kind === "email_reply" ||
+      decision.action?.kind === "im_reply") &&
+    !decision.context?.draft
+  ) {
+    const isEmail = decision.action.kind === "email_reply";
+    const params = (decision.action?.params ?? {}) as Record<string, unknown>;
+    const subjectHint = isEmail
+      ? `The subject line lives in \`action.params.subject\` (already prefixed with "Re: "). Keep it as-is unless \`action.params.subject\` is empty/missing, in which case invent a short, boring one.`
+      : `There is no subject line — IM channels only carry a message body.`;
+    // Re-use the same loop-server port the native agent URL resolves to
+    // so the PATCH hits the same host the agent's bash tool runs from.
+    const loopBaseUrl = `http://localhost:${
+      process.env.PORT ??
+      (process.env.NODE_ENV === "development" ? DEV_PORT : PROD_PORT)
+    }`;
+    const patchUrl = `${loopBaseUrl}/api/loop/decision/${decision.id}`;
+    parts.push(
+      "",
+      "No draft exists yet — you must generate one, PATCH it back to the decision, and THEN send.",
+      "",
+      "Step 1 — Draft a concise reply grounded in the source signal:",
+      "  - Mention the sender's name (or channel/user) and the thread subject so the recipient knows what you are replying to.",
+      '  - Be specific, not a generic placeholder ("Got it, thanks" or "Will follow up").',
+      "  - Use the original sender's language. Keep it short (3–6 sentences for email, 1–3 for IM).",
+      `  - ${subjectHint}`,
+      "",
+      "Step 2 — PATCH the draft back to the decision so the UI can show it BEFORE the send:",
+      `  curl -sS -X PATCH ${patchUrl} \\`,
+      `    -H 'content-type: application/json' \\`,
+      `    -d '{"draft":{"subject":<subject string or null>,"body":<body string>}}'`,
+      "",
+      "The endpoint rejects empty body (HTTP 400 `draft.body required`), so the body MUST be non-empty. The PATCH is what the UI keys on; the send is what the recipient sees.",
+      "",
+      "Step 3 — ONLY AFTER the PATCH succeeds, send via the composio tool (see the tool guidance below).",
+      "",
+      "If the PATCH fails (decision no longer pending, auth expired, etc.), DO NOT send — emit the outcome as `skipped` with reason=`draft PATCH failed: <msg>`. The user can retry from the card.",
     );
   }
   // If the user edited the draft inline (via the pet card's #dec-editor
@@ -242,6 +342,21 @@ function buildPrompt(decision: LoopDecision, mode: "dry" | "run"): string {
       d.body ?? "",
     );
   }
+  // IM reply (Telegram / Feishu / Lark / WeChat / QQ / DingTalk) has no
+  // subject line — inject only the body verbatim so the agent sends the
+  // user's edited message unchanged instead of re-drafting via the LLM.
+  if (decision.action?.kind === "im_reply" && decision.context?.draft) {
+    const d = decision.context.draft as {
+      subject?: string | null;
+      body?: string;
+    };
+    parts.push(
+      "",
+      "User-edited draft — send this body verbatim, do NOT redraft:",
+      "",
+      d.body ?? "",
+    );
+  }
   if (mode === "dry") {
     parts.push(
       "",
@@ -263,6 +378,14 @@ export interface RunResult {
   decision: LoopDecision | null;
   result?: unknown;
   error?: string;
+  /**
+   * #358 — structured execution verdict for the action API + UI. Present
+   * for `run` and `dry` paths; absent for dismiss / promote because they
+   * don't execute anything. Persisted on the decision via `decisions.moveTo`
+   * / `decisions.update` and re-exposed to the caller so the web UI can
+   * render the verdict without re-reading the decision.
+   */
+  execution?: LoopDecisionExecution;
 }
 
 /**
@@ -285,6 +408,22 @@ export async function runDecision(
       decision: dec,
       error: `not pending (${dec.status})`,
     };
+  }
+
+  // #359 — readiness is an execution gate. A `not_actionable` decision (e.g.
+  // an event you own with no other guests) must never perform an external
+  // write. Dry runs stay allowed so the user can still inspect the plan.
+  if (!opts.dry) {
+    const readiness = deriveReadiness(dec);
+    if (readiness.status === "not_actionable") {
+      log(`run ${dec.id} blocked: not_actionable`);
+      return {
+        ok: false,
+        status: "pending",
+        decision: dec,
+        error: "not_actionable: no action needed for this decision",
+      };
+    }
   }
 
   const url = resolveNativeAgentUrl();
@@ -314,13 +453,71 @@ export async function runDecision(
     return { ok: true, status: "pending", decision: dec, result: res.result };
   }
 
-  const moved = decisions.moveTo(
-    dec.id,
-    "done",
-    res.result ?? res.text ?? null,
+  // #358 — parse the agent's verdict. The transport completed, but the
+  // user-visible action may not have. Switching on `execution.outcome` lets
+  // us (a) keep blocked/failed decisions in `pending` so the user can
+  // retry, (b) move executed/skipped into `done` with the verdict attached,
+  // and (c) populate `last_error` for blocked/failed so the UI can render a
+  // "Last attempt failed: <reason>" banner without re-reading the decision.
+  const execution = parseExecutionOutcome(
+    res.result,
+    res.text ?? "",
+    Array.isArray(res.events) ? res.events : [],
   );
-  log(`run ${dec.id} → done`);
-  return { ok: true, status: "done", decision: moved, result: res.result };
+  const outcome: ExecutionOutcome = execution.outcome;
+
+  if (outcome === "executed" || outcome === "skipped") {
+    // Persist the structured verdict onto the decision and move it to
+    // `done`. `moveTo` takes a `result` payload — pass the structured
+    // execution so on-disk records carry the evidence forward. The
+    // execution field is also exposed via `decision.execution` for
+    // downstream surfaces that want richer rendering than `result`.
+    const moved = decisions.moveTo(dec.id, "done", {
+      execution,
+      // Keep the agent's plain-text summary as `result` so the existing
+      // Result panel keeps working without a special case.
+      summary: res.text ?? null,
+      outcome,
+      ...(res.result &&
+      typeof res.result === "object" &&
+      !("summary" in (res.result as Record<string, unknown>))
+        ? { agentPayload: res.result }
+        : {}),
+    });
+    // Stamp `execution` on the moved record too — `moveTo`'s `result`
+    // payload is the canonical field, but `decision.execution` is what the
+    // web UI keys on. The store layer merges via `{...d[src][idx], ...}`,
+    // so a follow-up update is the safest way to attach a new top-level
+    // field without rewriting the bucket layout.
+    const withExecution = decisions.update(dec.id, { execution });
+    log(`run ${dec.id} → done (${outcome})`);
+    return {
+      ok: true,
+      status: "done",
+      decision: withExecution ?? moved,
+      result: res.result,
+      execution,
+    };
+  }
+
+  // blocked / failed — keep the decision in `pending` so the user can
+  // retry. Store the verdict + `last_error` so the existing banner picks
+  // up the structured reason on the next render.
+  const blockedCtx = {
+    ...(dec.context ?? {}),
+    last_error: execution.reason ?? `Last attempt ${outcome}.`,
+  };
+  decisions.update(dec.id, { context: blockedCtx, execution });
+  log(
+    `run ${dec.id} → pending (${outcome}: ${execution.reason ?? "no reason"})`,
+  );
+  return {
+    ok: false,
+    status: "pending",
+    decision: decisions.get(dec.id) ?? dec,
+    error: execution.reason ?? `agent returned outcome=${outcome}`,
+    execution,
+  };
 }
 
 export async function dismissDecision(
@@ -397,4 +594,90 @@ export async function promoteDecision(id: string): Promise<RunResult> {
   const moved = decisions.moveTo(dec.id, "pending");
   log(`promote ${dec.id} → pending`);
   return { ok: true, status: "pending", decision: moved ?? next };
+}
+
+/**
+ * #363 / #364 — RSVP-specific run path. Pre-sets `action.params.response`
+ * to the user's intent (`"accepted"` / `"declined"` / `"tentative"`),
+ * persists the mutation so the on-disk record carries the user's
+ * choice, then delegates to `runDecision` for the agent + verdict
+ * pipeline (#358). The runner refuses on non-RSVP decisions and on
+ * non-pending decisions so a card in `done` / `dismissed` never silently
+ * re-executes.
+ *
+ * `tentative` was added in the #364 follow-up so the floating pet
+ * card's `rsvp_maybe` verb can route through the same RSVP-specific
+ * runner. Without it the Maybe button would have to fall back to the
+ * generic `runDecision` path, which leaves `action.params.response`
+ * unset and lets the prompt re-ask the user mid-flow. `buildPrompt`
+ * only reads `params.response` as a string (line ~254), so the new
+ * variant works end-to-end without touching the prompt template.
+ */
+export async function runDecisionWithRsvpResponse(
+  id: string,
+  response: "accepted" | "declined" | "tentative",
+): Promise<RunResult> {
+  const dec = decisions.get(id);
+  if (!dec)
+    return { ok: false, status: "pending", decision: null, error: "not found" };
+  if (dec.type !== "rsvp") {
+    return {
+      ok: false,
+      status: dec.status,
+      decision: dec,
+      error: `rsvp action on non-rsvp decision (${dec.type})`,
+    };
+  }
+  if (dec.status !== "pending") {
+    return {
+      ok: false,
+      status: dec.status,
+      decision: dec,
+      error: `not pending (${dec.status})`,
+    };
+  }
+  // #363 — overwrite the response param via the same immutable update
+  // helper the inline editor uses, so the audit trail reflects the user's
+  // exact intent at the moment they tapped Attend / Decline / Maybe.
+  const existingParams =
+    dec.action && typeof dec.action.params === "object" && dec.action.params
+      ? dec.action.params
+      : {};
+  decisions.update(dec.id, {
+    action: {
+      ...dec.action,
+      params: { ...existingParams, response },
+    },
+  });
+  return runDecision(dec.id);
+}
+
+/**
+ * #358 — re-queue a `done` decision so the user can retry after a skipped
+ * or failed execution. Mirrors `promoteDecision` for dismissed rows but
+ * also clears the structured `execution` field so the card re-renders as a
+ * fresh pending card (no stale "Ran at <ts>" footer). Idempotent.
+ */
+export async function resurrectDecision(id: string): Promise<RunResult> {
+  const dec = decisions.get(id);
+  if (!dec)
+    return { ok: false, status: "pending", decision: null, error: "not found" };
+  if (dec.status !== "done") {
+    return {
+      ok: false,
+      status: dec.status,
+      decision: dec,
+      error: "not done",
+    };
+  }
+  // Clear execution + completed_at before the move so the pending card has
+  // a clean shape. `decisions.update` is fine in the current bucket; the
+  // moveTo below takes the cleaned record with it.
+  decisions.update(dec.id, {
+    completed_at: undefined,
+    execution: undefined,
+  });
+  const moved = decisions.moveTo(dec.id, "pending");
+  log(`resurrect ${dec.id} → pending`);
+  return { ok: true, status: "pending", decision: moved };
 }

@@ -1,28 +1,50 @@
 ---
 title: "Automation"
-description: "Have AI automatically execute tasks at specified times"
+description: "Schedule recurring work — daily digests, weekly reports, deadline reminders — that OpenLoomi runs for you on a cron, interval, or one-time schedule."
 icon: "FaClock"
 ---
 
 # Automation
 
-Have AI automatically execute tasks at specified times. Set it and forget it—OpenLoomi will handle the rest.
+Have AI automatically execute tasks at specified times. Set it and forget it — OpenLoomi handles the rest.
 
-> ⚠️ **Important**: All conversations and data are stored **locally** on your device. The app must remain **open** for the automation feature.
+<Callout type="warning">
+  **Local-only execution.** All conversations and data are stored **locally** on
+  your device. The app must remain **open** for scheduled tasks to run.
+</Callout>
 
-> 📍 **This page is the conceptual overview.** For the full reference on creating, scheduling, approving, and auditing jobs — including cron syntax, timezone handling, retries, dry-run, and execution history — see [Tasks](/docs/scheduled-jobs). That page is the authoritative documentation for the automation feature; this one stays focused on what automation is and how it fits next to Loop.
->
-> **Automation vs Loop:** [Loop](/docs/loop) is the _judgement_ engine that watches your day and proposes decision cards. Automation / Tasks are the _executor_ — you write a prompt, pick a schedule, and OpenLoomi runs it. Both are powered by the same Scheduled Jobs runtime under the hood.
+<Callout type="info">
+  **Automation vs Loop:** [Loop](/docs/loop) is the _judgement_ engine that
+  watches your day and proposes decision cards. Automation is the _executor_ —
+  you write a prompt, pick a schedule, and OpenLoomi runs it. Both are powered
+  by the same Scheduled Jobs runtime under the hood.
+</Callout>
+
+## Goal
+
+By the end of this page you should be able to:
+
+1. Create a scheduled task with a cron, interval, or one-time schedule.
+2. Audit past executions and enable/disable tasks without losing their history.
+3. Combine Automation with [Skills](/docs/skills) to turn it into a cross-app executor.
+
+## Before you begin
+
+- OpenLoomi Desktop is installed and the local API on `127.0.0.1:3414` (or `:3515`) is reachable.
+- At least one AI provider is configured — see [Getting Started](/docs/getting-started).
+- The desktop app stays open during the scheduled run window.
 
 ---
 
 ## Overview
 
-Scheduled Tasks allow you to automate recurring work:
+Automation is the executor half of OpenLoomi's proactive layer: while [Loop](/docs/loop) watches your day and proposes actions, Automation lets you write a prompt, attach a schedule, and let OpenLoomi run it on its own.
 
 <p align="center">
   <img src="/img/openloomi/agents.png" alt="OpenLoomi Automation" />
 </p>
+
+Common uses:
 
 - Daily news summaries
 - Weekly report generation
@@ -31,24 +53,24 @@ Scheduled Tasks allow you to automate recurring work:
 
 ---
 
-## How to Create
+## How to create
 
-1. Go to the **Agent** page, then select **Automation**
-2. Click **"New Task"**
-3. Fill in task information:
+1. Go to the **Agent** page, then select **Automation**.
+2. Click **"New Task"**.
+3. Fill in the task fields:
 
-| Field            | Description          | Example                                           |
-| ---------------- | -------------------- | ------------------------------------------------- |
-| Task Name        | Give the task a name | "Daily News Summary"                              |
-| Task Description | Tell AI what to do   | "Search latest AI news, summarize and send to me" |
-| Schedule Type    | Cron/Interval/Once   | `0 9 * * *` = 9am daily                           |
-| Timezone         | Time reference       | "Asia/Shanghai"                                   |
+| Field            | Description            | Example                                           |
+| ---------------- | ---------------------- | ------------------------------------------------- |
+| Task Name        | Give the task a name   | "Daily News Summary"                              |
+| Task Description | Tell AI what to do     | "Search latest AI news, summarize and send to me" |
+| Schedule Type    | Cron / Interval / Once | `0 9 * * *` = 9am daily                           |
+| Timezone         | Time reference         | "Asia/Shanghai"                                   |
 
 ---
 
-## Schedule Types
+## Schedule types
 
-### Cron Expression
+### Cron expression
 
 Use standard cron syntax for flexible scheduling:
 
@@ -64,7 +86,7 @@ Run every X minutes/hours:
 - Every 2 hours
 - Every 6 hours
 
-### One-Time
+### One-time
 
 Run once at a specific time:
 
@@ -73,47 +95,47 @@ Run once at a specific time:
 
 ---
 
-## Manage Tasks
+## Manage tasks
 
-### View Tasks
+### View tasks
 
-- See all your scheduled tasks in one place
-- View task status (enabled/disabled)
-- See next scheduled run time
+- See all your scheduled tasks in one place.
+- View task status (enabled/disabled).
+- See next scheduled run time.
 
-The calendar view displays all your scheduled tasks in a visual timeline, making it easy to track when tasks are set to execute:
+The calendar view displays all your scheduled tasks in a visual timeline, making it easy to track when tasks are set to execute.
 
-### Task Actions
+### Task actions
 
-- **Enable/Disable** — Turn tasks on or off
-- **Run Now** — Execute immediately without waiting
-- **View History** — See past execution results
-- **Edit** — Modify task configuration
-- **Delete** — Remove a task
+- **Enable / Disable** — Turn tasks on or off.
+- **Run Now** — Execute immediately without waiting.
+- **View History** — See past execution results.
+- **Edit** — Modify task configuration.
+- **Delete** — Remove a task.
 
-### Execution History
+### Execution history
 
-- View all past executions
-- See success/failure status
-- Review output logs
+- View all past executions.
+- See success/failure status.
+- Review output logs.
 
 ---
 
-## Example Use Cases
+## Example use cases
 
-### Daily News Summary
+### Daily news summary
 
 > **Task**: "Search latest AI news, summarize top 5 stories and email to me"
 >
 > **Schedule**: Every morning at 8am
 
-### Weekly Report
+### Weekly report
 
 > **Task**: "Generate weekly report on all project progress"
 >
 > **Schedule**: Every Friday at 5pm
 
-### Periodic Reminder
+### Periodic reminder
 
 > **Task**: "Check calendar for upcoming meetings, remind me 15 minutes before"
 >
@@ -123,7 +145,26 @@ The calendar view displays all your scheduled tasks in a visual timeline, making
 
 ## Tips
 
-- Start with simple tasks to test the system
-- Use descriptive task names for easy management
-- Check execution history regularly to verify tasks run correctly
-- Combine with [Skills](/docs/skills) for powerful automations
+- Start with simple tasks to test the system.
+- Use descriptive task names for easy management.
+- Check execution history regularly to verify tasks run correctly.
+- Combine with [Skills](/docs/skills) for powerful automations.
+
+## Verify
+
+- **Cron tasks**: confirm the first run hits within the next minute boundary and the calendar view shows the new entry.
+- **Interval tasks**: confirm the task appears with `Next run` recalculated based on the interval.
+- **One-time tasks**: confirm the task disappears from the active list after firing.
+
+## Troubleshooting
+
+- **Task didn't fire.** Make sure the desktop app was open at the scheduled time and your laptop wasn't sleeping; macOS may suspend background processes.
+- **Wrong timezone.** Re-edit the task and pick the timezone you actually live in — cron expressions are evaluated in the task's timezone, not your system clock.
+- **"Run Now" shows an empty output.** Check Execution History for the error message and your AI provider's credentials.
+
+## Related
+
+- [Loop](/docs/loop) — the judgement engine that proposes decision cards
+- [Skills](/docs/skills) — extend automation with reusable prompts
+- [Connectors](/docs/connectors) — let automation act across Gmail, Slack, GitHub, Linear
+- [Getting Started](/docs/getting-started) — install + first run

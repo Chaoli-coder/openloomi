@@ -76,6 +76,11 @@ Close the main OpenLoomi window and Loomi doesn't disappear. It shrinks into the
 
 Loomi isn't a one-way notifier. It responds to a handful of gestures:
 
+<img
+  src="/img/openloomi/loomi-pet.gif"
+  alt="Loomi pet animations — idle, presenting, sleeping and other gestures"
+/>
+
 | Gesture                | How                               | What Happens                                                                                         |
 | ---------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Tap a bubble**       | Click the bubble next to Loomi    | Opens the matching detail view — a [Chat](/docs/chat) thread for emails, a calendar card for invites |
@@ -88,7 +93,134 @@ If you don't want to be interrupted in a moment — say, during a demo — right
 
 ---
 
+## 🃏 Decision Cards You Can See
+
+Loomi bubbles whatever Loop decides. Here's the full catalog of card types currently shipping — built-in types plus two representative custom examples — and what each one looks like when it lands in your queue. Every card arrives with the same four-button tray (Approve / Edit Draft / Later / Skip); only the type, label, and confidence differ.
+
+### Built-in card types
+
+#### `email_reply`
+
+Inbound email from someone on your **important contacts** list, with an action keyword in the subject or body ("RSVP", "please confirm", "reply by Friday"), past your usual reply window. Loop drafts a reply on your behalf.
+
+<img
+  src="/img/openloomi/plugins/claude/22-loop-draft-reply.png"
+  alt="Loop decision card — EMAIL_REPLY for a Q3 OKR status email, with Subject and Body pre-filled"
+/>
+
+#### `im_reply`
+
+DM from a contact inside one of your connected messaging apps (Telegram / WhatsApp / iMessage / Lark / QQ) that you haven't responded to. Loop drafts a reply that matches your tone, drawing on prior conversation history from memory.
+
+<img
+  src="/img/openloomi/plugins/claude/15-loop-im-reply.png"
+  alt="Loop decision card — IM_REPLY for an Alice follow-up, marked Outbound and Approve / Edit Draft / Later / Skip"
+/>
+
+#### `review_pr`
+
+Open GitHub PRs where you're a reviewer and the author has pinged you. Loop summarises the diff, the linked issue, and your last open question on the thread before you click through.
+
+<img
+  src="/img/openloomi/plugins/claude/24-loop-review-pr.png"
+  alt="Loop decision card — REVIEW_PR for PR #220 'compose lifestyle image prompts'"
+/>
+
+#### `linear_review`
+
+Linear tickets where you're a reviewer, a status change was made, or `@-OpenLoomi` was set. Loop pulls the issue body, recent comments, and related PRs into the card preview.
+
+<img
+  src="/img/openloomi/plugins/claude/17-loop-linear-review.png"
+  alt="Loop decision card — LINEAR_REVIEW for LIN-1234 'pet bubble drag-and-drop' with priority and confidence"
+/>
+
+#### `requirement_synthesis`
+
+Several tagged PRs/issues mention the same theme ("v0.9 launch", "classifier-rules UX"). Loop clusters them into one synthesis card so a single Approve produces a cross-cutting spec, roadmap delta, or migration note.
+
+<img
+  src="/img/openloomi/plugins/claude/18-loop-requirement-synthesis.png"
+  alt="Loop decision card — REQUIREMENT_SYNTHESIS rolling 14 PRs/issues tagged loop/v0.9 into one narrative"
+/>
+
+#### `release_plan`
+
+Multiple `requirements_synthesis` cards converge on the same release window. Loop promotes them into a release plan card — features, breaking changes, rollout order, owners — ready to paste into your changelog or release thread.
+
+<img
+  src="/img/openloomi/plugins/claude/19-loop-release-plan.png"
+  alt="Loop decision card — RELEASE_PLAN 'classifier-rules UX + custom channels'"
+/>
+
+#### `contact_update`
+
+People on your important-contacts list had a public signal — promotion, new role, link in bio, publication. Loop matches it to the existing `people/<name>.md` memory file and proposes a contact-card update.
+
+<img
+  src="/img/openloomi/plugins/claude/20-loop-contact-update.png"
+  alt="Loop decision card — CONTACT_UPDATE for Sarah Chen's new 'Head of Product' role"
+/>
+
+#### `doc_update`
+
+A memory-tracked document (a wiki page, a project Notion page, a runbook in your vault) hasn't been touched in N days and now has new context to add. Loop proposes the doc edit so stale docs can't drift.
+
+<img
+  src="/img/openloomi/plugins/claude/21-loop-doc-update.png"
+  alt="Loop decision card — DOC_UPDATE for docs/getting-started.md flagged 42 days stale"
+/>
+
+#### `todo`
+
+Anything that doesn't fit the typed actions above — a voice memo, a screenshot, a bookmarked article — is bucketed into a `todo`. Loop writes the card so you can act later; the source is preserved in the payload for one-tap retrieval.
+
+<img
+  src="/img/openloomi/plugins/claude/25-loop-todo.png"
+  alt="Loop decision card — TODO for issue #382 'historical RSVPs misclassified'"
+/>
+
+#### `digest` (QUIET)
+
+A noise-only day — 6 GitHub notifications, 3 low-priority Slack threads — would normally surface as 9 separate cards. Loop instead rolls them into a single `digest` card. It counts toward nothing, flags as QUIET, and never turns red.
+
+<img
+  src="/img/openloomi/plugins/claude/26-loop-digest.png"
+  alt="Loop decision card — DIGEST (QUIET) consolidating 8 GitHub notifications into one bucket"
+/>
+
+### Custom card types (representative examples)
+
+These are the two custom types our own team uses day-to-day — both registered through the same `openloomi-loop` skill without writing any new code. The full extension walkthrough lives in the next section.
+
+#### `birthday_wish`
+
+Pulled from the memory `people/<name>.md` files — the date-of-birth field. Pinned to fire 0 days out via a classifier rule (`signal.type eq "contact_birthday" and signal.payload.daysUntilNext eq 0`). Loomi bubbles the card before 9 AM so you don't miss it.
+
+<img
+  src="/img/openloomi/loop/birthday-wish-card.png"
+  alt="Custom birthday_wish decision card with cake icon, forced by the force_birthday_today classifier rule"
+/>
+
+#### `mom_imessage_alert`
+
+A custom type wired to incoming iMessage from a specific contact (your mom's number). High priority, no dry-run — the rule sets `confidence ≥ 0.95` and the card lands with the red ⚠ OUTBOUND label before anything else in the queue.
+
+<img
+  src="/img/openloomi/plugins/claude/28-loop-mom-imessage-alert.png"
+  alt="Custom MOM_IMESSAGE_ALERT decision card, high-priority todo with OUTBOUND warning"
+/>
+
+> 💡 **Every card goes through the same four-gesture flow** — Approve / Edit Draft / Later / Skip. What changes between cards is the badge, the label, the action kind, and the suggested next step. To add your own types, jump to [Custom Decision Types & Signal Sources](#custom-decision-types--signal-sources) below.
+
+---
+
 ## Custom Decision Types & Signal Sources
+
+<img
+  src="/img/openloomi/loop/birthday-wish-card.png"
+  alt="A custom birthday_wish decision card — routed by the force_birthday_today classifier rule with the cake icon"
+/>
 
 Loomi is the messenger for [Loop](/docs/loop), so anything Loop can decide, Loomi can surface — including the **custom decision types and custom signal channels** you register yourself. If you don't know what those are yet, read the [Extending Loop section](/docs/loop#extending-loop-custom-types--channels) first; the short version is that you can teach Loop new kinds of cards (e.g. a `birthday_wish` type for birthday greetings) and new sources of signals (e.g. Stripe charges) without writing any code.
 
@@ -96,7 +228,7 @@ Loomi is the messenger for [Loop](/docs/loop), so anything Loop can decide, Loom
 
 When you register a custom decision type, three things change at the next tick:
 
-1. **The classifier sees it.** Loop's prompt now lists your custom ids (e.g. `birthday_wish`) alongside the built-ins, with the `actionKind` each one maps to. The agent can therefore pick them the same way it picks `draft_reply` or `slack_reply`.
+1. **The classifier sees it.** Loop's prompt now lists your custom ids (e.g. `birthday_wish`) alongside the built-ins, with the `actionKind` each one maps to. The agent can therefore pick them the same way it picks `email_reply` or `im_reply`.
 2. **The card UI renders it.** Decision cards in the main OpenLoomi window, in the pet card, and in the bubble that Loomi shows use the `label` and `icon` you provided — so a `birthday_wish` card arrives with `ri-cake-2-line` and the text **"Birthday wish"** instead of falling back to a generic icon.
 3. **The bubble tone adapts.** When Loomi shows a one-liner summary for that card, it pulls from your custom `label` rather than a hard-coded string. The same applies to the chip Loomi tints on the card list.
 
@@ -112,19 +244,19 @@ Concretely, the next tick will:
 - Stamp every record with the channel's `signalType` (e.g. `stripe_charge`) so the classifier and the audit log know which source produced it.
 - Inject a "User-defined channels" block into the tick prompt describing the `payloadShape` — so the agent knows what `stripe_charge` records look like and can prioritise them correctly.
 
-From Loomi's perspective, a `stripe_charge` decision card and a `draft_reply` decision card are the same kind of thing — both become a bubble with the same gestures, the same Approve / Edit Draft / Later / Skip actions, and the same audit-trail treatment.
+From Loomi's perspective, a `stripe_charge` decision card and a `email_reply` decision card are the same kind of thing — both become a bubble with the same gestures, the same Approve / Edit Draft / Later / Skip actions, and the same audit-trail treatment.
 
 > 💡 **Loomi stays out of the extension API.** The `openloomi-loop` skill talks to Loop's local JSON registries (`~/.openloomi/loop/custom-types.json` and `custom-channels.json`); Loomi just observes. You never need to teach the pet anything — it inherits.
 
 ### How classifier rules pin what Loomi surfaces
 
-Beyond teaching Loop **new kinds** of cards and **new sources** of signals, you can also pin the routing for specific signal patterns — so the LLM can't drift and accidentally surface a generic `draft_reply` card when you really wanted a `birthday_wish` card. That's what [classifier rules](/docs/loop#register-a-deterministic-classifier-rule) do. A rule is a tiny safe AST of field predicates (`signal.type eq "contact_birthday"` and `signal.payload.daysUntilNext eq 0`, for example) plus a `then` block that forces `type` / `actionKind` / a confidence floor.
+Beyond teaching Loop **new kinds** of cards and **new sources** of signals, you can also pin the routing for specific signal patterns — so the LLM can't drift and accidentally surface a generic `email_reply` card when you really wanted a `birthday_wish` card. That's what [classifier rules](/docs/loop#register-a-deterministic-classifier-rule) do. A rule is a tiny safe AST of field predicates (`signal.type eq "contact_birthday"` and `signal.payload.daysUntilNext eq 0`, for example) plus a `then` block that forces `type` / `actionKind` / a confidence floor.
 
 Because the rule is enforced **twice** (in the prompt the agent sees _and_ in a server-side post-processor that rewrites the persisted decision), Loomi ends up bubbling the card you actually wanted. A typical example:
 
 | Without a rule                                                                                         | With a rule                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Same-day birthday signal → LLM classifies as `draft_reply` (generic) → Loomi shows an email-reply card | Same signal → rule pins `type=birthday_wish`, `actionKind=email_reply`, `confidence ≥ 0.9` → Loomi shows a `🎂 Birthday wish` card with your custom icon |
+| Same-day birthday signal → LLM classifies as `email_reply` (generic) → Loomi shows an email-reply card | Same signal → rule pins `type=birthday_wish`, `actionKind=email_reply`, `confidence ≥ 0.9` → Loomi shows a `🎂 Birthday wish` card with your custom icon |
 
 A rule with `then.type = "noop"` does the opposite — it **suppresses** the decision entirely so the bubble never appears for that pattern. Rules live in `~/.openloomi/loop/classifier-rules.json`, are registered via the same [`openloomi-loop`](/docs/skills#openloomi-loop) skill (or the `PUT /api/loop/classifier-rules` HTTP endpoint), and apply on the very next tick — no rebuild needed. There's also a `POST /api/loop/classifier-rules/dry-run` endpoint that previews which rules would fire on a given signal, so you can iterate on the AST before going live.
 
@@ -182,6 +314,11 @@ Yes. Loomi ships with two built-in themes (`fox` and `capybara`) and a fully fil
 
 - **Switch theme** — right-click Loomi → `Theme → Capybara` (or `Fox`).
 - **Custom themes** — drop a folder at `~/.openloomi/pet-custom/<name>/` with PNGs named `idle.png`, `thinking.png`, `presenting.png`, etc. Loomi auto-discovers them and they appear in the theme picker.
+
+  ![OpenLoomi main window running a custom kawaii pet theme — sidebar avatar and the inline `thinking` sprite are both a tabby cat, drawn from `~/.openloomi/pet-custom/kawaii/`](/img/openloomi/pet/loomi-pet-kawaii.png)
+
+  > The kawaii theme above was registered by dropping three PNGs (`idle.png`, `thinking.png`, `presenting.png`) at `~/.openloomi/pet-custom/kawaii/`. Both the sidebar avatar **and** the chat-side `thinking` sprite repainted in under 250 ms with no app restart — that's the config watcher doing its job.
+
 - **Per-state overrides** — edit `~/.openloomi/pet-config.json` to point individual states at any PNG on disk:
 
   ```json
@@ -198,6 +335,50 @@ Yes. Loomi ships with two built-in themes (`fox` and `capybara`) and a fully fil
 - **External edits auto-apply** — the config watcher listens for changes and re-paints within ~250 ms; no app restart needed.
 - **`presenting` state** — when a decision moves to `done` and you haven't reviewed it yet, Loomi shows the `presenting` sprite + bubble ("All wrapped up — ready when you are"). Click the bubble to flip back to `happy`.
 
+### Can the right-click menu start agentic tasks?
+
+Yes. Loomi's right-click menu can show local prompt action shortcuts from `~/.openloomi/pet-actions.json`. Each shortcut is a named task prompt that routes into the normal Loomi agent runtime.
+
+![Loomi Pet right-click menu with configured prompt actions](/img/openloomi/pet/pet-actions-context-menu.png)
+
+The flow is:
+
+1. Define one or more enabled prompt actions in `~/.openloomi/pet-actions.json`.
+2. Right-click Loomi and choose the named shortcut from the **Actions** section.
+3. The widget emits only the selected action id.
+4. Rust re-reads the local config, resolves the matching prompt, frames it as an agent task, and sends it into chat.
+5. The normal Loomi agent runtime decides which available tools, skills, connectors, or local helpers to use.
+6. Privacy-sensitive or destructive actions should still require confirmation inside the agent workflow.
+
+The widget only receives `id` and `label`; the prompt body stays host-side until Rust resolves the selected `actionId`.
+
+Local prompt actions are configured in `~/.openloomi/pet-actions.json`:
+
+```json
+{
+  "version": 1,
+  "enabled": true,
+  "actions": [
+    {
+      "id": "daily-brief",
+      "label": "Prepare daily brief",
+      "prompt": "Prepare a concise daily brief from my available OpenLoomi context. Include open priorities, recent updates, and anything that needs my attention. Ask before contacting external services or changing data.",
+      "enabled": true
+    },
+    {
+      "id": "workspace-summary",
+      "label": "Summarize workspace",
+      "prompt": "Summarize the current workspace or active project context. Identify the main goal, recent changes, blockers, and the next safe steps. Do not modify files unless I explicitly confirm.",
+      "enabled": true
+    }
+  ]
+}
+```
+
+The supported schema is intentionally small: top-level `version` and `enabled`, plus up to 8 valid `actions[]` entries with `id`, `label`, `prompt`, and optional `enabled`. Invalid ids, empty labels, empty prompts, duplicates, disabled actions, and target-only entries are ignored. Missing, empty, malformed, disabled, or unsupported configs render no prompt shortcuts; the Pet falls back to the base menu: **Open Loomi / Settings / Theme / Quit**.
+
+If a shortcut needs real external capability, expose it to the agent through an appropriate tool surface such as a skill, connector, MCP server, CLI, OpenLoomi API route, or trusted loopback helper. The right-click menu itself does not execute shell commands and does not directly call remote services. Fields like `target`, `url`, `method`, or command strings are not executable action definitions for this menu.
+
 ### What's the difference between the Attention Agent and Loop?
 
 - **The Attention Agent** is the **little pet on your desktop**, gently reminding you in your line of sight.
@@ -212,3 +393,15 @@ Yes. When you register a [custom decision type](/docs/loop#extending-loop-custom
 ### Can I force specific signal patterns to always become a specific card?
 
 Yes — register a [classifier rule](/docs/loop#register-a-deterministic-classifier-rule) and Loop will pin the routing for that pattern. The card Loomi bubbles is then deterministic, regardless of how the underlying LLM interprets the signal. Rules support a `noop` action too, which suppresses the decision so the bubble never appears for that pattern. See the [How classifier rules pin what Loomi surfaces](#how-classifier-rules-pin-what-loomi-surfaces) section above for the example and the safe-AST predicate syntax.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the judgement engine that produces Decision Cards
+- [Memory](/docs/memory) — supplies the important-contacts filter and project context
+- [Connectors](/docs/connectors) — which platforms feed the Attention Agent
+- [Chat](/docs/chat) — where bubbles deep-link into a full thread
+- [Plugins](/docs/plugins) — drive Loomi from Claude Code or Codex CLI
+- [Privacy & Security](/docs/privacy-security) — what the Attention Agent does and doesn't see
+- [Glossary](/docs/glossary) — clear up the Attention Agent vs Loomi vs Pet vs Fox naming

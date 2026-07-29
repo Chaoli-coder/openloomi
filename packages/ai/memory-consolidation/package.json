@@ -1,6 +1,6 @@
 {
   "name": "@openloomi/memory-consolidation",
-  "version": "0.7.6",
+  "version": "0.8.8",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,6 +11,7 @@
     "./evidence-cluster": "./src/evidence-cluster.ts",
     "./graph-contracts": "./src/graph-contracts.ts",
     "./graph-evolution": "./src/graph-evolution.ts",
+    "./graph-lifecycle": "./src/graph-lifecycle.ts",
     "./graph-retrieval": "./src/graph-retrieval.ts",
     "./governance": "./src/governance.ts",
     "./persistence": "./src/persistence.ts",

@@ -416,3 +416,26 @@ Once disconnected:
 - You can reconnect at any time by repeating the connection steps
 
 > 💡 **Tip**: Before disconnecting, review what data has been synced in the **Privacy & Security** settings.
+
+---
+
+## Verify
+
+- The connector appears in **Settings → Connectors** with status **Connected**.
+- For bot-token connectors (Feishu, DingTalk, QQ), sending a message to your bot returns a reply within a few seconds.
+- For QR / phone connectors (Telegram, WhatsApp), sending a message to your own Saved Messages / 自聊 returns an AI reply in the same thread.
+
+## Troubleshooting
+
+- **Authorization never completes.** The Composio flow opens in your system browser — if popup blockers are blocking it, allow popups for `127.0.0.1` (or your configured callback host).
+- **Bot doesn't appear in group chat.** Confirm the bot was added to the group and that your message @mentions it; the bot only reacts to mentions, not to all group traffic.
+- **iMessage connector stays disconnected.** Verify Full Disk Access and Automation permissions in System Settings → Privacy & Security, then restart the app.
+- **Gmail / Outlook rejects the password.** App Passwords require 2-Step Verification to be enabled on the Google / Microsoft account first.
+
+## Related
+
+- [Messaging Apps](/docs/messaging-apps) — how the messaging connectors differ from Composio flows
+- [Loop](/docs/loop) — consumes Signals produced by these connectors
+- [Memory](/docs/memory) — where connector messages land after ingestion
+- [Privacy & Security](/docs/privacy-security) — what data each connector can see
+- [Getting Started](/docs/getting-started) — install + first run

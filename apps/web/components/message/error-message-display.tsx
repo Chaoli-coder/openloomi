@@ -3,19 +3,133 @@
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { RemixIcon } from "@/components/remix-icon";
+import { Button } from "@/components/ui/button";
+import type { ChatMessage } from "@openloomi/shared";
+import type { UseChatHelpers } from "@ai-sdk/react";
 
 interface ErrorMessageDisplayProps {
   errorContent: string;
+  /**
+   * Optional continuation payload extracted from a `data-interruption` part
+   * that follows this error part. When present, we render an explicit
+   * Continue action that reuses the preserved workspace instead of the
+   * misleading "system will automatically retry" wording. See issue #356.
+   */
+  interruption?: {
+    reason: "timeout";
+    timeoutMs?: number;
+    workspacePath?: string;
+    completedArtifacts: string[];
+    canResume: boolean;
+  };
+  /** Chat helper exposed by the surrounding message tree so Continue can
+   *  inject the continuation prompt into the existing conversation. */
+  sendMessage?: UseChatHelpers<ChatMessage>["sendMessage"];
 }
 
 export function ErrorMessageDisplay({
   errorContent,
+  interruption,
+  sendMessage,
 }: ErrorMessageDisplayProps) {
   const { t } = useTranslation();
+
+  // Provider-timeout interruption path — render an actionable card that
+  // explicitly invites the user to continue the task. We deliberately do not
+  // route this through the generic timeout branch below because that branch
+  // promises "the system will automatically retry", which is not true: the
+  // provider was killed mid-tool-call and there is no auto-retry scheduled.
+  if (interruption?.canResume) {
+    const artifactCount = interruption.completedArtifacts.length;
+    return (
+      <div
+        className={cn(
+          "my-3 rounded-lg border p-4",
+          "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200",
+        )}
+      >
+        <div className="flex items-start gap-3">
+          <RemixIcon name="timer" size="size-5" className="shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <h4 className="font-semibold text-sm">
+              {t("auth.errors.agentTimeoutError.title")}
+            </h4>
+            <p className="text-xs opacity-90">{errorContent}</p>
+            {artifactCount > 0 ? (
+              <p className="text-xs opacity-80">
+                {t("auth.errors.agentTimeoutError.completedArtifacts", {
+                  count: artifactCount,
+                })}
+              </p>
+            ) : null}
+            {sendMessage ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-1"
+                onClick={() => {
+                  const artifactList =
+                    interruption.completedArtifacts.length > 0
+                      ? `\n\nFiles preserved from the previous run:\n${interruption.completedArtifacts
+                          .map((path) => `- ${path}`)
+                          .join("\n")}`
+                      : "";
+                  const workspaceHint = interruption.workspacePath
+                    ? `\n\nWorkspace: ${interruption.workspacePath}`
+                    : "";
+                  sendMessage({
+                    role: "user",
+                    parts: [
+                      {
+                        type: "text",
+                        text: `Continue the previous task from where it was interrupted. Reuse any files already created — do not restart from scratch.${workspaceHint}${artifactList}`,
+                      },
+                    ],
+                  });
+                }}
+              >
+                {t("auth.errors.agentTimeoutError.continueAction")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Parse error content and provide friendly messages
   const getErrorDetails = (error: string) => {
     const lowerError = error.toLowerCase();
+
+    // Codex CLI/model compatibility errors are already actionable at the
+    // provider boundary. Preserve that original diagnostic instead of
+    // replacing it with the generic "try again later" copy (issue #437).
+    if (
+      lowerError.includes("codex") &&
+      (lowerError.includes("requires a newer") ||
+        lowerError.includes("not available in codex cli") ||
+        lowerError.includes("not supported") ||
+        lowerError.includes("unsupported model") ||
+        lowerError.includes("upgrade codex") ||
+        lowerError.includes("codex cli executable not found") ||
+        lowerError.includes("codex cli version check"))
+    ) {
+      const suggestions = t(
+        "common.errors.codexCompatibilityError.suggestions",
+        {
+          returnObjects: true,
+        },
+      );
+      return {
+        title: t("common.errors.codexCompatibilityError.title"),
+        description: sanitizeErrorForDisplay(error),
+        suggestions: Array.isArray(suggestions) ? suggestions : [],
+        icon: "alert_triangle",
+        severity: "warning" as const,
+        showCodexDocs: true,
+      };
+    }
 
     // IMPROVED: Handle special error markers from Claude Extension
     // Process crash errors (OOM, killed) - retryable
@@ -308,13 +422,7 @@ export function ErrorMessageDisplay({
       returnObjects: true,
     });
     // Remove log file paths and other sensitive info from error message
-    const cleanError = error
-      .replace(/\/Users\/[^/]+\/\.openloomi\/logs\/[^\s]+/g, "")
-      .replace(/\/home\/[^/]+\/\.openloomi\/logs\/[^\s]+/g, "")
-      .replace(/http:\/\/[^/]+\/[^/]+\/Users\/[^/]+\/[^\s]+/g, "")
-      .replace(/__CUSTOM_API_ERROR__\|[^|]+/g, "")
-      .trim()
-      .replace(/\s+/g, " ");
+    const cleanError = sanitizeErrorForDisplay(error);
     return {
       title: t("common.errors.genericError.title"),
       description: cleanError || t("common.errors.genericError.description"),
@@ -348,8 +456,12 @@ export function ErrorMessageDisplay({
           className="shrink-0 mt-0.5"
         />
 
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-sm mb-1">{errorDetails.title}</h4>
+        <div className="flex-1 min-w-0 space-y-2">
+          <h4 className="font-semibold text-sm">{errorDetails.title}</h4>
+
+          <p className="text-xs opacity-90 whitespace-pre-wrap break-words">
+            {errorDetails.description}
+          </p>
 
           {/* Suggestions */}
           {errorDetails.suggestions.length > 0 && (
@@ -364,8 +476,31 @@ export function ErrorMessageDisplay({
               </ul>
             </div>
           )}
+
+          {"showCodexDocs" in errorDetails &&
+          errorDetails.showCodexDocs === true ? (
+            <Button asChild size="sm" variant="outline">
+              <a
+                href="https://github.com/openai/codex#installation"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("common.errors.codexCompatibilityError.docsAction")}
+              </a>
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+function sanitizeErrorForDisplay(error: string): string {
+  return error
+    .replace(/\/Users\/[^/]+\/\.openloomi\/logs\/[^\s]+/g, "")
+    .replace(/\/home\/[^/]+\/\.openloomi\/logs\/[^\s]+/g, "")
+    .replace(/http:\/\/[^/]+\/[^/]+\/Users\/[^/]+\/[^\s]+/g, "")
+    .replace(/__CUSTOM_API_ERROR__\|[^|]+/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
 }

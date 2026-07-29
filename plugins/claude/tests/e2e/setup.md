@@ -10,12 +10,12 @@ paths; this file covers the surface area that needs Claude Code itself
 1. Node 18+ is on `PATH` (`node --version`).
 2. Claude Code is installed. The e2e checklist is load-channel-agnostic;
    pick whichever matches your situation:
-   - **GitHub install (recommended, works today)** — two-step inside any session:
+   - **GitHub install** — two slash commands, entered one at a time inside any session:
      ```text
-     /plugin marketplace add melandlabs/openloomi
+     /plugin marketplace add melandlabs/plugins
      /plugin install openloomi
      ```
-     To point at a fork / branch, use `melyourname/openloomi@branch-name`.
+     Slash commands can't be chained with `&&`; paste each line, hit enter, wait for the prompt to clear, then paste the next. To point at a fork / branch, use `melyourname/plugins@branch-name` (the slim marketplace repository).
    - **Built-in marketplace install** (after publish): `/plugin install openloomi` (short name, no `marketplace add` step needed).
    - **Dev from source** (only if you're editing the plugin): `claude --plugin-dir /Users/timi/codes/openloomi/plugins/claude`
 3. OpenLoomi Desktop is **not** installed yet (for the missing-install test).
@@ -35,15 +35,18 @@ paths; this file covers the surface area that needs Claude Code itself
 - [ ] `/openloomi:setup` reports `OPENLOOMI_NOT_INSTALLED` and prompts y/N.
 - [ ] Accepting y launches the appropriate platform install script
       (`setup.macos.sh`, `setup.linux.sh`, or `setup.windows.ps1`).
-- [ ] After install completes, `/openloomi:setup` proceeds to login
-      and `sync-claude-env`.
-- [ ] With `ANTHROPIC_API_KEY` set, `sync-claude-env` reports
-      `{ok: true, provider: "anthropic_compatible", model: "<name>"}` —
-      the key value never appears in the response.
-- [ ] If the OpenLoomi runtime does not yet expose the provider config
-      endpoint, the bridge reports `code: "ENDPOINT_MISSING"` with the
-      OpenLoomi Desktop Preferences deep link — and the plugin remains
-      usable for the other commands.
+- [ ] After install completes, `/openloomi:setup` reaches
+      `setup: ready` without prompting the user for an API key when either
+      the selected non-Claude runtime is ready or the local `claude` CLI
+      auth probe succeeds.
+- [ ] With `defaultAgent: "codex"` (or another supported non-Claude runtime)
+      and no per-user provider row, `setup-status` reports
+      `executionProviderReady: true`, `ready: true`, and never requests
+      Claude login or an Anthropic-compatible API key.
+- [ ] If Claude is selected but no native Claude runtime is authenticated and
+      no per-user provider row exists, `setup-status` reports
+      `reason: "AI_PROVIDER_REQUIRED"` and `nextAction: "configure_ai_provider"`
+      — the user is pointed at the OpenLoomi Desktop Preferences page.
 
 ## C. Already-installed detection
 
@@ -108,13 +111,12 @@ With hooks installed:
 
 ## I. Secrets contract
 
-- [ ] With `ANTHROPIC_API_KEY=sk-leaktest-xxxxx`, run
-      `/openloomi:setup`. Capture bridge stdout to a file.
-- [ ] `grep "sk-leaktest"` on the captured file MUST return zero
-      matches.
-- [ ] Confirm the unit test
-      `tests/bridge.test.mjs > "secrets contract: sync-claude-env never echoes key value"`
-      passes.
+- [ ] The bridge never reads AI provider API keys from the environment.
+- [ ] The bridge's stdout contains no AI provider key names or values
+      even when the user has them in their shell.
+- [ ] `/openloomi:setup` reaches `ready` purely on runtime-detected
+      `claude` CLI auth; the plugin does not POST env-var values to any
+      `/api/preferences/ai` endpoint.
 
 ## J. Plugin validation
 

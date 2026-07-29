@@ -15,12 +15,15 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use serde::Deserialize;
+use std::fs;
+
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Listener, Manager};
 
 use super::{
     handle_runtime_state_event, last_review_seen_secs_ago, publish_baseline_state,
-    set_pending_decision_count, PET_BUBBLE_LABEL, PET_CARD_LABEL, PET_LABEL,
+    publish_baseline_state_with_meta, set_pending_decision_count, PET_BUBBLE_LABEL, PET_CARD_LABEL,
+    PET_LABEL,
 };
 
 const POLL_MS: u64 = 2000;
@@ -142,6 +145,14 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
     // opened the card.
     let mut last_emitted_state: Option<String> = None;
     let mut last_reviewed_recently: bool = false;
+    // #365 — track whether the previous poll had at least one pending
+    // decision so we can detect the non-empty → empty transition and
+    // auto-hide the card window. Without this flag the watcher would
+    // have to remember the bucket count across iterations (which it
+    // already does via `last_buckets`), but a separate boolean keeps
+    // the intent obvious at the call site and gives the unit test a
+    // dedicated seam (`should_hide_when_pending_emptied`).
+    let mut previously_had_pending: bool = false;
 
     // One-shot first-run detection: if `~/.openloomi/loop/decisions.json`
     // doesn't exist AND the runtime isn't configured (no env-level
@@ -160,7 +171,7 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
     // resets it to `false` after the user saves a key, so a later
     // reset (or a future watcher restart) can re-trigger the hint.
     std::thread::sleep(Duration::from_millis(FIRST_RUN_SETUP_DELAY_MS));
-    if !*setup_emitted.lock().unwrap() && !path.exists() && !has_anthropic_env_key() {
+    if !*setup_emitted.lock().unwrap() && !path.exists() && !is_runtime_ready() {
         publish_baseline_state(
             app,
             "needs-setup",
@@ -214,7 +225,15 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
             .filter_map(|d| d.completed_at.clone().or(d.created_at.clone()))
             .max();
         let needs_user = snap.pending.iter().any(|d| d.needs_user.unwrap_or(false));
-        let top_pending_id = snap.pending.first().and_then(|d| d.id.clone());
+        // SP-1 — project `pending` through `rank_pending` once so the
+        // bubble/card surfaces the most-urgent card, not the FIFO
+        // first. The same ranked slice backs the top-id snapshot, the
+        // `loop:decision` emit, and the top-5 pending list. We clone
+        // to a `Vec<&DecItem>` (cheap — pointer array) because the
+        // rest of the watch loop needs to keep using `snap` for the
+        // terminal-transition diff and other reads.
+        let ranked = rank_pending(&snap.pending);
+        let top_pending_id = ranked.first().and_then(|d| d.id.clone());
         // Snapshot the current pending ids so the transition-diff below
         // can compare against the previous poll. We clone rather than
         // borrow because `snap.pending` is moved through several helpers
@@ -222,15 +241,28 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
         // may consume) and a small Vec<String> is cheap.
         let current_pending_ids: Vec<String> =
             snap.pending.iter().filter_map(|d| d.id.clone()).collect();
+        // #365 — hoist the boolean the auto-hide check needs so we
+        // don't borrow `current_pending_ids` after it's moved into
+        // `last_pending_ids` further down (the move is required by
+        // existing transition-diff helpers and isn't worth
+        // reordering). Mirrors the `top_changed` hoist above.
+        let current_has_pending = !current_pending_ids.is_empty();
 
         let reviewed_recently = last_review_seen_secs_ago()
             .map(|s| s < PRESENTING_REVIEW_GRACE_SECS)
             .unwrap_or(false);
         let (state, monologue) = map_state_to_pet(&snap, needs_user, reviewed_recently);
 
+        // #364 follow-up — capture the top-id transition here, BEFORE
+        // `last_top_id` is overwritten below. The B2 card auto-show
+        // branch (further down) reuses this so `show_card_window`
+        // fires only on a *new* top pending, not on every data_changed
+        // poll. Without the hoist the comparison would read the
+        // freshly-updated `last_top_id` and never trigger.
+        let top_changed = top_pending_id != last_top_id;
         let data_changed = buckets != last_buckets
             || newest_ts != last_decision_ts
-            || top_pending_id != last_top_id
+            || top_changed
             || current_pending_ids != last_pending_ids;
         if !should_emit_update(
             data_changed,
@@ -264,7 +296,17 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
         // Runtime chat activity temporarily wins over this baseline.
         // The coordinator still records every watcher update and restores
         // the latest one after the chat UI releases its override.
-        publish_baseline_state(app, state, monologue);
+        //
+        // #365 — fold `enabled` (loop on/off) + the current poll
+        // timestamp into the payload so the widget's idle pill and
+        // the card's compact view can read both from a single
+        // `loop:state` subscription. `enabled` is a static hint for
+        // now (the watcher only runs when loop is conceptually live);
+        // the timestamp gives the card a stable "last checked" line
+        // that ticks every poll.
+        let last_polled_at = current_poll_timestamp_iso();
+        let loop_enabled = is_loop_enabled();
+        publish_baseline_state_with_meta(app, state, monologue, loop_enabled, Some(last_polled_at));
 
         // B2: keep bubble + card windows in sync. The bubble auto-shows
         // when the latest pending decision changes and auto-hides when
@@ -276,20 +318,40 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
         // (so the user immediately sees the decision + connector dots)
         // and otherwise leave its visibility alone (the × / click
         // handlers drive subsequent toggles).
-        if let Some(top) = snap.pending.first() {
+        if let Some(top) = ranked.first() {
             let decision_payload = build_decision_payload(top);
             let _ = app.emit_to(PET_BUBBLE_LABEL, "loop:decision", decision_payload.clone());
             let _ = app.emit_to(PET_CARD_LABEL, "loop:decision", decision_payload);
-            // Auto-show the card so the connector strip is visible
-            // without an extra click. `show_card_window` is idempotent
-            // and re-focuses the existing window. We do this BEFORE
-            // showing the bubble so the bubble's `set_focus` call ends
-            // up as the last focus event — which is what determines the
-            // z-order in the OS float layer (both windows are
-            // `always_on_top(true)`). If we did it in the opposite
-            // order, the card would end up on top of the bubble and
-            // obscure the speech text.
-            super::show_card_window(app);
+            // #364 follow-up — gate the card auto-show on a *change* in
+            // the top pending id, not on every data_changed poll. The
+            // previous code unconditionally called `show_card_window`
+            // here, which meant the watcher re-showed the same card
+            // every 2 s as long as anything in decisions.json moved
+            // (bucket counts, completed_at, lower-priority pending
+            // inserts, etc.). That fights the user's × click and
+            // produces the visual loop reported in #364: dismiss → card
+            // pops back up before the watcher sees the dismiss.
+            //
+            // We emit the payload (so the bubble text tracks the top
+            // pending) and we still auto-show on the *transition*
+            // (last_top_id was None / a different id). After that, the
+            // × / click handlers own visibility — exactly what the
+            // comment above says we wanted all along. `top_changed`
+            // was captured above (before `last_top_id` was overwritten)
+            // so the comparison sees the previous poll's value, not
+            // the freshly-cloned current one.
+            if top_changed {
+                // Auto-show the card so the connector strip is visible
+                // without an extra click. `show_card_window` is idempotent
+                // and re-focuses the existing window. We do this BEFORE
+                // showing the bubble so the bubble's `set_focus` call ends
+                // up as the last focus event — which is what determines the
+                // z-order in the OS float layer (both windows are
+                // `always_on_top(true)`). If we did it in the opposite
+                // order, the card would end up on top of the bubble and
+                // obscure the speech text.
+                super::show_card_window(app);
+            }
             // Show the bubble as a transient notification on top of
             // the card. The bubble's JS owns the auto-dismiss
             // lifecycle — see `loomi-bubble.html::scheduleAutoHide`.
@@ -301,7 +363,29 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
             if let Some(w) = app.get_webview_window(PET_BUBBLE_LABEL) {
                 let _ = w.hide();
             }
+            // #365 — auto-hide the card when the pending bucket drains.
+            // Mirrors the existing `top_changed`-gated auto-show path:
+            // the bubble was always auto-hidden on the same transition
+            // (see the `if let Some(w) = ...` block above), but the
+            // card had no symmetric drain handler — once opened it
+            // would stay open until the user clicked × or the layout
+            // decided to swap. With this branch, dismissing the last
+            // pending decision closes the card within one watcher
+            // poll (≤ 2 s), so the desktop never carries a stale
+            // decision card when there's nothing left to act on.
+            if should_hide_when_pending_emptied(snap.pending.is_empty(), previously_had_pending) {
+                log::info!(
+                    "[loop-pet] pending drained from non-empty to empty — auto-hiding card window"
+                );
+                super::hide_card_window(app);
+            }
         }
+        // Track whether the current poll had pending decisions so the
+        // *next* iteration's drain branch can compare against it. We
+        // update this AFTER the auto-hide check above so the helper
+        // sees the previous poll's state, not the freshly-snapshotted
+        // one (mirrors the `top_changed` hoist earlier in this loop).
+        previously_had_pending = current_has_pending;
 
         // Drain terminal transitions: for each id that left `pending`
         // between polls, emit a `loop:decision` payload that carries
@@ -324,8 +408,11 @@ fn watch_loop(app: &AppHandle, setup_emitted: std::sync::Arc<std::sync::Mutex<bo
         // (Form 1) and any layout that wants to render a queue can
         // subscribe. Top 5 entries is plenty for a 360×420 window —
         // the user can dismiss / open to see more in the dashboard.
+        // SP-1 — slice the *ranked* projection, not the raw FIFO
+        // `snap.pending`, so the top-5 list mirrors the bubble's
+        // #1 (P0 surfaces first).
         let pending_list = serde_json::json!({
-            "items": snap.pending.iter().take(5).map(|d| {
+            "items": ranked.iter().take(5).map(|d| {
                 serde_json::json!({
                     "id": d.id,
                     "type": d.r#type,
@@ -355,6 +442,63 @@ fn should_emit_update(
     data_changed || review_changed || last_state != Some(next_state)
 }
 
+/// Resolve the card-display priority for a single decision.
+///
+/// SP-2 contract: priority is TS-precomputed and persisted at
+/// `context.priority` (set by `lib/loop/store.ts::normalizeDecision`
+/// using `readiness.ts::derivePriority`). The pet/bubble/card chip
+/// reads that precomputed value, NOT `confidence` — the historical
+/// `confidence → priority` mapping in this file violated the
+/// `derivePriority — never derived from confidence` invariant and
+/// made `quiet_digest` (confidence 0.9) surface as p0. The TS layer
+/// is the single source of truth; Rust is a pure reader.
+///
+/// Returns the literal "p0" | "p1" | "p2" string for direct
+/// `serde_json::json!({...})` interpolation. Falls back to "p2"
+/// when the field is missing, malformed, or carries an unknown
+/// value — under-prioritising a card the TS layer never classified
+/// is the safer failure mode (the user can still open the card and
+/// see it in the queue).
+fn dec_priority(d: &DecItem) -> &'static str {
+    let raw = d
+        .context
+        .as_ref()
+        .and_then(|c| c.extra.get("priority"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_ascii_lowercase());
+    match raw.as_deref() {
+        Some("p0") => "p0",
+        Some("p1") => "p1",
+        _ => "p2",
+    }
+}
+
+/// Numeric rank used by the `rank_pending` projector: p0=0 (top),
+/// p1=1, p2=2 (default fallback). The watcher sorts by this rank
+/// so the bubble surfaces the most urgent card, not the oldest
+/// arrival — see SP-1.
+fn priority_rank(d: &DecItem) -> u8 {
+    match dec_priority(d) {
+        "p0" => 0,
+        "p1" => 1,
+        _ => 2,
+    }
+}
+
+/// Project `snap.pending` into priority order. SP-1 contract: the
+/// pet bubble + card must show the most-urgent pending card, not
+/// the FIFO first. TS pre-computes the priority and persists it;
+/// Rust re-projects the snapshot on every poll (2 s, cheap — just
+/// pointer Vec<u8>+&DecItem). Returns borrowed references so the
+/// caller can keep using `snap` for the rest of the watch loop
+/// without cloning every item.
+fn rank_pending(items: &[DecItem]) -> Vec<&DecItem> {
+    let mut indexed: Vec<(u8, &DecItem)> =
+        items.iter().map(|d| (priority_rank(d), d)).collect();
+    indexed.sort_by_key(|(rank, _)| *rank);
+    indexed.into_iter().map(|(_, d)| d).collect()
+}
+
 /// Build the `loop:decision` payload that the bubble + card webviews
 /// listen for. Mirrors the shape consumed by `loomi-bubble.html` /
 /// `loomi-card.html` (id, type, title, dialogue, priority, confidence,
@@ -365,14 +509,11 @@ fn should_emit_update(
 /// "no payload yet" from "still pending". Note: `confidence` is
 /// emitted as-is (`Option<f32>` → `null` if missing) so the card's
 /// meta-node row can render `Math.round(c * 100) + "%"` directly;
-/// priority is derived from the same value upstream so card and
-/// payload stay consistent.
+/// priority comes from `context.priority` (TS-precomputed via
+/// `readiness.ts::derivePriority`) so the chip and the dashboard's
+/// `derivePriority(decision)` always render the same bucket.
 fn build_decision_payload(d: &DecItem) -> serde_json::Value {
-    let priority = match d.confidence {
-        Some(c) if c >= 0.85 => "p0",
-        Some(c) if c >= 0.75 => "p1",
-        _ => "p2",
-    };
+    let priority = dec_priority(d);
     let (source, source_type, source_ts) = match d.source_signal.as_ref() {
         Some(s) => (Some(s.source.clone()), Some(s.r#type.clone()), s.ts.clone()),
         None => (None, None, None),
@@ -387,6 +528,8 @@ fn build_decision_payload(d: &DecItem) -> serde_json::Value {
         "source": source,
         "source_type": source_type,
         "source_ts": source_ts,
+        "action": d.action,
+        "context": d.context,
         "why": d.context.as_ref().and_then(|c| c.why.clone()).unwrap_or_default(),
         "status": "pending",
     })
@@ -461,6 +604,79 @@ fn diff_completed_ids(
         out.push((id.clone(), status.to_string()));
     }
     out
+}
+
+/// #365 — decide whether the watcher should auto-hide the card window
+/// on this poll. We hide exactly when the bucket transitions from
+/// non-empty to empty; staying empty or staying non-empty leaves the
+/// existing visibility decisions alone (the user's × / click handlers
+/// remain in charge).
+///
+/// `current_empty` is the freshly-snapshotted `snap.pending.is_empty()`
+/// value; `previous_had_pending` is the boolean we tracked from the
+/// previous poll. Both are passed by value so the function is pure
+/// and trivially unit-testable.
+fn should_hide_when_pending_emptied(current_empty: bool, previous_had_pending: bool) -> bool {
+    current_empty && previous_had_pending
+}
+
+/// #365 — render the current poll moment as an ISO-8601 / RFC3339
+/// timestamp (UTC, second precision). Reused on every watcher emit so
+/// the card's "Last checked: just now" line ticks once per poll cycle.
+/// We avoid pulling in `chrono` for this single field — the format is
+/// a fixed width and `days_from_civil` (already in this file for
+/// `is_just_now`) gives us the inverse conversion cheaply.
+fn current_poll_timestamp_iso() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let days = secs / 86_400;
+    let secs_in_day = secs % 86_400;
+    let hour = (secs_in_day / 3600) as u32;
+    let minute = ((secs_in_day % 3600) / 60) as u32;
+    let second = (secs_in_day % 60) as u32;
+    // Howard Hinnant's `civil_from_days` (https://howardhinnant.github.io/date_algorithms.html)
+    // — inverse of `days_from_civil`. Returns y/m/d for the given day
+    // count since 1970-01-01. Branch-light, no allocations.
+    let z = days + 719_468;
+    // `days` is a non-negative day count since the Unix epoch (we
+    // early-returned on the negative branch via the `unwrap_or(0)`
+    // above), so the `z >= 0` branch is the only one that ever
+    // fires. We keep the symmetric form for clarity but suppress
+    // the useless-comparison lint explicitly.
+    #[allow(unused_comparisons)]
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe as i64 + (era * 400) as i64;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+    let y = if m <= 2 { y + 1 } else { y };
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        y, m, d, hour, minute, second
+    )
+}
+
+/// #365 — whether the loop subsystem should report itself as enabled
+/// in the `loop:state` payload. The widget's idle pill colours its
+/// status dot green when this is `true` and grey when `false`. Today
+/// the watcher runs whenever the host process runs, so the answer is
+/// `true` unless the user explicitly disabled loop via the
+/// `OPENLOOMI_LOOP_ENABLED` env var (read "0" / "false" / "no" /
+/// case-insensitive variants as disabled). This keeps the integration
+/// testable from the shell without a DB round-trip.
+fn is_loop_enabled() -> bool {
+    let Ok(value) = std::env::var("OPENLOOMI_LOOP_ENABLED") else {
+        return true;
+    };
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "" | "0" | "false" | "no" | "off"
+    )
 }
 
 /// Resolve where the loop skill writes its decision JSON.
@@ -768,6 +984,8 @@ pub struct DecItem {
     #[serde(default)]
     pub source_signal: Option<SourceSignal>,
     #[serde(default)]
+    pub action: Option<DecAction>,
+    #[serde(default)]
     pub context: Option<DecContext>,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -780,7 +998,7 @@ pub struct DecItem {
     pub needs_user: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct SourceSignal {
     #[serde(default)]
     pub source: String,
@@ -790,10 +1008,20 @@ pub struct SourceSignal {
     pub ts: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
+pub struct DecAction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct DecContext {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Map a decision snapshot to `(pet_state, optional_monologue_hint)`.
@@ -921,33 +1149,66 @@ fn current_hour_local() -> u32 {
 }
 
 /// Whether the runtime already has a usable conversation-model
-/// configuration from the watcher's point of view. Mirrors the
-/// combined `defaultAgent` + `systemDefaults.anthropic_compatible.hasApiKey`
-/// gate on the JS side (see `apps/web/app/(chat)/api/preferences/ai/route.ts`
-/// and `apps/web/lib/ai/conversation-api-configuration.ts`). Used to decide
-/// whether the watcher should emit the `needs-setup` hint — if either an
-/// env key is set or the active agent runtime ships its own auth, the user
-/// is already configured and we stay silent. User-set DB keys aren't
-/// visible to the watcher; the pet card surfaces those via its own
-/// `apply()` flow.
-fn has_anthropic_env_key() -> bool {
-    // Non-claude runtimes (codex/opencode/hermes/openclaw) bring their own
-    // CLI auth, so an anthropic key is irrelevant. We still read the env
-    // var ourselves instead of shelling out because the watcher runs
-    // before the web server is reachable on first launch.
+/// configuration from the watcher's point of view.
+///
+/// Reads `~/.openloomi/loop/activation_state.json` (the JS-side
+/// `lib/loop/activation.ts` writes this on every refresh of
+/// `coreReady`). The watcher polls decisions/decisions-side files via
+/// mtime already, so adding JSON parsing here costs nothing and keeps
+/// the pet card / `needs-setup` hint in lockstep with the actual
+/// runtime.
+///
+/// `OPENLOOMI_AGENT_PROVIDER` is still consulted as a synchronous
+/// fallback: a non-Claude runtime (codex/opencode/hermes/openclaw) brings
+/// its own CLI auth and the activation_state file may not have been
+/// written yet on first launch (the watcher fires before the web
+/// server becomes reachable). All other readiness — including the
+/// AI-provider env-var shortcut a previous revision leaned on — is
+/// now the JS runtime's responsibility, never the watcher's.
+fn is_runtime_ready() -> bool {
     if let Ok(value) = std::env::var("OPENLOOMI_AGENT_PROVIDER") {
         let trimmed = value.trim();
         if !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("claude") {
             return true;
         }
     }
-    let set = |name: &str| {
-        std::env::var(name)
-            .ok()
-            .map(|v| !v.trim().is_empty())
-            .unwrap_or(false)
+    let home = match dirs_home() {
+        Some(h) => h,
+        None => return false,
     };
-    set("ANTHROPIC_API_KEY") || set("ANTHROPIC_AUTH_TOKEN")
+    let path = home
+        .join(".openloomi")
+        .join("loop")
+        .join("activation_state.json");
+    let bytes = match fs::read(&path) {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+    let parsed: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    parsed
+        .get("coreReady")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    // `dirs` is intentionally NOT a dep — we only need HOME / USERPROFILE
+    // for one file path, and the `home` crate would add a transitive
+    // dep for nothing else.
+    if let Ok(value) = std::env::var("HOME") {
+        if !value.trim().is_empty() {
+            return Some(PathBuf::from(value));
+        }
+    }
+    if let Ok(value) = std::env::var("USERPROFILE") {
+        if !value.trim().is_empty() {
+            return Some(PathBuf::from(value));
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -1053,11 +1314,12 @@ mod tests {
             pending: (0..pending)
                 .map(|i| DecItem {
                     id: Some(format!("dec_test_pending_{i}")),
-                    r#type: Some("draft_reply".into()),
+                    r#type: Some("email_reply".into()),
                     title: Some(format!("pending {i}")),
                     dialogue: None,
                     confidence: Some(0.8),
                     source_signal: None,
+                    action: None,
                     context: None,
                     created_at: Some(format!("2026-01-01T00:00:0{i}Z")),
                     completed_at: None,
@@ -1067,11 +1329,12 @@ mod tests {
             done: (0..done)
                 .map(|i| DecItem {
                     id: Some(format!("dec_test_done_{i}")),
-                    r#type: Some("draft_reply".into()),
+                    r#type: Some("email_reply".into()),
                     title: Some(format!("done {i}")),
                     dialogue: None,
                     confidence: Some(0.8),
                     source_signal: None,
+                    action: None,
                     context: None,
                     created_at: None,
                     completed_at: Some(format!("2026-01-01T00:00:0{i}Z")),
@@ -1081,11 +1344,12 @@ mod tests {
             dismissed: (0..dismissed)
                 .map(|i| DecItem {
                     id: Some(format!("dec_test_dismissed_{i}")),
-                    r#type: Some("draft_reply".into()),
+                    r#type: Some("email_reply".into()),
                     title: Some(format!("dismissed {i}")),
                     dialogue: None,
                     confidence: Some(0.8),
                     source_signal: None,
+                    action: None,
                     context: None,
                     created_at: Some(format!("2026-01-01T00:00:0{i}Z")),
                     completed_at: None,
@@ -1149,11 +1413,12 @@ mod tests {
             done: (0..done)
                 .map(|i| DecItem {
                     id: Some(format!("dec_test_done_{i}")),
-                    r#type: Some("draft_reply".into()),
+                    r#type: Some("email_reply".into()),
                     title: Some(format!("done {i}")),
                     dialogue: None,
                     confidence: Some(0.8),
                     source_signal: None,
+                    action: None,
                     context: None,
                     created_at: None,
                     completed_at: Some(completed_at.into()),
@@ -1250,11 +1515,12 @@ mod tests {
     fn dec_with_id(id: &str) -> DecItem {
         DecItem {
             id: Some(id.into()),
-            r#type: Some("draft_reply".into()),
+            r#type: Some("email_reply".into()),
             title: Some(format!("title {id}")),
             dialogue: Some("hello".into()),
             confidence: Some(0.8),
             source_signal: None,
+            action: None,
             context: None,
             created_at: None,
             completed_at: Some("2026-01-01T00:00:00Z".into()),
@@ -1282,10 +1548,11 @@ mod tests {
         // The card's meta-node row renders `Math.round(confidence * 100) +
         // "%"`. The top-pending emit (`loop:decision`) is the only event
         // that drives that row, so it must carry confidence too — the
-        // priority chip is derived from the same value upstream so the
-        // raw number on the card matches the chip. Without this test the
-        // field was forgotten and the card rendered "—" even for a
-        // decision with confidence=0.92 (bug surfaced via the
+        // priority chip is TS-precomputed (see `readiness.ts::derivePriority`)
+        // and stored at `context.priority`, so the raw number on the card
+        // matches the chip independently. Without this test the
+        // `confidence` field was forgotten and the card rendered "—"
+        // even for a decision with confidence=0.92 (bug surfaced via the
         // birthday_wish demo screenshot, 2026-07-14).
         let d = dec_with_id("dec_y");
         let v = build_decision_payload(&d);
@@ -1300,17 +1567,256 @@ mod tests {
             (0.0..=1.0).contains(&conf),
             "confidence must be in [0,1]; got {conf}"
         );
-        // The priority field is derived from confidence upstream, so the
-        // two values must agree on the chip bucket (0.92 → p0).
+        // SP-2: priority is TS-precomputed and persisted at
+        // `context.priority`. `build_decision_payload` reads that
+        // value verbatim, so a decision with no priority on disk
+        // falls back to p2 (the safer default — under-prioritising a
+        // card the TS layer never classified is preferable to the
+        // historical confidence-bucket mapping, which labelled
+        // `quiet_digest` (confidence 0.9, readiness=not_actionable)
+        // as p0). The dec_with_id helper above doesn't stamp
+        // `context.priority`, so the expected bucket is the p2
+        // fallback.
         let p = v.get("priority").and_then(|s| s.as_str()).unwrap_or("");
-        let expected = if conf >= 0.85 {
-            "p0"
-        } else if conf >= 0.75 {
-            "p1"
-        } else {
-            "p2"
+        assert_eq!(
+            p, "p2",
+            "priority must derive from context.priority (defaulting to p2 when absent)"
+        );
+    }
+
+    #[test]
+    fn build_decision_payload_reads_priority_from_context() {
+        // SP-2 contract: the chip on the pet/bubble/card always
+        // matches the TS-computed `derivePriority(decision)`. A
+        // decision with a high-confidence `quiet_digest` (which
+        // `readiness.ts` would resolve to P2 because readiness is
+        // `not_actionable`) MUST surface as p2 even though
+        // `confidence: 0.92` would have hit the old confidence
+        // bucket. This is the regression test for the priority
+        // invariant the old `match d.confidence` block violated.
+        let mut extra = serde_json::Map::new();
+        extra.insert("priority".into(), serde_json::json!("p0"));
+        extra.insert(
+            "deadlineAt".into(),
+            serde_json::json!("2030-01-01T00:00:00Z"),
+        );
+        let d_low_conf_p0 = DecItem {
+            id: Some("dec_low_conf_p0".into()),
+            r#type: Some("deadline_reminder".into()),
+            title: Some("Low confidence but urgent".into()),
+            dialogue: None,
+            // confidence 0.5 would have hit the p2 bucket under the
+            // old code; with context.priority = "p0" the new code
+            // honours the TS-computed value.
+            confidence: Some(0.5),
+            source_signal: None,
+            action: None,
+            context: Some(DecContext {
+                why: None,
+                extra,
+            }),
+            created_at: None,
+            completed_at: None,
+            needs_user: None,
         };
-        assert_eq!(p, expected, "priority must match confidence bucket");
+        let v = build_decision_payload(&d_low_conf_p0);
+        assert_eq!(
+            v.get("priority").and_then(|s| s.as_str()),
+            Some("p0"),
+            "context.priority must override any confidence-based bucket"
+        );
+
+        // Symmetric case: a high-confidence quiet_digest with
+        // context.priority = "p2" (readiness=not_actionable →
+        // derivePriority always P2) must surface as p2.
+        let mut extra2 = serde_json::Map::new();
+        extra2.insert("priority".into(), serde_json::json!("p2"));
+        let d_high_conf_p2 = DecItem {
+            id: Some("dec_quiet_digest".into()),
+            r#type: Some("quiet_digest".into()),
+            title: Some("AI news digest".into()),
+            dialogue: None,
+            confidence: Some(0.92),
+            source_signal: None,
+            action: None,
+            context: Some(DecContext {
+                why: None,
+                extra: extra2,
+            }),
+            created_at: None,
+            completed_at: None,
+            needs_user: None,
+        };
+        let v2 = build_decision_payload(&d_high_conf_p2);
+        assert_eq!(
+            v2.get("priority").and_then(|s| s.as_str()),
+            Some("p2"),
+            "quiet_digest (readiness=not_actionable) must always be p2"
+        );
+
+        // Garbage / missing values fall back to p2.
+        let mut extra3 = serde_json::Map::new();
+        extra3.insert("priority".into(), serde_json::json!("banana"));
+        let d_garbage = DecItem {
+            id: Some("dec_garbage".into()),
+            r#type: Some("todo".into()),
+            title: Some("garbage".into()),
+            dialogue: None,
+            confidence: Some(0.9),
+            source_signal: None,
+            action: None,
+            context: Some(DecContext {
+                why: None,
+                extra: extra3,
+            }),
+            created_at: None,
+            completed_at: None,
+            needs_user: None,
+        };
+        assert_eq!(
+            build_decision_payload(&d_garbage)
+                .get("priority")
+                .and_then(|s| s.as_str()),
+            Some("p2"),
+            "unknown priority values must fall back to p2"
+        );
+    }
+
+    #[test]
+    fn rank_pending_orders_by_priority_then_keeps_diversity() {
+        // SP-1 contract: the bubble + card must surface the most
+        // urgent pending card, not the FIFO first. `rank_pending`
+        // is the only sanctioned projection — every read of
+        // `snap.pending.first()` / `snap.pending.iter().take(5)`
+        // funnels through this helper.
+        let mk = |id: &str, prio: &str, conf: f32| DecItem {
+            id: Some(id.into()),
+            r#type: Some("todo".into()),
+            title: Some(id.into()),
+            dialogue: None,
+            confidence: Some(conf),
+            source_signal: None,
+            action: None,
+            context: Some(DecContext {
+                why: None,
+                extra: {
+                    let mut m = serde_json::Map::new();
+                    m.insert("priority".into(), serde_json::json!(prio));
+                    m
+                },
+            }),
+            created_at: None,
+            completed_at: None,
+            needs_user: None,
+        };
+        // P2 oldest, P1 middle, P0 newest — rank should put P0 first.
+        let items = vec![
+            mk("dec_p2", "p2", 0.9),
+            mk("dec_p1", "p1", 0.8),
+            mk("dec_p0", "p0", 0.7),
+        ];
+        let ranked = rank_pending(&items);
+        let ids: Vec<&str> = ranked.iter().filter_map(|d| d.id.as_deref()).collect();
+        assert_eq!(ids, vec!["dec_p0", "dec_p1", "dec_p2"]);
+
+        // Two P0 + one P2: P0s first (stable order preserved among
+        // the tied bucket), P2 last.
+        let items2 = vec![
+            mk("dec_p2_again", "p2", 0.9),
+            mk("dec_p0_a", "p0", 0.7),
+            mk("dec_p0_b", "p0", 0.7),
+        ];
+        let ranked2 = rank_pending(&items2);
+        let ids2: Vec<&str> = ranked2.iter().filter_map(|d| d.id.as_deref()).collect();
+        assert_eq!(ids2, vec!["dec_p0_a", "dec_p0_b", "dec_p2_again"]);
+
+        // Missing / invalid priority falls back to p2.
+        let items3 = vec![
+            DecItem {
+                id: Some("dec_unclassified".into()),
+                r#type: Some("todo".into()),
+                title: Some("unclassified".into()),
+                dialogue: None,
+                confidence: Some(0.5),
+                source_signal: None,
+                action: None,
+                context: None,
+                created_at: None,
+                completed_at: None,
+                needs_user: None,
+            },
+            mk("dec_p0_only", "p0", 0.7),
+        ];
+        let ranked3 = rank_pending(&items3);
+        let ids3: Vec<&str> = ranked3.iter().filter_map(|d| d.id.as_deref()).collect();
+        assert_eq!(ids3, vec!["dec_p0_only", "dec_unclassified"]);
+
+        // Empty input → empty output.
+        let empty: Vec<DecItem> = vec![];
+        assert!(rank_pending(&empty).is_empty());
+    }
+
+    #[test]
+    fn build_decision_payload_preserves_quiet_digest_action_and_items() {
+        let mut extra = serde_json::Map::new();
+        extra.insert("module".into(), serde_json::json!("github-notifications"));
+        extra.insert(
+            "items".into(),
+            serde_json::json!([
+                {
+                    "repo": "melandlabs/openloomi",
+                    "title": "Issue 447 repro",
+                    "summary": "You were mentioned",
+                    "url": "https://github.com/melandlabs/openloomi/issues/447"
+                }
+            ]),
+        );
+        let d = DecItem {
+            id: Some("gh_digest_repro".into()),
+            r#type: Some("quiet_digest".into()),
+            title: Some("GitHub has 1 update".into()),
+            dialogue: Some(
+                "1 unread GitHub notification across 1 repo: melandlabs/openloomi.".into(),
+            ),
+            confidence: Some(0.9),
+            source_signal: None,
+            action: Some(DecAction {
+                kind: Some("quiet_digest".into()),
+                params: Some(serde_json::json!({
+                    "module": "github-notifications"
+                })),
+            }),
+            context: Some(DecContext {
+                why: Some(vec![
+                    "Grouped 1 passive GitHub notification into one read-only summary".into(),
+                ]),
+                extra,
+            }),
+            created_at: None,
+            completed_at: None,
+            needs_user: None,
+        };
+
+        let v = build_decision_payload(&d);
+        assert_eq!(
+            v.pointer("/action/params/module").and_then(|m| m.as_str()),
+            Some("github-notifications"),
+            "pet card payload must keep the quiet digest module"
+        );
+        assert_eq!(
+            v.pointer("/context/items/0/url").and_then(|u| u.as_str()),
+            Some("https://github.com/melandlabs/openloomi/issues/447"),
+            "pet card payload must keep GitHub digest items for navigation"
+        );
+        assert_eq!(
+            v.pointer("/context/items/0/title").and_then(|t| t.as_str()),
+            Some("Issue 447 repro")
+        );
+        assert_eq!(
+            v.get("why").and_then(|w| w.as_array()).map(|w| w.len()),
+            Some(1),
+            "legacy top-level why remains populated for old card code"
+        );
     }
 
     #[test]
@@ -1353,5 +1859,75 @@ mod tests {
         assert_eq!(py.get("status").and_then(|s| s.as_str()), Some("dismissed"));
         // Missing item → None rather than a half-formed payload.
         assert!(build_terminal_decision_payload("z", "done", &s).is_none());
+    }
+
+    // ----------------------------------------------------------------
+    // #365 — auto-hide seam + enriched-payload helpers. Pinned here so
+    // a future refactor of the watch loop can't quietly drop the
+    // pending-drained → hide_card_window transition.
+    // ----------------------------------------------------------------
+
+    #[test]
+    fn should_hide_only_on_drain_transition() {
+        // Drained transition: previously non-empty, now empty → hide.
+        assert!(should_hide_when_pending_emptied(true, true));
+        // Stayed empty across two polls → don't repeatedly hide.
+        assert!(!should_hide_when_pending_emptied(true, false));
+        // Stayed non-empty → leave card alone (user's × / click owns it).
+        assert!(!should_hide_when_pending_emptied(false, true));
+        // Cold boot: never had pending → no spurious hide on first poll.
+        assert!(!should_hide_when_pending_emptied(true, false));
+    }
+
+    #[test]
+    fn current_poll_timestamp_iso_is_well_formed() {
+        // The helper is best-effort; we just verify the shape so a
+        // future regression (e.g. accidental truncation) is caught by
+        // tests rather than silently breaking the card's "Last
+        // checked" line.
+        let s = current_poll_timestamp_iso();
+        assert_eq!(s.len(), 20, "expected `YYYY-MM-DDTHH:MM:SSZ`, got {s:?}");
+        assert!(s.ends_with('Z'), "expected UTC suffix, got {s:?}");
+        let bytes = s.as_bytes();
+        assert_eq!(bytes[4], b'-');
+        assert_eq!(bytes[7], b'-');
+        assert_eq!(bytes[10], b'T');
+        assert_eq!(bytes[13], b':');
+        assert_eq!(bytes[16], b':');
+    }
+
+    #[test]
+    fn loop_enabled_defaults_true_when_env_missing() {
+        // Remove the var so we test the documented default branch.
+        // `with_env` in `path_tests` already wraps this — we just
+        // call it directly here rather than creating a third env
+        // helper.
+        let saved = std::env::var_os("OPENLOOMI_LOOP_ENABLED");
+        std::env::remove_var("OPENLOOMI_LOOP_ENABLED");
+        assert!(is_loop_enabled());
+        // Defensive restore so the rest of the suite sees its prior
+        // value. `None` is the expected case (env var unset on a
+        // normal host) but we still want to round-trip cleanly.
+        if let Some(v) = saved {
+            std::env::set_var("OPENLOOMI_LOOP_ENABLED", v);
+        }
+    }
+
+    #[test]
+    fn loop_enabled_recognises_falsy_env_values() {
+        let saved = std::env::var_os("OPENLOOMI_LOOP_ENABLED");
+        for falsy in ["0", "false", "FALSE", "no", "off", "Off", ""] {
+            std::env::set_var("OPENLOOMI_LOOP_ENABLED", falsy);
+            assert!(!is_loop_enabled(), "value {falsy:?} should disable");
+        }
+        for truthy in ["1", "true", "yes", "on"] {
+            std::env::set_var("OPENLOOMI_LOOP_ENABLED", truthy);
+            assert!(is_loop_enabled(), "value {truthy:?} should enable");
+        }
+        if let Some(v) = saved {
+            std::env::set_var("OPENLOOMI_LOOP_ENABLED", v);
+        } else {
+            std::env::remove_var("OPENLOOMI_LOOP_ENABLED");
+        }
     }
 }

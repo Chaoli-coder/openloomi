@@ -1,10 +1,38 @@
 ---
 title: "Getting Started"
-description: "Download, connect your platforms, and let OpenLoomi start working for you — takes about 3 minutes"
+description: "Download OpenLoomi, configure an AI provider, and finish your first session — install takes about 3 minutes."
 icon: "FaRocket"
 ---
 
 # Getting Started
+
+This page walks you through your first 10 minutes with OpenLoomi — picking the install path that matches how you work, installing the binary, configuring an AI provider, and confirming a successful first run.
+
+## Goal
+
+By the end of this page you should have:
+
+1. OpenLoomi running on your machine (or wired into your existing agent shell).
+2. An AI provider configured so OpenLoomi can answer prompts.
+3. A clear "first success" — a connector, a memory write, or a Loop tick — depending on your path.
+
+## Choose a path
+
+| If you are…                            | First step                                                         | Next step                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| A new **desktop app** user             | [Download](#download) the installer for your OS                    | Finish [permissions](#permissions) and [AI configuration](#ai-configuration), then run a Loop tick |
+| A **Claude Code** developer            | Install the [Claude Code plugin](/docs/plugins/claude)             | Run `/openloomi:setup` and confirm the readiness table is `READY`                                  |
+| A **Codex CLI** developer              | Install the [Codex plugin](/docs/plugins/codex)                    | Run `@OpenLoomi Run first-use setup.` and verify the status block                                  |
+| Wiring a **runtime / API** integration | Pick a runtime in [Agent Runtimes](/docs/reference/agent-runtimes) | Configure the matching `OPENLOOMI_AGENT_*` environment variables                                   |
+
+## Before you begin
+
+- macOS 13+, Windows 10 (64-bit), or Ubuntu/Debian 20.04+ on x86_64 / ARM64.
+- 4 GB of RAM and ~500 MB of free disk space.
+- An internet connection for sync and messaging features.
+- An API key or local CLI auth for at least one supported AI provider — see [AI Configuration](#ai-configuration).
+
+---
 
 ## System Requirements
 
@@ -14,9 +42,12 @@ icon: "FaRocket"
 | **Windows** | Windows 10 (64-bit) or later                     | x86_64 / AMD64                       | 4 GB | 500 MB     |
 | **Linux**   | Ubuntu 20.04 / Debian 11 or later, or equivalent | x86_64 or ARM64                      | 4 GB | 500 MB     |
 
-> **Network:** Internet connection required for sync and messaging features.
->
-> **Linux only:** GTK and libnotify libraries are required (usually pre-installed on desktop Ubuntu/Debian systems).
+<Callout type="info">
+**Network:** Internet connection required for sync and messaging features.
+
+**Linux only:** GTK and libnotify libraries are required (usually pre-installed on desktop Ubuntu/Debian systems).
+
+</Callout>
 
 ---
 
@@ -26,8 +57,8 @@ icon: "FaRocket"
 
 | Option                                                                                                                                        | Notes                                                      |
 | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [Download .dmg installer (Apple Silicon)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_aarch64.dmg) | Recommended for M1/M2/M3/M4 Macs — double-click to install |
-| [Download .dmg installer (Intel)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_amd64.dmg)           | For Intel Macs                                             |
+| [Download .dmg installer (Apple Silicon)](https://github.com/melandlabs/openloomi/releases/download/v0.8.8/openloomi_0.8.8_macOS_aarch64.dmg) | Recommended for M1/M2/M3/M4 Macs — double-click to install |
+| [Download .dmg installer (Intel)](https://github.com/melandlabs/openloomi/releases/download/v0.8.8/openloomi_0.8.8_macOS_amd64.dmg)           | For Intel Macs                                             |
 | Homebrew                                                                                                                                      | For developers — see command below                         |
 
 ```bash
@@ -51,21 +82,25 @@ brew upgrade --cask openloomi
 
 | Option                                                                                                                              | Notes                                               |
 | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Download .deb package (x86_64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.deb)  | For x86_64 / AMD64 systems                          |
-| [Download .deb package (ARM64)](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.deb) | For ARM64 systems (e.g., Raspberry Pi, ARM servers) |
+| [Download .deb package (x86_64)](https://github.com/melandlabs/openloomi/releases/download/v0.8.8/openloomi_0.8.8_linux_amd64.deb)  | For x86_64 / AMD64 systems                          |
+| [Download .deb package (ARM64)](https://github.com/melandlabs/openloomi/releases/download/v0.8.8/openloomi_0.8.8_linux_aarch64.deb) | For ARM64 systems (e.g., Raspberry Pi, ARM servers) |
 
 ```bash
-sudo dpkg -i openloomi_0.7.5_linux_amd64.deb
+sudo dpkg -i openloomi_0.8.8_linux_amd64.deb
 sudo apt-get install -f
 
-# Fix resource path (required for v0.7.5 and earlier)
+# Fix resource path (required for v0.8.8 and earlier)
 sudo ln -sf /usr/lib/openloomi/_up_ /usr/bin/_up_
 
 # Start the application
 openloomi
 ```
 
-> **Note:** The symlink above is needed because of a known packaging issue where the binary looks for resources in `/usr/bin/_up_` instead of `/usr/lib/openloomi/_up_`. This will be fixed in a future release.
+<Callout type="info">
+  The symlink above is needed because of a known packaging issue where the
+  binary looks for resources in `/usr/bin/_up_` instead of
+  `/usr/lib/openloomi/_up_`. This will be fixed in a future release.
+</Callout>
 
 **Linux (Fedora/RHEL)**
 
@@ -85,14 +120,33 @@ openloomi
 
 | Option                                                                                                                        | Notes                                               |
 | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [Download .exe installer](https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_windows_amd64.exe) | Recommended — run the installer to set up OpenLoomi |
+| [Download .exe installer](https://github.com/melandlabs/openloomi/releases/download/v0.8.8/openloomi_0.8.8_windows_amd64.exe) | Recommended — run the installer to set up OpenLoomi |
 | Winget                                                                                                                        | Coming Soon                                         |
 
-> **Windows SmartScreen:** If Windows shows a warning when running the installer, click **"More info"** then **"Run anyway"**. This is normal — OpenLoomi is open-source and the code is publicly verifiable. You only need to do this once per machine.
->
-> **"Unable to Find Entry Point" / GetSystemTimePreciseAsFileTime error:** If you see an error about `GetSystemTimePreciseAsFileTime` not being found in `kernel32.dll`, your Windows version is too old. OpenLoomi requires **Windows 10 (build 1607 or later)** or **Windows 11**. Windows XP, Vista, 7, and 8/8.1 are not supported. To check your version, press `Win + R`, type `winver`, and press Enter — or go to **Settings > System > About**.
+<Callout type="warning">
+**Windows SmartScreen:** If Windows shows a warning when running the installer, click **"More info"** then **"Run anyway"**. This is normal — OpenLoomi is open-source and the code is publicly verifiable. You only need to do this once per machine.
+
+**"Unable to Find Entry Point" / GetSystemTimePreciseAsFileTime error:** If you see an error about `GetSystemTimePreciseAsFileTime` not being found in `kernel32.dll`, your Windows version is too old. OpenLoomi requires **Windows 10 (build 1607 or later)** or **Windows 11**. Windows XP, Vista, 7, and 8/8.1 are not supported. To check your version, press `Win + R`, type `winver`, and press Enter — or go to **Settings > System > About**.
+
+</Callout>
 
 [View all releases →](https://github.com/melandlabs/openloomi/releases)
+
+---
+
+## Use as a Plugin (For Claude Code / Codex Users)
+
+Don't want to install the desktop app? OpenLoomi also ships as official marketplace plugins that turn your existing agent (Claude Code or Codex CLI) into a front-end for the local OpenLoomi runtime.
+
+| Agent       | Install                                                                                       | First-run setup                   |
+| ----------- | --------------------------------------------------------------------------------------------- | --------------------------------- |
+| Claude Code | `/plugin marketplace add melandlabs/plugins`<br />`/plugin install openloomi`                 | `/openloomi:setup`                |
+| Codex CLI   | `codex plugin marketplace add melandlabs/plugins`<br />`codex plugin add openloomi@openloomi` | `@OpenLoomi Run first-use setup.` |
+
+For full documentation, see the plugin docs:
+
+- [Claude Code Plugin](/docs/plugins/claude)
+- [Codex Plugin](/docs/plugins/codex)
 
 ---
 
@@ -132,7 +186,7 @@ No special permissions are required on Linux. OpenLoomi uses the standard deskto
 
 ## AI Configuration
 
-When you start OpenLoomi for the first time, you'll be guided through the [Onboarding](/docs/onboarding) flow — pick an AI runtime, complete the conversation API setup, and select your account.
+When you start OpenLoomi for the first time, the desktop app walks you through picking an AI runtime and completing the conversation API setup.
 
 <div style={{ textAlign: "center" }}>
   <img src="/img/openloomi/onboarding.png" alt="OpenLoomi onboarding screen" />
@@ -190,6 +244,7 @@ OPENLOOMI_AGENT_OPENCLAW_TOKEN_FILE=/path/to/gateway.token
 # Codex
 OPENLOOMI_AGENT_PROVIDER=codex
 OPENLOOMI_AGENT_CODEX_COMMAND=codex
+# On macOS, run/execute maps workspace-write to danger-full-access.
 OPENLOOMI_AGENT_CODEX_SANDBOX=workspace-write
 ```
 
@@ -214,4 +269,33 @@ Edit `~/.claude/settings.json` to customize your environment:
 }
 ```
 
-> **Security:** Your API keys are stored locally in `~/.claude/settings.json`. Always keep your settings file private.
+<Callout type="warning">
+  **Security:** Your API keys are stored locally in `~/.claude/settings.json`.
+  Always keep your settings file private.
+</Callout>
+
+---
+
+## Verify
+
+After the desktop app starts and your AI provider is configured:
+
+1. The desktop window opens and shows your [Loop](/docs/loop) dashboard.
+2. The pet widget on the desktop reflects the `thinking` → `working` → `happy` cycle.
+3. Open the chat and ask "what did I work on yesterday?" — OpenLoomi should answer from your local [Memory](/docs/memory) instead of returning an empty response.
+
+If you're on the plugin path, confirm the readiness table lands on `READY` and `/openloomi:status` returns `{ "ready": true }`.
+
+## Troubleshooting
+
+- **App doesn't open on macOS** — confirm the binary is in `/Applications` (not quarantined in `~/Downloads`). Re-run `brew install --cask openloomi` to repair.
+- **API key rejected** — verify the key in `~/.claude/settings.json`, then restart the desktop app so the helper binary picks up the new env.
+- **Loop is silent** — make sure at least one connector is enabled; otherwise there's nothing to surface.
+- **Plugin says `OPENLOOMI_NOT_INSTALLED`** — re-run `/openloomi:setup` or `@OpenLoomi Run first-use setup.` to mint a guest session.
+
+## Next steps
+
+- [Connectors](/docs/connectors) — wire up Gmail, Calendar, Slack, GitHub, Linear, and 1000+ apps via Composio.
+- [Memory](/docs/memory) — see how OpenLoomi's tiered storage and forgetting engine work.
+- [Loop](/docs/loop) — understand the decision cards Loop will start surfacing.
+- [Plugins](/docs/plugins) — if you started from the desktop, try driving OpenLoomi from Claude Code or Codex CLI.

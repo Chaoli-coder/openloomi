@@ -1,15 +1,16 @@
 ---
 title: "OpenLoomi 0.7.0"
-description: "OpenLoomi 0.7.0 release notes"
+description: "OpenLoomi 0.7.0 release notes — AI coworker experience, Loomi desktop pet, integrated Loop, memory intelligence upgrade"
+icon: "FaBolt"
 ---
 
 # OpenLoomi 0.7.0 - July 8, 2026
 
 OpenLoomi 0.7.0 marks the release of the **AI coworker experience** — a Loomi desktop pet that mirrors your activity, the Loop proactive execution engine running inside the main app, and a sweeping memory intelligence upgrade with relations, consolidation, and the BEAM benchmark. The release also expands agent runtime support with OpenCode, Hermes ACP, and the OpenClaw ACP bridge, ships a cross-platform FileSystem and Obsidian vault scanner, and consolidates the CLI around `openloomi-ctl` and one-shot mode.
 
-### Notable Changes
+## Highlights
 
-#### Loomi Desktop Pet (Attention Agent)
+### Loomi Desktop Pet (Attention Agent)
 
 A resident desktop pet — a small Loomi fox — now ships with OpenLoomi and reflects your activity in real time. The pet is on by default with an opt-out setting, and runs in its own Tauri webview so it stays present even when the main window is closed.
 
@@ -120,3 +121,14 @@ A new FileSystem surface works in both the browser and Tauri, and an Obsidian va
 - **Lint Cleanups**: Biome lint errors in the composio-bridge are resolved and a single-line import is collapsed for readability
 - **Sentry Removed**: Sentry instrumentation is removed in favor of lighter, in-house observability
 - **`--dangerously-skip-permissions` Flag**: The `openloomi-loop` skill documents a `skip-permissions` flag for advanced operators
+
+## Related
+
+- [Loop](/docs/loop) — the proactive execution engine introduced in this release
+- [Memory](/docs/memory) — the memory intelligence upgrade
+- [Attention Agent](/docs/attention-agent) — the Loomi pet introduced in this release
+- [Privacy & Security](/docs/privacy-security) — the new privacy documentation
+- [Agent Runtimes](/docs/reference/agent-runtimes) — OpenCode, Hermes, OpenClaw providers
+- [OpenLoomi CLI](/docs/reference/openloomi-ctl) — the renamed `openloomi-ctl` binary
+- [Changelog](/docs/changelog) — full release history
+- [GitHub Release](https://github.com/melandlabs/openloomi/releases/tag/v0.7.0) — raw build artifacts

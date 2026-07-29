@@ -738,10 +738,9 @@ It is **not** designed for:
 
 Two surfaces, two auth styles:
 
-| Surface                  | Auth                                                 | Use it from                                   |
-| ------------------------ | ---------------------------------------------------- | --------------------------------------------- |
-| **Local desktop server** | `Authorization: Bearer $TOKEN`                       | Claude Code / Tauri / scripts on your machine |
-| **Cloud**                | Same Bearer token, base URL `https://app.alloomi.ai` | Production integrations, multi-user apps      |
+| Surface                  | Auth                           | Use it from                                   |
+| ------------------------ | ------------------------------ | --------------------------------------------- |
+| **Local desktop server** | `Authorization: Bearer $TOKEN` | Claude Code / Tauri / scripts on your machine |
 
 The token is stored at `~/.openloomi/token` as a **base64-encoded** JWT. You must decode it before sending it as a Bearer token.
 
@@ -834,14 +833,6 @@ curl -X POST http://localhost:3414/api/rag/search \
   ],
   "total": 1
 }
-```
-
-**Step 5 — Use the cloud API (production)**
-
-```bash
-export TOKEN="your_production_jwt"
-curl https://app.alloomi.ai/api/remote-auth/user \
-  -H "Authorization: Bearer $TOKEN"
 ```
 
 The same endpoints, the same schemas — only the base URL changes.
@@ -1008,7 +999,6 @@ The API is the **foundation layer** — every other open-source skill calls into
 ### Reference
 
 - **Full endpoint reference (all 129+ routes, schemas):** [openloomi-api SKILL.md on GitHub](https://github.com/melandlabs/openloomi/tree/main/skills/openloomi-api/SKILL.md)
-- **Production API base URL:** `https://app.alloomi.ai`
 - **Local API base URL:** `http://localhost:3414` (fallback `3515`)
 - **Token location:** `~/.openloomi/token` (base64-encoded JWT)
 - **Source code:** [`skills/openloomi-api/`](https://github.com/melandlabs/openloomi/tree/main/skills/openloomi-api)
@@ -1028,10 +1018,10 @@ The Loop is **not a daemon, not a cron job, and not a script**. It is Claude, lo
 
 The Loop shines when **ambient signals need to become actions** and the cost of missing them is real:
 
-- 📥 **Inbox triage** — Sarah's email about "Q2 review tomorrow please RSVP" becomes a `draft_reply` card with her project context already attached.
+- 📥 **Inbox triage** — Sarah's email about "Q2 review tomorrow please RSVP" becomes a `email_reply` card with her project context already attached.
 - 📅 **Calendar RSVPs** — A meeting invite where you haven't responded surfaces as an `rsvp` card with the organizer's last three notes already in the prompt.
 - 🔀 **PR review queue** — Every PR where you're a reviewer lands in the queue as a `review_pr` card, with the diff stats and the last CI status.
-- 💬 **Slack mentions** — Messages that @mention you become `slack_reply` cards with the thread context pre-loaded.
+- 💬 **Slack mentions** — Messages that @mention you become `im_reply` cards with the thread context pre-loaded.
 - ✅ **Assigned issues** — GitHub issues assigned to you surface as `todo` cards, with prior discussion linked.
 
 It is **not** designed for:
@@ -1066,7 +1056,7 @@ Three layers, all agentic — no subprocess hacks, no local memory cache:
 | ------------ | ---------------------------------------------------------------------------------------------- | --------------------------------- |
 | **Pull**     | Claude calls Composio MCP tools in parallel to fetch fresh signals                             | `data/signals.jsonl`              |
 | **Enrich**   | Each signal is enriched via openloomi-memory (sender lookup, project context, recent insights) | `~/.openloomi/data/memory/...`    |
-| **Classify** | LLM assigns a typed action (`rsvp`, `draft_reply`, `review_pr`, `slack_reply`, `todo`)         | `data/decisions.json`             |
+| **Classify** | LLM assigns a typed action (`rsvp`, `email_reply`, `review_pr`, `im_reply`, `todo`)            | `data/decisions.json`             |
 | **Execute**  | You pick a card; Loop spawns a fresh `claude -p` with the full context                         | API calls (email, calendar, etc.) |
 
 Hard rules run **before** the LLM and short-circuit: `noreply@*` senders, Gmail `Promotions/Social/Forums/Updates/Spam` labels, already-accepted calendar events, and already-replied emails are skipped without ever reaching the classifier.
@@ -1232,10 +1222,10 @@ It then spawns `claude -p "<prompt>"` and inherits stdio, so you see Claude's ou
 | Type          | Trigger                                                                               | Suggested action |
 | ------------- | ------------------------------------------------------------------------------------- | ---------------- |
 | `rsvp`        | Calendar event with `my_response: needsAction`                                        | `calendar_rsvp`  |
-| `draft_reply` | Email matching meeting/RSVP/invite patterns, or with action verbs from a known person | `email_reply`    |
+| `email_reply` | Email matching meeting/RSVP/invite patterns, or with action verbs from a known person | `email_reply`    |
 | `review_pr`   | GitHub PR where you're a reviewer                                                     | `github_review`  |
 | `todo`        | GitHub issue assigned to you, open                                                    | `todo`           |
-| `slack_reply` | Slack message that mentions you                                                       | `slack_reply`    |
+| `im_reply`    | Slack message that mentions you                                                       | `im_reply`       |
 
 Confidence is **0.85** when the sender is in openloomi-memory (known contact), else **0.60**.
 
@@ -1304,3 +1294,15 @@ POST /api/notify               fire macOS desktop test notification
 - **Full skill reference (commands, env vars, troubleshooting):** [openloomi-loop SKILL.md on GitHub](https://github.com/melandlabs/openloomi/tree/main/skills/openloomi-loop/SKILL.md)
 - **Source code:** [`skills/openloomi-loop/`](https://github.com/melandlabs/openloomi/tree/main/skills/openloomi-loop)
 - **Apache 2.0 license** — fork it, extend it, integrate it into your own Agent workflow.
+
+---
+
+## Related
+
+- [Chat](/docs/chat) — where Skills are most often triggered
+- [Automation](/docs/automation) — schedules that call Skills in the background
+- [Memory](/docs/memory) — `openloomi-memory` skill reference
+- [Loop](/docs/loop) — `openloomi-loop` skill reference
+- [Connectors](/docs/connectors) — `openloomi-connectors` skill reference
+- [Agent Runtimes](/docs/reference/agent-runtimes) — the runtimes Skills execute against
+- [Plugins](/docs/plugins) — bridge Skills into Claude Code or Codex CLI

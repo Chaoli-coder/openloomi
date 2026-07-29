@@ -1,24 +1,41 @@
 ---
 title: "Welcome"
-description: "Start here for OpenLoomi product documentation"
+description: "Open-source AI coworker — install OpenLoomi on your machine, wire up your apps, and let the attention agent surface what matters."
 ---
 
 import { OpenLoomiDocsCards } from "../components/docs-card";
 
 # Welcome
 
-Welcome to the OpenLoomi docs — a local-first, open-source AI workspace that remembers your work, watches your day, and acts on your behalf when you tap Approve.
+OpenLoomi is an open-source AI coworker you run on your own machine. It connects the apps you already use, builds a holistic context of your people, projects, and decisions, and tells you what happened, why it matters, and what to do next — saving your attention for what matters.
+
+<Callout type="info">
+  **Fastest path:** if you only do one thing, [install the desktop
+  app](/docs/getting-started), authorize one connector (Gmail or Slack is the
+  most useful), and let Loop run for one afternoon. Most readers finish a first
+  **Approve** within 30 minutes. Already living in Claude Code or Codex? Skip
+  the desktop and [install the plugin](/docs/plugins) instead.
+</Callout>
+
+## Choose your path
+
+| If you are…                                                                       | Start here                                                                                           |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| A new **desktop app** user installing OpenLoomi for the first time                | [Getting Started](/docs/getting-started) — install, sign in, finish your first session               |
+| A developer already living in **Claude Code** or **Codex CLI**                    | [Plugins](/docs/plugins) — wire OpenLoomi in with a one-command setup                                |
+| A **platform / integrations** engineer wiring a runtime                           | [Agent Runtimes](/docs/reference/agent-runtimes) — pick the runtime that executes native agent tasks |
+| Looking for an **end-to-end story** (engineering sync, sales triage, founder day) | [Use Cases](/docs/use-cases) — real workflows from real teams                                        |
 
 ## Overview
 
-The docs are organized into four groups:
+The docs are grouped so you only read what you need:
 
-- **Concepts & guides** (top-level) — what OpenLoomi is, how the desktop app is set up, and how each major surface works. Start with [What is OpenLoomi?](/docs/what-is-openloomi) or [Getting Started](/docs/getting-started).
-- **[Use cases](/docs/use-cases)** — real-world workflows that show what OpenLoomi is good at, from proactive decision-making to async standups across time zones.
-- **[Reference](/docs/reference)** — power-user material: agent runtimes, embedding providers, credits, keyboard shortcuts, and the public API.
-- **[Plugins](/docs/plugins)** — first-party bridges to Claude Code and Codex CLI for users who already work inside another agent shell.
+- **Start here** — the first 10 minutes: install, sign in, and finish a session.
+- **Use OpenLoomi** — the day-to-day surfaces: connectors, messaging apps, automation, chat, memory, and the Loop.
+- **Build / Integrate** — plugins, skills, and the library for developers extending OpenLoomi.
+- **Reference** — agent runtimes, the openloomi-ctl CLI, embedding providers, privacy & security, benchmarks, and the changelog.
 
-Pick a card below to jump in. New users should head to **Getting Started**; if you're integrating OpenLoomi into an existing agent, jump to **[Plugins](/docs/plugins)** or **[Agent Runtimes](/docs/reference/agent-runtimes)**.
+## Available pages
 
 <OpenLoomiDocsCards />
 
@@ -26,4 +43,5 @@ Pick a card below to jump in. New users should head to **Getting Started**; if y
 
 - [What is OpenLoomi?](/docs/what-is-openloomi) — the 30-second pitch
 - [Getting Started](/docs/getting-started) — install + first run
-- [Onboarding](/docs/onboarding) — the in-app first-run flow
+- [Plugins](/docs/plugins) — bridge OpenLoomi into Claude Code or Codex CLI
+- [Use Cases](/docs/use-cases) — see real workflows in context

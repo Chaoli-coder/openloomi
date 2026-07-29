@@ -16,6 +16,7 @@ mod audio_capture;
 mod close_behavior;
 mod constants;
 mod js_scheduler;
+mod launch_mode;
 mod lifecycle;
 mod menu;
 mod node;
@@ -32,6 +33,90 @@ mod workspace_artifacts;
 
 mod permissions;
 mod telegram;
+
+fn escape_js_string(raw: &str) -> String {
+    raw.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+}
+
+fn deliver_pet_prompt_to_chat(
+    app: &tauri::AppHandle,
+    event_name: &str,
+    bridge_global: &str,
+    prompt: &str,
+) {
+    eprintln!("[{event_name}] listener fired");
+    tray::show_main_window(app);
+    let Some(window) = app.get_webview_window("main") else {
+        eprintln!("[{event_name}] no main webview window");
+        return;
+    };
+
+    let escaped = escape_js_string(prompt);
+    let js = format!(
+        "(function(){{console.log('[Tauri] pet prompt eval landed, polling for bridge...');var n=0;var bridge=\"{}\";var t=setInterval(function(){{n++;if(typeof window[bridge]==='function'){{clearInterval(t);console.log('[Tauri] pet prompt bridge found after '+n+' ticks');window[bridge](\"{}\");}}else if(n>25){{clearInterval(t);console.warn('[Tauri] pet prompt bridge not ready after 5s, prompt dropped');}}}},200);}})()",
+        bridge_global, escaped
+    );
+    match window.eval(&js) {
+        Ok(_) => eprintln!("[{event_name}] eval ok"),
+        Err(e) => eprintln!("[{event_name}] eval err: {e}"),
+    }
+}
+
+fn send_pet_prompt_to_chat(app: &tauri::AppHandle, event_name: &str, prompt: &str) {
+    deliver_pet_prompt_to_chat(app, event_name, "__petChatBridgeSend", prompt);
+}
+
+fn parse_pet_context_action_id(payload: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(payload).ok()?;
+    let action_id = value.get("actionId")?.as_str()?.trim();
+    if action_id.is_empty() {
+        None
+    } else {
+        Some(action_id.to_string())
+    }
+}
+
+fn send_pet_context_action_to_chat(app: &tauri::AppHandle, action_id: &str) {
+    let cfg = pet::actions::read_config(app);
+    let action = match pet::actions::resolve_action_prompt(&cfg, action_id) {
+        Ok(action) => action,
+        Err(e) => {
+            eprintln!("[pet:context-action] ignored action '{action_id}': {e}");
+            return;
+        }
+    };
+    let prompt = pet::actions::build_agent_prompt(&action);
+    send_pet_prompt_to_chat(app, "pet:context-action", &prompt);
+}
+
+#[cfg(test)]
+mod pet_context_action_payload_tests {
+    use super::*;
+
+    #[test]
+    fn parses_action_id_payload() {
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "actionId": " clean-disk " }"#),
+            Some("clean-disk".into())
+        );
+    }
+
+    #[test]
+    fn rejects_missing_or_empty_action_id_payload() {
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "id": "clean-disk" }"#),
+            None
+        );
+        assert_eq!(
+            parse_pet_context_action_id(r#"{ "actionId": "   " }"#),
+            None
+        );
+        assert_eq!(parse_pet_context_action_id("not json"), None);
+    }
+}
 
 #[cfg(not(debug_assertions))]
 fn resolve_resource_file(
@@ -253,6 +338,37 @@ fn install_panic_hook() {
     }));
 }
 
+fn handle_second_instance_launch(app: &tauri::AppHandle) {
+    eprintln!("[single-instance] second launch detected; restoring existing instance");
+
+    let app_for_main = app.clone();
+    if let Err(error) = app.run_on_main_thread(move || {
+        tray::show_main_window(&app_for_main);
+        pet::show_pet_window(&app_for_main);
+    }) {
+        log::warn!("[single-instance] failed to restore existing instance: {error}");
+    }
+
+    // A very fast double-click can arrive while startup-created windows are
+    // still settling. Retry briefly so the existing process, not the second
+    // launch, owns the eventual foreground/visible state.
+    let app_for_retry = app.clone();
+    std::thread::spawn(move || {
+        for delay_ms in [250_u64, 1_000] {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            let runner = app_for_retry.clone();
+            let app_for_main = app_for_retry.clone();
+            if let Err(error) = runner.run_on_main_thread(move || {
+                tray::show_main_window(&app_for_main);
+                pet::show_pet_window(&app_for_main);
+            }) {
+                log::warn!("[single-instance] restore retry failed: {error}");
+                break;
+            }
+        }
+    });
+}
+
 fn main() {
     env_logger::init();
 
@@ -272,10 +388,11 @@ fn main() {
 
     let context = tauri::generate_context!();
 
-    // Pre-start cleanup (production only)
+    // Prepare production server startup state. The port cleanup and Next.js
+    // sidecar spawn happen later in setup(), after the single-instance plugin
+    // has accepted this process as the primary instance.
     #[cfg(not(debug_assertions))]
     {
-        node::cleanup_before_start();
         // Create channel to deliver AppHandle to the background thread
         let (tx, rx) = std::sync::mpsc::channel();
         let mut rx_guard =
@@ -287,9 +404,9 @@ fn main() {
             panic_guard::lock_recovered(&node::APP_HANDLE_TX, "store app handle sender");
         *tx_guard = Some(tx);
         drop(tx_guard);
-        // Resolve the resource dir before the Tauri app is built: the Next.js
-        // server starts before an AppHandle exists, and on Linux resources are
-        // installed to /usr/lib/<app>, not next to the executable in /usr/bin.
+        // Resolve the resource dir from Tauri's package context instead of
+        // falling back to current_exe(): on Linux resources are installed to
+        // /usr/lib/<app>, not next to the executable in /usr/bin.
         match tauri::utils::platform::resource_dir(context.package_info(), &tauri::Env::default()) {
             Ok(dir) => {
                 let mut dir_guard =
@@ -302,7 +419,6 @@ fn main() {
                 e
             ),
         }
-        node::start_nextjs_server();
     }
 
     #[cfg(debug_assertions)]
@@ -314,11 +430,47 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            handle_second_instance_launch(app);
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                // The Card, Bubble, and DevPanel are transient
+                // always-on-top panels whose visibility + dimensions
+                // are owned by the Rust side (decision watcher / user
+                // gesture / dev panel toggle). Persisting their size
+                // across upgrades was part of the root cause of issue
+                // #341: an older build wrote `loomi-card=92160x107520`
+                // and `loomi-bubble=81920x21504` into
+                // `~/Library/Application Support/com.openloomi.app/
+                // .window-state.json`, and the upgrade restored those
+                // values verbatim, leaving the aux windows at
+                // impossible sizes.
+                //
+                // The Pet (`loomi-pet`) is intentionally NOT denylisted:
+                // users expect its drag position to be remembered
+                // across launches. The Pet's size is fixed by the
+                // widget sprite, so the size side of the trade is
+                // handled by `build_pet_window`, which defensively
+                // re-applies the canonical 168x168 after build (see
+                // `pet::window::build_pet_window`).
+                //
+                // Denylisting the Card / Bubble / DevPanel keeps them
+                // out of the `.window-state.json` round-trip entirely:
+                // they are always built with their builder-defined
+                // inner size and start hidden (visibility is
+                // app-driven).
+                .with_denylist(&[
+                    pet::PET_BUBBLE_LABEL,
+                    pet::PET_CARD_LABEL,
+                    pet::PET_DEV_LABEL,
+                ])
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
@@ -399,6 +551,7 @@ fn main() {
             // shortcuts. Registered unconditionally so the widget
             // always has a way to discover its theme on cold boot.
             pet::get_pet_config,
+            pet::get_pet_context_actions,
             pet::set_active_theme,
         ])
         .setup(|app| {
@@ -459,6 +612,8 @@ fn main() {
             // returns immediately and the WebView renders about:blank right away.
             #[cfg(not(debug_assertions))]
             {
+                node::cleanup_before_start();
+                node::start_nextjs_server();
                 render_runtime::ensure_render_engine_download_started();
                 let app = app.handle().clone();
                 std::thread::spawn(move || {
@@ -618,6 +773,30 @@ fn main() {
                 });
             });
 
+            // Pet asks the host for the current launch mode. We answer
+            // synchronously with the value resolved at setup() time from
+            // `OPENLOOMI_LAUNCH_MODE`. A pull (webview asks, host
+            // answers) rather than push (host emits on listen()) because
+            // there is a real race between the webview reaching "ready"
+            // and our `listen()` being registered — a push can silently
+            // drop the first message if the webview's listener fires
+            // before we have a subscriber. The pull is cheap (one
+            // round-trip) and reliable across both cold boots and
+            // webview rebuilds.
+            //
+            // `plugin` → the pet left-click short-circuits to
+            // `pet:open-status` (the compact card) instead of opening the
+            // main dashboard, so a plugin-launched session doesn't
+            // surface "two dialogs" of the same conversation. The user
+            // can still reach the main window via the pet right-click
+            // menu ("Open Loomi") or the card's "Open in dashboard"
+            // CTA — those are unchanged.
+            let launch_mode_value = launch_mode::as_wire_value(launch_mode::detect());
+            let launch_mode_app = app_handle.clone();
+            app_handle.listen("pet:request-launch-mode", move |_event| {
+                let _ = launch_mode_app.emit("pet:launch-mode", launch_mode_value);
+            });
+
             // Pet right-click "Settings" → show the main window and ask
             // the Next.js side to client-side navigate to the General
             // settings page. We use a custom DOM event (rather than
@@ -681,6 +860,18 @@ fn main() {
                 pet::mark_review_seen();
                 pet::hide_bubble_window(&open_card_app);
                 pet::show_card_window(&open_card_app);
+            });
+
+            // #365 — pet click + idle-pill click when there's no
+            // actionable work → open the card in compact (status)
+            // mode. Reuses the same window as `pet:open-card` so the
+            // position poller / stacking behaviour stays consistent;
+            // a fresh `loop:decision` event transitions the card from
+            // compact → full in-place because the JS handler keys off
+            // the most-recent `loop:state` / `loop:decision` payload.
+            let open_status_app = app_handle.clone();
+            app_handle.listen("pet:open-status", move |_event| {
+                pet::show_card_compact_window(&open_status_app);
             });
 
             // Card header drag → let the user manually park the card.
@@ -759,57 +950,30 @@ fn main() {
                 }
             });
 
-            // Pet card "Add more connectors" CTA → show the main
-            // window and dispatch a new openloomi:send-chat-message
-            // DOM event with the chat prompt. The new PetChatBridge
-            // mounted in the (chat) layout listens for this event and
-            // forwards it to the chat composer via
-            // useChatContext().sendMessage(). Mirrors the
-            // `pet:open-decision` event-payload pattern (same escape
-            // helper for the JS literal so backslashes / quotes /
-            // newlines can't break the eval). English prompt by
-            // design — loomi-card.html is a static asset with no
-            // runtime i18n, and the agent can translate the response
-            // server-side.
+            // User-defined Pet context actions are prompt templates.
+            // The widget sends only an action id; the host re-reads
+            // `pet-actions.json`, resolves the prompt, frames it as an
+            // agent task, then submits it through the same chat bridge
+            // used by existing Pet-triggered agent flows.
+            let pet_context_action_app = app_handle.clone();
+            app_handle.listen("pet:context-action", move |event| {
+                let Some(action_id) = parse_pet_context_action_id(event.payload()) else {
+                    eprintln!("[pet:context-action] missing actionId payload");
+                    return;
+                };
+                send_pet_context_action_to_chat(&pet_context_action_app, &action_id);
+            });
+
+            // Pet card "Add more connectors" CTA -> show the main
+            // window and send a connector-focused prompt through the
+            // existing chat bridge.
             let guide_app = app_handle.clone();
             app_handle.listen("pet:guide-connect-more", move |_event| {
-                eprintln!("[pet:guide-connect-more] listener fired");
-                tray::show_main_window(&guide_app);
-                if let Some(window) = guide_app.get_webview_window("main") {
-                    let prompt = "Please help me connect more available connectors via Composio \
+                let prompt = "Please help me connect more available connectors via Composio \
 (Gmail, Slack, Google Calendar, GitHub, Linear, Obsidian, etc.). \
 List the platforms I haven't connected yet, then walk me through \
 authorizing each one. Begin with Gmail if it's not connected.";
-                    // Escape the prompt for embedding in a JS string literal.
-                    // (No backslashes / quotes / newlines in this prompt in
-                    // practice, but the helper is copy-pasted from the
-                    // pet:open-decision block for consistency / defense in
-                    // depth.)
-                    let escaped = prompt
-                        .replace('\\', "\\\\")
-                        .replace('"', "\\\"")
-                        .replace('\n', "\\n");
-                    // Call window.__petChatBridgeSend(text) directly,
-                    // retrying every 200ms for up to 5s. We can't use a
-                    // one-shot CustomEvent because the React bridge
-                    // component might not be mounted yet when the eval
-                    // lands (events with no listener are silently lost).
-                    // A global function can be polled until the bridge
-                    // registers it. The leading console.log + title
-                    // change are diagnostic so we can confirm the eval
-                    // is actually executing on the main webview (vs
-                    // silently swallowed).
-                    let js = format!(
-                        "(function(){{console.log('[Tauri] eval landed, polling for bridge...');document.title='[pet] '+document.title;var n=0;var t=setInterval(function(){{n++;if(typeof window.__petChatBridgeSend==='function'){{clearInterval(t);console.log('[Tauri] bridge found after '+n+' ticks');window.__petChatBridgeSend(\"{}\");}}else if(n>25){{clearInterval(t);console.warn('[Tauri] bridge not ready after 5s, prompt dropped');}}}},200);}})()",
-                        escaped
-                    );
-                    match window.eval(&js) {
-                        Ok(_) => eprintln!("[pet:guide-connect-more] eval ok"),
-                        Err(e) => eprintln!("[pet:guide-connect-more] eval err: {e}"),
-                    }
-                } else {
-                    eprintln!("[pet:guide-connect-more] no main webview window");
-                }
+                send_pet_prompt_to_chat(&guide_app, "pet:guide-connect-more", prompt);
             });
 
             // B2b: "Open brief" / "Open wrap" inside the card. Brief and

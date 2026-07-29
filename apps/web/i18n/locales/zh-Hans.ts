@@ -6,6 +6,12 @@ const zh = {
   chat: {
     ...baseZh.chat,
     stopGenerating: "停止生成",
+    codexTransport: {
+      retrying: "Codex WebSocket 超时，正在重试，任务仍在运行",
+      retryingWithAttempt:
+        "Codex WebSocket 超时，正在重试 {{attempt}}/{{maxAttempts}}，任务仍在运行",
+      fallback: "Codex WebSocket 超时，正在切换到 HTTPS，任务仍在运行",
+    },
   },
   common: {
     ...baseZh.common,
@@ -81,6 +87,15 @@ const zh = {
     actionFailed: "操作失败:{{msg}}",
     ranAt: "执行于 {{ts}}",
     dismissedAt: "已忽略",
+    // #358 — structured execution outcome surfaced by the runner.
+    outcome: {
+      executed: "已执行",
+      skipped: "已跳过",
+      blocked: "受阻",
+      failed: "失败",
+      reason: "原因:{{reason}}",
+    },
+    lastAttemptFailed: "上次执行失败:{{reason}} —— 请重新点击「执行」重试。",
     tab: {
       pending: "待办",
       done: "已完成",
@@ -94,12 +109,76 @@ const zh = {
       dismissedDesc: "忽略的决策会留在这里,方便你回头再看。",
       runTick: "立即 Tick",
     },
+    activation: {
+      title: {
+        activated: "Loop 已就绪",
+        working: "完成首张决策卡的设置",
+      },
+      subtitle: "接入一个数据源,让 Loomi 帮你留意需要决策的事项。",
+      step: {
+        setup: "初始化",
+        runtime: "接入数据源",
+        source: "首次 check",
+        check: "等待首张决策",
+        decision: "审阅决策",
+      },
+      cta: {
+        connectSource: "接入数据源",
+        runFirstCheck: "跑首次 check",
+        reviewDecision: "查看首张决策",
+        finishSetup: "完成设置",
+        activated: "已就绪",
+      },
+      badge: {
+        decision: "有决策待审",
+        check: "跑首次 check",
+        source: "接入数据源",
+        aiProvider: "添加 AI 密钥",
+        setup: "完成设置",
+        title: {
+          decision: "打开 Loop 页审阅你的首张决策",
+          next: "下一步激活动作",
+        },
+      },
+    },
     dialogue: {
-      draftReply: "这封邮件看起来在等你——要我先起草回复吗?",
+      emailReply: "这封邮件看起来在等你——要我先起草回复吗?",
+      // #363 — replaces the hardcoded RSVP dialogue in server.ts::defaultDialogue
+      rsvp: "这封会议邀请需要你拍板。",
+    },
+    // #363 — RSVP-specific decision card layers (issue #363). 命名空间保留
+    // 在 loop.rsvp.*，方便后续 email_reply / review_pr 等复用同套结构。
+    rsvp: {
+      invitationLabel: "会议邀请",
+      decidePrompt: "你会参加这次会议吗?",
+      attend: "参加",
+      decline: "谢绝",
+      viewOriginal: "查看原始事件",
+      fieldTime: "时间",
+      fieldOrganizer: "组织者",
+      fieldAttendance: "出席情况",
+      fieldLocation: "地点",
+      fieldConflict: "冲突",
+      conflictNone: "无冲突",
+      readinessSufficient: "信息充分可以决定。",
+      readinessIncomplete: "信息不完整:{{fields}}。请先查看原始事件再回复。",
+      technicalDetails: "技术详情",
     },
     nextStep: {
       tapRun: "点「执行」让代理处理。",
     },
+    // #359 — 决策状态的自然语言表达。置信度仅作诊断显示,这里的状态徽章
+    // 才是一级决策信号,且绝不由分类置信度推导。
+    readiness: {
+      ready: "可以拍板",
+      needsContext: "还差一些信息",
+      notActionable: "无需处理",
+      confirm: "请仔细确认",
+      missing: "还缺:{{fields}}",
+    },
+    confirmRun: "确认并执行",
+    confidenceShort: "置信 {{n}}",
+    confidenceDiagnostic: "分类置信度(诊断用,不表示紧急程度)",
     detailTitle: "决策详情",
     backToList: "返回 Loop",
     detail: {
@@ -107,6 +186,11 @@ const zh = {
         pending: "待办",
         done: "已完成",
         dismissed: "已忽略",
+      },
+      openFirstDecision: "打开首张决策",
+      backToLoop: "返回 Loop",
+      notFoundDesc: {
+        firstTime: "这张决策已经不在了——但你置顶的待办决策还在等你。",
       },
       confidenceBadge: "置信 {{n}}",
       created: "创建于 {{ts}}",
@@ -144,6 +228,15 @@ const zh = {
       ranAt: "执行于 {{ts}}",
       dismissedLabel: "已忽略",
       dismissedNoReason: "没有记录原因。",
+      // #358 — verdict-specific labels for the result panel header and
+      // the resurrect button on a skipped/non-executed done row.
+      executedLabel: "已执行",
+      skippedLabel: "已跳过",
+      executedBadge: "已执行",
+      resurrect: "重新执行",
+      resurrectedToast: "已回到待办",
+      resurrectFailed: "重新执行失败:{{msg}}",
+      lastAttemptFailed: "上次执行失败:{{reason}} —— 请重新点击「执行」重试。",
       promote: "升级回「待办」",
       promotedToast: "已回到待办",
       promoteFailed: "升级失败:{{msg}}",
@@ -154,10 +247,42 @@ const zh = {
       sourceSignal: "来源信号",
       metaLabel: "元信息",
     },
+    // #365 — 闲置状态徽章 + 紧凑状态卡文案。徽章文案刻意写得简短,
+    // 才能塞进 168×168 的宠物窗口而不挡住狐狸;详细文案放在
+    // loop.compactCard.* 下,展示在紧凑卡片中。
+    idlePill: {
+      short: "Loomi 在守候 · 当前没有需要你处理的事",
+      cta: "查看状态",
+      paused: "监控已暂停",
+      working: "正在检查已接入的来源…",
+      failure: "无法访问 {{source}} · 需要处理",
+    },
+    compactCard: {
+      title: {
+        healthy: "一切正常",
+        checking: "正在检查来源",
+        paused: "监控已暂停",
+        failure: "{{source}} 需要处理",
+      },
+      subtitle: {
+        healthy:
+          "当前没有需要你处理的事。一旦有决策需要你拍板,Loomi 会自动弹出卡片。",
+        checking: "Loomi 正在检查你的来源。",
+        paused: "Loop 已暂停 —— 恢复前不会再有新动态浮出。",
+        failure: "Loomi 最近没能更新 {{source}}。请先回到原始信号再继续。",
+      },
+      lastChecked: "上次检查:{{rel}}",
+      lastCheckedNever: "上次检查:暂无记录",
+      syncHealthy: "同步状态正常",
+      sourcesLabel: "正在监听",
+      sourcesEmpty: "尚未接入任何来源",
+      collapse: "收起",
+      openLoop: "进入 Loop",
+    },
   },
   settings: {
     ...baseZh.settings,
-    aiSettingsTitle: "API 设置",
+    aiSettingsTitle: "设置",
     loopSectionTitle: "Loop（主动执行）",
     loopEnableLabel: "启用 Loop",
     loopEnableDescription:
@@ -179,6 +304,7 @@ const zh = {
     aiSettingsAnthropicDescription: "支持 Anthropic Claude 或兼容接口",
     aiSettingsOverride: "用户覆盖",
     aiSettingsSystem: "系统默认",
+    aiSettingsNotConfigured: "未配置",
     aiSettingsApiKey: "API 密钥",
     aiSettingsBaseUrl: "接口地址",
     aiSettingsModel: "模型",
@@ -234,6 +360,8 @@ const zh = {
       "想要自行配置，可填写模型路径后打开此选项。禁止下载模型，只加载当前设备上已经存在的模型文件。",
     embeddingLocalDownloadHint:
       "首次测试可能需要下载模型，因此会多等一会儿。切换模型后，需要重启应用。",
+    embeddingSelectProviderHint:
+      "请先在上方选择一种 Embedding 提供方再进行配置。",
     embeddingUsageHint: "用于知识库、记忆和语义搜索。",
     embeddingSaved: "Embedding 设置已保存",
     embeddingSaveError: "Embedding 设置保存失败",

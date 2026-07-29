@@ -1,7 +1,9 @@
 {
   "title": "Changelog",
+  "defaultOpen": false,
+  "collapsible": true,
   "pages": [
-    "index",
+    "openloomi-0.8.0",
     "openloomi-0.7.0",
     "openloomi-0.6.0",
     "openloomi-0.5.0",

@@ -18,11 +18,6 @@ import { ResponsiveToolbar } from "@/components/agent/responsive-toolbar";
 import { AgentChatPanel } from "@/components/agent/chat-panel";
 import { ChatHeaderPanel } from "@/components/agent/chat-header-panel";
 import { Button, PageSectionHeader } from "@openloomi/ui";
-import {
-  AgentEventsPanel,
-  AgentBriefPanel,
-  InsightDetailDrawer,
-} from "@/components/agent/dynamic-panels";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import type { ChatMessage } from "@openloomi/shared";
@@ -40,11 +35,35 @@ import { ChatHistorySidePanel } from "@/components/agent/chat-history-side-panel
 import { NewInsightsSidePanel } from "@/components/agent/new-insights-side-panel";
 import { useNewInsightsContext } from "@/components/insights-new-context";
 import type { ChatHistoryResponse } from "@/lib/ai/chat/api";
+import { decodeSearchParamText } from "@/lib/chat/query-text";
 import { mutate } from "swr";
+import useSWRInfinite from "swr/infinite";
 import { AddPlatformDialog } from "@/components/add-platform-dialog";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { PanelSkeleton, ChatSkeleton } from "@/components/agent/panel-skeleton";
 import { RemixIcon } from "@/components/remix-icon";
+
+const HISTORY_PAGE_SIZE = 20;
+
+/**
+ * Keyed page fetcher for the chat history used by the right-side
+ * ChatHistorySidePanel. Uses `starting_after` for forward pagination
+ * (newest page first), matching the underlying `/api/history` route.
+ */
+function getHomeHistoryKey(
+  pageIndex: number,
+  previousPageData: ChatHistoryResponse | null,
+) {
+  if (previousPageData && previousPageData.hasMore === false) {
+    return null;
+  }
+  if (pageIndex === 0) {
+    return `/api/history?limit=${HISTORY_PAGE_SIZE}`;
+  }
+  const last = previousPageData?.chats?.at(-1);
+  if (!last) return null;
+  return `/api/history?limit=${HISTORY_PAGE_SIZE}&starting_after=${last.id}`;
+}
 
 // Lazy load motion components to reduce bundle size
 const MotionSection = dynamic(
@@ -76,8 +95,11 @@ export function Home() {
   const urlChatId = searchParams.get("chatId") ?? undefined;
   /** Chat page reads send parameter from URL, automatically sends that message after mounting (e.g., onboarding "Talk with openloomi") */
   const urlSendMessage = searchParams.get("send");
-  const initialMessageToSend =
-    urlSendMessage != null ? decodeURIComponent(urlSendMessage) : undefined;
+  const initialMessageToSend = decodeSearchParamText(urlSendMessage);
+  /** Chat page reads input parameter from URL, pre-fills the composer, and waits for user confirmation */
+  const urlInitialInput = searchParams.get("input");
+  const initialInput = decodeSearchParamText(urlInitialInput);
+  const prefillToken = searchParams.get("prefillToken") ?? undefined;
 
   /** Inbox page (/inbox) and Focus page (/) are distinguished by pathname, no longer use panel parameter */
   const isInboxPage = pathname === "/inbox";
@@ -204,74 +226,35 @@ export function Home() {
     return localActiveChatId;
   }, [page, urlChatId, localActiveChatId]);
 
-  // Data for Chat page right sidebar history (independent of Header, avoid dependency on internal implementation)
-  // Pagination state
-  const [chatsList, setChatsList] = useState<ChatHistoryResponse["chats"]>([]);
-  const [startingAfter, setStartingAfter] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const isFirstLoadRef = useRef(true);
+  // Data for Chat page right sidebar history (independent of Header, avoid
+  // dependency on internal implementation). SWR Infinite handles dedup,
+  // abort-on-unmount, and shares the cache with the Header's `/api/history`
+  // key so the two views stay in sync.
+  const {
+    data: historyPages,
+    size: historySize,
+    setSize: setHistorySize,
+    isValidating: isHistoryValidating,
+    mutate: mutateHistoryPages,
+  } = useSWRInfinite<ChatHistoryResponse>(
+    (pageIndex, previousPageData) =>
+      page === "chat" ? getHomeHistoryKey(pageIndex, previousPageData) : null,
+    fetcher,
+    { revalidateFirstPage: false, parallel: false },
+  );
 
-  // Build API URL
-  const historyApiUrl = useMemo(() => {
-    if (page !== "chat") return null;
-    const url = new URL("/api/history", window.location.origin);
-    url.searchParams.set("limit", "20");
-    if (startingAfter) {
-      url.searchParams.set("starting_after", startingAfter);
-    }
-    return url.toString();
-  }, [page, startingAfter]);
-
-  // Use useEffect + fetch instead of useSWR, avoid data not updating due to onSuccess callback timing issue
-  useEffect(() => {
-    if (!historyApiUrl) return;
-
-    const abortController = new AbortController();
-    const isLoadMore = !isFirstLoadRef.current;
-    const url = historyApiUrl;
-
-    async function fetchHistory() {
-      try {
-        const data: ChatHistoryResponse = await fetcher(url);
-
-        // Check if request was aborted
-        if (abortController.signal.aborted) return;
-
-        if (isLoadMore) {
-          setChatsList((prev) => [...prev, ...data.chats]);
-        } else {
-          setChatsList(data.chats);
-          isFirstLoadRef.current = false;
-        }
-        setHasMore(data.hasMore);
-        setIsLoadingMore(false);
-      } catch (error) {
-        // Ignore abort errors (component unmounted)
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-        console.error("Error fetching chat history:", error);
-        setIsLoadingMore(false);
-      }
-    }
-
-    fetchHistory();
-
-    return () => {
-      abortController.abort();
-    };
-  }, [historyApiUrl]);
+  const chatsList = useMemo<ChatHistoryResponse["chats"]>(
+    () => historyPages?.flatMap((p) => p.chats) ?? [],
+    [historyPages],
+  );
+  const hasMore = historyPages?.at(-1)?.hasMore ?? true;
+  const isLoadingMore = isHistoryValidating && historySize > 1;
 
   // Load more
   const loadMoreChats = useCallback(() => {
-    if (!hasMore || isLoadingMore || chatsList.length === 0) return;
-    const lastChat = chatsList[chatsList.length - 1];
-    if (lastChat) {
-      setIsLoadingMore(true);
-      setStartingAfter(lastChat.id);
-    }
-  }, [hasMore, isLoadingMore, chatsList]);
+    if (!hasMore || isLoadingMore) return;
+    setHistorySize((s) => s + 1);
+  }, [hasMore, isLoadingMore, setHistorySize]);
 
   const sortedChatsForChatPage = useMemo(() => {
     if (!chatsList.length) return [];
@@ -583,8 +566,16 @@ export function Home() {
         credentials: "include",
       });
       if (!res.ok) return;
-      setChatsList((prev) => prev.filter((c) => c.id !== chatId));
-      // Refresh history data in ChatHeader
+      // Remove from the SWR cache so the side panel updates immediately,
+      // then revalidate the matching key to keep the header in sync.
+      mutateHistoryPages(
+        (pages) =>
+          pages?.map((page) => ({
+            ...page,
+            chats: page.chats.filter((c) => c.id !== chatId),
+          })) ?? pages,
+        { revalidate: false },
+      );
       mutate(
         (key) => typeof key === "string" && key.startsWith("/api/history"),
       );
@@ -592,7 +583,7 @@ export function Home() {
         handleChatIdChange(null);
       }
     },
-    [effectiveChatId, handleChatIdChange],
+    [effectiveChatId, handleChatIdChange, mutateHistoryPages],
   );
 
   const handleOpenRelatedInsight = useCallback(
@@ -622,7 +613,7 @@ export function Home() {
       return memoizedCategory || t("nav.inbox", "Insight Box");
     }
     return t("brief.title", "Daily Focus");
-  }, [mobileActivePanel, isInboxPage, memoizedCategory, t]);
+  }, [isInboxPage, memoizedCategory, t]);
 
   /** Utility page title mapping (single source of truth: only maintain here, PageSectionHeader reuses) */
   function getUtilityPageTitle(pageParam: string | null): string {
@@ -736,20 +727,6 @@ export function Home() {
       const mobilePanelTitle = getMobilePanelTitle();
 
       switch (mobileActivePanel) {
-        case "insight":
-          mobilePanelContent = (
-            <AgentEventsPanel
-              key="events-panel"
-              hideHeader={false}
-              category={memoizedCategory}
-            />
-          );
-          break;
-        case "brief":
-          mobilePanelContent = (
-            <AgentBriefPanel key="brief-panel" hideHeader={true} />
-          );
-          break;
         case "chat":
           mobilePanelContent = (
             <div className="flex h-full flex-col">
@@ -761,14 +738,33 @@ export function Home() {
                   isMobile && "pb-[80px]",
                 )}
               >
-                <AgentChatPanel initialMessageToSend={initialMessageToSend} />
+                <AgentChatPanel
+                  initialInput={initialInput}
+                  prefillToken={prefillToken}
+                  initialMessageToSend={initialMessageToSend}
+                />
               </div>
             </div>
           );
           break;
         default:
           mobilePanelContent = (
-            <AgentBriefPanel key="brief-panel" hideHeader={true} />
+            <div className="flex h-full flex-col">
+              <ChatHeaderPanel onChatIdChange={handleChatIdChange} />
+              <div
+                className={cn(
+                  "flex-1 min-h-0 overflow-auto",
+                  // Mobile: add bottom spacing (chat panel needs less spacing)
+                  isMobile && "pb-[80px]",
+                )}
+              >
+                <AgentChatPanel
+                  initialInput={initialInput}
+                  prefillToken={prefillToken}
+                  initialMessageToSend={initialMessageToSend}
+                />
+              </div>
+            </div>
           );
       }
 
@@ -794,15 +790,6 @@ export function Home() {
           </AgentLayout>
           {/* Mobile bottom menu bar - render independently outside AgentLayout */}
           {responsiveToolbar}
-          {/* Global InsightDetailDrawer - Mobile */}
-          <InsightDetailDrawer
-            insight={selectedInsight}
-            isOpen={isInsightDrawerOpen}
-            onClose={() => {
-              setSelectedInsight(null);
-              setIsInsightDrawerOpen(false);
-            }}
-          />
         </InsightsPaginationProvider>
       );
     }
@@ -832,6 +819,8 @@ export function Home() {
                   <AgentChatPanel
                     key={effectiveChatId}
                     chatId={effectiveChatId}
+                    initialInput={initialInput}
+                    prefillToken={prefillToken}
                     initialMessageToSend={initialMessageToSend}
                   />
                 </div>
@@ -881,14 +870,6 @@ export function Home() {
               )}
             </div>
           </AgentLayout>
-          <InsightDetailDrawer
-            insight={selectedInsight}
-            isOpen={isInsightDrawerOpen}
-            onClose={() => {
-              setSelectedInsight(null);
-              setIsInsightDrawerOpen(false);
-            }}
-          />
         </InsightsPaginationProvider>
       );
     }
@@ -906,19 +887,12 @@ export function Home() {
       router.replace(newPath);
     };
 
-    const leftPanel = isInboxPage ? (
-      <AgentEventsPanel
-        key="events-panel"
-        category={memoizedCategory}
-        embedInCard={true}
-        externalSelectedInsight={selectedInsight}
-        onExternalInsightClose={closeExternalInsight}
-      />
-    ) : page === null ? (
-      <ChatSkeleton key="chat-skeleton" />
-    ) : (
-      <PanelSkeleton key="panel-skeleton" />
-    );
+    const leftPanel =
+      page === null ? (
+        <ChatSkeleton key="chat-skeleton" />
+      ) : (
+        <PanelSkeleton key="panel-skeleton" />
+      );
 
     return (
       <InsightsPaginationProvider>
@@ -929,17 +903,6 @@ export function Home() {
         >
           {leftPanel}
         </AgentLayout>
-        {/* Desktop doesn't render global drawer (Events/Brief both embedded in middle card); only mobile uses global drawer */}
-        {isMobile && (
-          <InsightDetailDrawer
-            insight={selectedInsight}
-            isOpen={isInsightDrawerOpen}
-            onClose={() => {
-              setSelectedInsight(null);
-              setIsInsightDrawerOpen(false);
-            }}
-          />
-        )}
       </InsightsPaginationProvider>
     );
   }

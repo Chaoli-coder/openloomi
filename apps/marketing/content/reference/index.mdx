@@ -1,11 +1,21 @@
 ---
 title: "Reference"
-description: "Developer and power-user reference material for OpenLoomi"
+description: "Developer and power-user reference material for OpenLoomi — agent runtimes, the openloomi-ctl CLI, and embedding providers"
+icon: "FaBook"
 ---
 
 # Reference
 
-Developer and power-user reference material for OpenLoomi. The pages here document the contracts that don't fit neatly into a user-guide chapter — runtime configuration, embedding providers, credit accounting, and the public HTTP API.
+Developer and power-user reference material for OpenLoomi. The pages here document the contracts that don't fit neatly into a user-guide chapter — runtime configuration, embedding providers, and the OpenLoomi CLI.
+
+## Choose your path
+
+| If you are…                                         | Start with…                                                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Picking a runtime to execute agent tasks            | [Agent Runtimes](/docs/reference/agent-runtimes) — Claude, Codex, OpenCode, Hermes, OpenClaw                  |
+| Driving OpenLoomi from a shell or CI                | [OpenLoomi CLI](/docs/reference/openloomi-ctl) — `openloomi-ctl` from packaged desktop installs               |
+| Switching between cloud and local embeddings        | [Embedding Providers](/docs/reference/embedding-providers) — providers, switching, and re-embedding behaviour |
+| New to OpenLoomi and looking for user-guide content | [Welcome](/docs) — back to the top-level docs                                                                 |
 
 ## Overview
 
@@ -14,7 +24,7 @@ The reference section is grouped into two buckets:
 - **Runtimes & APIs** — the [Agent Runtimes](/docs/reference/agent-runtimes) you can plug into OpenLoomi, plus the [OpenLoomi CLI](/docs/reference/openloomi-ctl) for one-shot automation from a shell or CI.
 - **Configuration** — [Embedding Providers](/docs/reference/embedding-providers) for cloud-vs-local search backends.
 
-If you're looking for something end-user-facing, head back to the [top-level docs](/docs) instead — most user-facing surfaces have their own page there.
+If you're looking for something end-user-facing, head back to the [Welcome](/docs) page instead — most user-facing surfaces have their own page there.
 
 ## Available references
 
@@ -25,5 +35,6 @@ If you're looking for something end-user-facing, head back to the [top-level doc
 ## Related
 
 - [Plugins](/docs/plugins) — bridge to Claude Code and Codex CLI
-- [Storage Management](/docs/storage-management) — where all this configuration lives on disk
-- [Settings Reference](/docs/settings-reference) — every `?page=` deep-link in the app
+- [Memory](/docs/memory) — where local data and embedding vectors live
+- [Getting Started](/docs/getting-started) — install + first run
+- [Glossary](/docs/glossary) — every term used across these reference pages

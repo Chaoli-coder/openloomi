@@ -124,6 +124,12 @@ export * from "./routing";
 // Runtime
 export * from "./runtime";
 
+// Live supplemental input for active agent runs
+export * from "./supplemental-input";
+
+// Runtime Goal and instruction protocol
+export * from "./runtime-instructions";
+
 // Native agent runner
 export * from "./native-runner";
 

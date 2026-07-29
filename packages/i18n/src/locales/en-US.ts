@@ -61,6 +61,10 @@ const enUS = {
     sources: "Sources",
     noSources: "No citation sources",
     temporary: "Temporary",
+    // #357 — pill rendered on a file card whose latest tool-native part
+    // errored or never reported completion. Distinguishes timed-out / failed
+    // tool runs from final deliverables in the chat output file list.
+    incomplete: "Incomplete",
     previewImage: "Preview Image",
     preview: "Preview",
     pin: "Pin",
@@ -719,6 +723,14 @@ const enUS = {
           "Contact support if the problem persists",
         ],
       },
+      codexCompatibilityError: {
+        title: "Codex setup needs attention",
+        suggestions: [
+          "Upgrade Codex, then restart OpenLoomi",
+          "Or choose a model supported by the installed Codex CLI",
+        ],
+        docsAction: "Open Codex installation guide",
+      },
       fileNotFoundError: {
         title: "File Not Found",
         description: "The specified file could not be found.",
@@ -830,6 +842,89 @@ const enUS = {
   connectors: {
     pageDescription:
       "Link your platforms or subscribe to content you care about — openloomi keeps watch so you don't have to.",
+    // #361 — capability state labels surfaced on the connectors page so
+    // users can tell authorization from Loop monitoring. The wording is
+    // deliberately different from `connected: true` to make the gap
+    // obvious — "Authorized" ≠ "Loop monitored".
+    capabilityConnected: "Connected",
+    capabilityLoopMonitored: "Loop monitored",
+    capabilityDecisionCapable: "Decision capable",
+    capabilityNeedsSetup: "Needs setup",
+    capabilityUnsupported: "Unsupported mapping",
+    capabilityReasonNoMapping:
+      "OpenLoomi recognizes this integration, but its signal type isn't mapped to a decision yet.",
+    capabilityReasonNotLoopMonitored:
+      "Authorized for chat & memory. Loop doesn't pull signals from this source yet.",
+    /**
+     * Capability summary strip rendered above the connector list. Counts
+     * come from `LoopState.connectorCapability` (#361) so we never claim
+     * "monitored" when only "authorized" is true.
+     */
+    capabilitySummary:
+      "{{connected}} connected · {{monitored}} monitored by Loop · {{decision}} decision-capable",
+    /**
+     * Plain-language note rendered when the readiness surface flags that
+     * an authorized integration has no Loop mapping. Anchored next to
+     * the unsupported counter, not on the integration's own row.
+     */
+    unsupportedSignalsNote:
+      "{{count}} signal dropped — no canonical Loop mapping for its source.",
+    /**
+     * Setup-action copy surfaced when a connected integration requires a
+     * custom channel or classifier before it can affect decisions. The
+     * action itself is `open the connectors page in chat` so the user
+     * can ask the agent to wire up a custom mapping.
+     */
+    needsSetupAction: "Ask the agent to wire up Loop",
+    // #391 — `/connectors` page surfaces Composio-managed OAuth accounts
+    // that aren't on the local `platform_accounts` table. The Sync button
+    // forces a fresh Loop probe so the list reflects the agent's view
+    // rather than a stale cache.
+    sync: "Sync",
+    sourceComposio: "Composio",
+    sourceComposioHint: "Connected via Composio (agent-managed)",
+    probeError: "Last sync failed",
+    // #412 — per-kind callout copy + affordances. Keys live here so the
+    // connectors page can render a localized reason + one-click fix
+    // instead of the previous generic "Last sync failed: <message>" line.
+    probeRetry: "Retry probe",
+    probeRetrying: "Retrying…",
+    probeKindTitle: {
+      cli_not_found: "Composio CLI not installed",
+      cli_unauthorized: "Composio CLI not signed in",
+      timeout: "Probe took too long",
+      transport_error: "Couldn't reach the agent",
+      agent_http_error: "Agent returned an error",
+      empty_response: "Agent returned no data",
+      malformed_response: "Agent output was unparseable",
+      cli_malformed: "Composio CLI returned bad output",
+    },
+    probeKindDesc: {
+      cli_not_found: "Install it with `npm i -g @composio/cli`, then retry.",
+      cli_unauthorized:
+        "Ask the agent to sign in, or run `composio login` in your terminal.",
+      timeout:
+        "Lower the probe interval in `~/.openloomi/loop/preferences.json` or check your network.",
+      transport_error:
+        "The agent service didn't respond. Check your network and try again.",
+      agent_http_error:
+        "The agent responded with a non-OK status. Try again in a few minutes.",
+      empty_response:
+        "The probe finished but produced no output. Retrying may help.",
+      malformed_response:
+        "The agent didn't return a recognizable `connectors` block. Retrying may help.",
+      cli_malformed:
+        "The CLI answered but its JSON couldn't be parsed. Run `composio dev init` then retry.",
+    },
+    probeKindInstall: "Copy install command",
+    probeKindCopied: "Copied",
+    probeKindSignIn: "Sign in via agent",
+    probeKindSignInPrompt:
+      "Please run `composio login --no-wait` in the user's terminal so the Loop probe can authenticate, then retry.",
+    probeKindHttpTooltip: "Upstream status: {{status}}",
+    healthOk: "Healthy",
+    healthDegraded: "Degraded",
+    healthError: "Connection error",
   },
   integrations: {
     description:
@@ -2435,6 +2530,13 @@ const enUS = {
           "Try simplifying the task or breaking it into smaller tasks",
           "Check network connection",
         ],
+        // The provider-timeout interruption card renders these strings when
+        // a long-running run is killed mid-tool-call. The wording here is
+        // intentionally different from the legacy timeout description above:
+        // there is no auto-retry in this case, so we do not promise one.
+        completedArtifacts:
+          "{{count}} file(s) from the previous run are preserved and can be reused.",
+        continueAction: "Continue this task",
       },
       genericError: {
         title: "An Error Occurred",
@@ -6156,6 +6258,42 @@ const enUS = {
     alreadyUpToDate: "You're already on the latest version!",
     manualDownloadHint:
       "If you encounter issues during the update, you can manually download from the official website",
+  },
+  // Loomi Pet theme system — desktop pet appearance customization.
+  // String sources: apps/web/public/loomi-widget.html context menu + theme picker.
+  pet: {
+    menu: {
+      title: "Menu",
+      openLoomi: "Open Loomi",
+      settings: "Settings",
+      theme: "Theme",
+      themeFox: "Fox",
+      themeCapybara: "Capybara",
+      pauseReminders: "Pause reminders for 1 hour",
+      checkNow: "Check now",
+      quit: "Quit Loomi",
+    },
+    theme: {
+      customDirHelp: "Drop PNGs into ~/.openloomi/pet-custom/<name>/",
+      overrideHelp: "Edit ~/.openloomi/pet-config.json",
+      statePrefixHelp:
+        "Filenames must contain a state name, e.g. idle.png, thinking.png",
+      noCustomThemes: "No custom themes found yet",
+      loadedToast: "Theme {{name}} loaded",
+      loadFailedToast: "Failed to load theme: {{reason}}",
+    },
+    state: {
+      idle: "Idle",
+      thinking: "Thinking",
+      working: "Working",
+      juggling: "Juggling",
+      needsinput: "Needs input",
+      greet: "Greet",
+      sleeping: "Sleeping",
+      sweeping: "Sweeping",
+      happy: "Happy",
+      presenting: "Presenting",
+    },
   },
 };
 

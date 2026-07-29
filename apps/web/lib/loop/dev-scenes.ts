@@ -155,9 +155,9 @@ function todoDecision(): LoopDecision {
 
 function highPriorityReplyDecision(): LoopDecision {
   // Form 5 demo: "Mira asks if security review can start today" — high-
-  // priority draft_reply that lands as a p0 card with full context.
+  // priority email_reply that lands as a p0 card with full context.
   return decision({
-    type: "draft_reply",
+    type: "email_reply",
     title: "Reply: Mira — security review can start today",
     action: {
       kind: "email_reply",
@@ -369,9 +369,9 @@ export const DEV_SCENES: Record<SceneKey, DevScene> = {
           },
         },
       }),
-      // Customer email — draft_reply card.
+      // Customer email — email_reply card.
       decision({
-        type: "draft_reply",
+        type: "email_reply",
         title: "Reply: Customer Q3 upgrade pricing question",
         action: {
           kind: "email_reply",
@@ -439,15 +439,17 @@ export const DEV_SCENES: Record<SceneKey, DevScene> = {
           },
         },
       }),
-      // Slack thread — slack_reply card.
+      // Slack thread — im_reply card (Slack is an IM channel).
       decision({
-        type: "slack_reply",
+        type: "im_reply",
         title: "Reply in #frontend-shipping",
         action: {
-          kind: "slack_reply",
+          kind: "im_reply",
           params: {
-            channel: "frontend-shipping",
-            ts: "1735000000.000100",
+            channel: "slack",
+            chatId: "frontend-shipping",
+            user: "@dana",
+            threadId: "1735000000.000100",
           },
         },
         dialogue: "@-mention in #frontend-shipping — context already pulled.",

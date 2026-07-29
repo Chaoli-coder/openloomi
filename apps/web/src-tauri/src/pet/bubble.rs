@@ -18,9 +18,8 @@ use crate::constants;
 pub const BUBBLE_W: f64 = 320.0;
 /// Logical (CSS) height of the bubble window. Matches `--bubble-h` in
 /// `loomi-bubble.html`. 84px to fit a 2-line speech + the downward
-/// tail + a small overlap with the blue dot; the dot's CSS `bottom: 4px`
-/// keeps it near the window's bottom edge so the tail tip still anchors
-/// to the pet (~7px above pet top with `PET_AUX_GAP = 4`).
+/// tail with a small overlap onto the pet's top so the tail tip still
+/// anchors visually (~7px above pet top with `PET_AUX_GAP = 4`).
 pub const BUBBLE_H: f64 = 84.0;
 
 static BUBBLE_APP_HANDLE: OnceLock<Mutex<Option<AppHandle>>> = OnceLock::new();
@@ -70,7 +69,11 @@ pub fn build_bubble_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindo
     let builder = base;
 
     let w = builder.build()?;
-    super::macos_window::configure_as_floating_panel(&w);
+    // Bubble: keep the NSPanel class swap — it's a non-activating
+    // overlay with no text-input surface, so the focusable-ivar
+    // trade-off described in `configure_as_floating_panel_with`
+    // doesn't apply.
+    super::macos_window::configure_as_floating_panel_with(&w, true);
     super::macos_window::configure_for_all_spaces(&w);
     // CloseRequested → hide (so the OS × button on the bubble isn't a
     // destroy gesture). Tauri's webview window has decorations(false) so
@@ -109,8 +112,10 @@ pub fn show_bubble_window(app: &AppHandle) {
         let _ = w.set_visible_on_all_workspaces(true);
         // Re-apply the NSPanel conversion on every show so a
         // transient rebuild of the underlying NSWindow doesn't
-        // quietly strip our non-activating-overlay behaviour.
-        super::macos_window::configure_as_floating_panel(&w);
+        // quietly strip our non-activating-overlay behaviour. The
+        // bubble has no text inputs, so the focusable-ivar trade-off
+        // doesn't apply.
+        super::macos_window::configure_as_floating_panel_with(&w, true);
         super::macos_window::configure_for_all_spaces(&w);
         let _ = w.set_focus();
         // Tell the bubble's JS to (re)arm its auto-dismiss timer. The

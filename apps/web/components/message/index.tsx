@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useCopyToClipboard } from "usehooks-ts";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { PreviewAttachment } from "../preview-attachment";
-import { MindMapPreview } from "../artifacts/mindmap-preview";
+import { MindMapPreviewDynamic } from "./mindmap-preview-dynamic";
 import { MessageMmarkFile } from "./message-mmark-file";
 import type { Insight } from "@/lib/db/schema";
 import { CitedInsightsDrawer } from "../cited-insights-drawer";
@@ -42,6 +42,7 @@ import { InlineRefBadge } from "../inline-ref-badge";
 import { ErrorMessageDisplay } from "./error-message-display";
 import { NativeToolCall } from "./native-tool-call";
 import { RawMessagesResult } from "./raw-messages-result";
+import { LifestyleImageConsent } from "./lifestyle-image-consent";
 import { ToolCallAccordion, type ToolCallPart } from "./tool-call-accordion";
 import {
   LibraryItemRow,
@@ -133,6 +134,8 @@ const PurePreviewMessage = ({
     openFilePreviewPanel,
     messages: contextMessages,
     setMessages: contextSetMessages,
+    confirmLifestyleImageGeneration,
+    declineLifestyleImageGeneration,
   } = useChatContext();
   const [, copyToClipboard] = useCopyToClipboard();
 
@@ -575,6 +578,8 @@ const PurePreviewMessage = ({
           type: f.type,
         },
         isTemporary: f.isTemporary,
+        readiness: f.readiness,
+        role: f.role,
       };
     });
   }, [
@@ -684,9 +689,28 @@ const PurePreviewMessage = ({
             )}
           >
             {(() => {
+              type LifestyleImageMetadata = {
+                lifestyleImage?: unknown;
+              };
+              type ImageFilePart = {
+                mediaType?: string;
+                name?: string;
+                source?: string;
+                url?: string;
+                blobPath?: string;
+              };
+
+              const isLifestyleImageMessage = Boolean(
+                (message.metadata as LifestyleImageMetadata | undefined)
+                  ?.lifestyleImage,
+              );
+              const isLifestyleImagePart = (part: ImageFilePart) =>
+                part.source === "lifestyle-image-generation" ||
+                isLifestyleImageMessage;
+
               // Collect image parts for separate rendering
               const imageParts: Array<{
-                part: any;
+                part: ImageFilePart;
                 index: number;
                 key: string;
               }> = [];
@@ -694,7 +718,7 @@ const PurePreviewMessage = ({
               filteredParts?.forEach((part, index) => {
                 const { type } = part;
                 if (type === "file") {
-                  const filePart = part as any;
+                  const filePart = part as ImageFilePart;
                   const { mediaType } = filePart;
                   if (mediaType?.startsWith("image/")) {
                     const key = `message-${message.id}-part-${index}`;
@@ -958,13 +982,22 @@ const PurePreviewMessage = ({
 
                     // Handle file type (images rendered uniformly in imageParts later, skip here)
                     if (type === "file") {
-                      const filePart = part as any;
+                      const filePart = part as ImageFilePart;
                       const { mediaType, name, url, blobPath } = filePart;
 
                       if (mediaType?.startsWith("image/")) {
+                        if (
+                          message.role === "assistant" &&
+                          isLifestyleImagePart(filePart)
+                        ) {
+                          return null;
+                        }
+
                         // Image rendering - convert mediaType to contentType
                         const attachment = {
                           ...filePart,
+                          name: name ?? "image",
+                          url: url ?? blobPath ?? "",
                           contentType: mediaType, // Convert field name
                         };
                         return (
@@ -1010,12 +1043,41 @@ const PurePreviewMessage = ({
                       };
                       return (
                         <div key={key} className="mt-3">
-                          <MindMapPreview
+                          <MindMapPreviewDynamic
                             content={mindmapPart.content}
                             filename={mindmapPart.name}
                             maxHeight="400px"
                           />
                         </div>
+                      );
+                    }
+
+                    if (type === "data-lifestyleImageConsent") {
+                      const consentPart = part as {
+                        data?: {
+                          prompt?: string;
+                        };
+                      };
+                      const prompt = consentPart.data?.prompt?.trim();
+                      if (!prompt) return null;
+
+                      return (
+                        <LifestyleImageConsent
+                          key={key}
+                          onConfirm={() =>
+                            confirmLifestyleImageGeneration({
+                              chatId,
+                              assistantMessageId: message.id,
+                              prompt,
+                            })
+                          }
+                          onDecline={() =>
+                            declineLifestyleImageGeneration({
+                              chatId,
+                              assistantMessageId: message.id,
+                            })
+                          }
+                        />
                       );
                     }
 
@@ -1057,12 +1119,34 @@ const PurePreviewMessage = ({
 
                     // Handle error messages from Native Agent
                     if (type === "error") {
+                      // Look ahead for an adjacent data-interruption part so
+                      // a provider-timeout interruption can render an explicit
+                      // Continue action. The interruption part is rendered
+                      // inline below to keep a single card layout.
+                      const partIndex = message.parts?.indexOf(part) ?? -1;
+                      const nextPart =
+                        partIndex >= 0
+                          ? message.parts?.[partIndex + 1]
+                          : undefined;
+                      const interruption =
+                        nextPart &&
+                        (nextPart as any).type === "data-interruption"
+                          ? ((nextPart as any).data as {
+                              reason: "timeout";
+                              timeoutMs?: number;
+                              workspacePath?: string;
+                              completedArtifacts: string[];
+                              canResume: boolean;
+                            })
+                          : undefined;
                       return (
                         <ErrorMessageDisplay
                           key={key}
                           errorContent={
                             (part as any).content || "Unknown error"
                           }
+                          interruption={interruption}
+                          sendMessage={sendMessage}
                         />
                       );
                     }
@@ -1266,11 +1350,19 @@ const PurePreviewMessage = ({
                   {message.role === "assistant" && imageParts.length > 0 && (
                     <div className="flex flex-wrap gap-2 items-center">
                       {imageParts.map(({ part, key }) => {
-                        const { url, name, mediaType } = part;
+                        const { url, name, mediaType, source, blobPath } = part;
+                        const shouldEnableImageLightbox =
+                          isLifestyleImagePart(part);
                         return (
                           <PreviewAttachment
                             key={key}
-                            attachment={{ url, name, contentType: mediaType }}
+                            attachment={{
+                              url: url ?? blobPath ?? "",
+                              name: name ?? "image",
+                              contentType: mediaType ?? "image/png",
+                              source,
+                            }}
+                            enableImageLightbox={shouldEnableImageLightbox}
                           />
                         );
                       })}

@@ -10,18 +10,27 @@ OpenLoomi's memory system is a local-first, tiered knowledge base built from mes
 
 This document covers the system architecture, data model, and the relationships between components.
 
+<img
+  src="/img/openloomi/arch.png"
+  alt="OpenLoomi memory architecture — Context sources feed the Proactive Agent, which drives the Controller and the Memory Brain (Save / Retrieve)"
+/>
+
+## Mental model
+
+OpenLoomi memory is built from three pillars:
+
+| Pillar             | Question it answers                       | Where it lives                                       |
+| ------------------ | ----------------------------------------- | ---------------------------------------------------- |
+| **Raw messages**   | "What was said, exactly?"                 | `raw_messages` table — verbatim platform messages    |
+| **Summaries**      | "What was the gist of this period?"       | `memory_summaries` table — derived compressions      |
+| **Insights**       | "What was decided / committed / blocked?" | `insights` table — AI-extracted structured records   |
+| **Knowledge Base** | "What's in this PDF I uploaded?"          | `rag_documents` + `rag_chunks` — user-uploaded files |
+
+All four originate from platform messages (and other context inputs like local files, audio/video, screenshots, Browser Use / Computer Use operation traces), but diverge into different representations for different query patterns.
+
 ---
 
-## Holistic Context
-
-At its core, OpenLoomi's memory system builds a **Holistic Context** — a comprehensive representation of your work that captures:
-
-- **People**: Who you work with, their roles, relationships, and collaboration patterns
-- **Projects**: What you're working on, goals, timelines, and progress
-- **Decisions**: Key decisions made, context, stakeholders, and outcomes
-- **Timeline**: How context evolves over time, with temporal validity for historical queries
-
-### The Four Pain Points of Agent Memory
+## The Four Pain Points of Agent Memory
 
 Current agent memory systems suffer from four critical challenges:
 
@@ -58,6 +67,11 @@ OpenLoomi transforms this pattern for personal AI agents, extracting structured 
 
 The memory system spans five distinct data layers, each serving a different purpose in the information architecture:
 
+<img
+  src="/img/openloomi/memory-layers.png"
+  alt="OpenLoomi's five memory layers — raw_messages, memory_summaries, Insights, Knowledge Base, and Vector index"
+/>
+
 | Layer                | Storage | Purpose                                                |
 | -------------------- | ------- | ------------------------------------------------------ |
 | **raw_messages**     | Local   | Verbatim message records — the ground truth            |
@@ -66,7 +80,7 @@ The memory system spans five distinct data layers, each serving a different purp
 | **Knowledge Base**   | Local   | User-uploaded document chunks for RAG                  |
 | **Vector index**     | Local   | Semantic search across all layers                      |
 
-All layers originate from platform messages (and broader context inputs such as local files, audio/video, screenshots, Browser Use / Computer Use operation traces, etc.), but diverge into different representations for different purposes. The full pipeline maps to the MelandOS architecture:
+The full pipeline maps to the MelandOS architecture:
 
 ```
 Connectors → Processor → Memory → Insights → Chat/Search → Weight Adjustment + Forgetting Engine → Knowledge Base + MCP Tools
@@ -511,7 +525,11 @@ When a user configures personalization in Insight Settings — focus people, top
 
 Screen Capture is OpenLoomi's **screen-aware memory**. When enabled, a global shortcut captures the frontmost window, a vision model summarizes what's on screen, and the result is stored locally as memory you can search and reason over later.
 
-> ⚠️ Screen Capture is **macOS only**. The native screen-capture command is compiled only on macOS (it uses `xcap` / ScreenCaptureKit) and requires macOS system permissions.
+<Callout type="warning">
+  Screen Capture is **macOS only**. The native screen-capture command is
+  compiled only on macOS (it uses `xcap` / ScreenCaptureKit) and requires macOS
+  system permissions.
+</Callout>
 
 ### Overview
 
@@ -558,11 +576,11 @@ Screen Capture settings live in **Personalization**. Available options:
 
 - Screenshots are uploaded to the local screenshot store; only the **path** is retained with each memory.
 - The persisted memory is the **summary** — `description`, `keyContent`, and `extractedText` — not a running video of your screen.
-- Everything stays under your local OpenLoomi data directory. See [Storage Management](/docs/storage-management) for where it lives and how to clear it.
+- Everything stays under your local OpenLoomi data directory; see [Privacy & Security](/docs/privacy-security) for where local data lives.
 
 ### Turning it off and purging
 
-Toggle **Enable Screen Capture** off to stop all capture — this immediately unregisters the native shortcut listener and short-circuits the capture handler. To reclaim disk space from stored screenshots and summaries, use [Storage Management](/docs/storage-management) to clear the relevant data.
+Toggle **Enable Screen Capture** off to stop all capture — this immediately unregisters the native shortcut listener and short-circuits the capture handler. To reclaim disk space from stored screenshots and summaries, clear the corresponding directories under `~/.openloomi/data/`.
 
 ### Troubleshooting
 
@@ -585,7 +603,7 @@ The dream process (re-embedding stale or changed content) needs to detect when `
 
 ### Why Write-Ahead Logging Mode?
 
-The background indexing pipeline writes new vectors while the user may be simultaneously querying. WAL (Write-Ahead Logging) allows concurrent readers without blocking the writer, and without the writer blocking readers. This is critical for maintaining \<500ms ingestion latency under read load.
+The background indexing pipeline writes new vectors while the user may be simultaneously querying. WAL (Write-Ahead Logging) allows concurrent readers without blocking the writer, and without the writer blocking readers. This is critical for maintaining &lt;500ms ingestion latency under read load.
 
 ### Why Log-Scale Access Score?
 
@@ -695,7 +713,10 @@ For full integration details, visit the [openloomi-memory Skill](https://github.
 
 ## Related
 
-- [Screen Capture](#screen-capture) — the screen-aware memory subsystem that feeds "screen" context sources
-- [Knowledge Base](/docs/library) — where uploaded documents and the RAG index live
-- [Global Search](/docs/global-search) — the search bar that hits memory, summaries, and raw messages in one go
+- [Connectors](/docs/connectors) — the source of raw messages that flow into Memory
+- [Loop](/docs/loop) — reads from Memory to populate decision cards
+- [Library](/docs/library) — the Knowledge Base surface where uploaded documents live
+- [Skills](/docs/skills) — how to expose Memory to other agent shells
 - [Embedding Providers](/docs/reference/embedding-providers) — cloud vs local embedding backends
+- [Privacy & Security](/docs/privacy-security) — where local data lives and how it's protected
+- [Benchmarks](/docs/benchmark) — LoCoMo, LongMemEval, and CL-bench performance data

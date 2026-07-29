@@ -64,30 +64,8 @@ export function Footer({
   const finalShowBackgroundImage =
     variant !== undefined ? false : (showBackgroundImage ?? false);
   const useUnifiedStyle = true;
-  const appDomain = "https://app.alloomi.ai";
 
   const [showWechatQR, setShowWechatQR] = useState(false);
-
-  const downloadLinks = {
-    macOS: {
-      arm64:
-        "https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_aarch64.dmg",
-      amd64:
-        "https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_macOS_amd64.dmg",
-    },
-    linux: {
-      amd64:
-        "https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_amd64.deb",
-      arm64:
-        "https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_linux_aarch64.deb",
-    },
-    windows: {
-      amd64:
-        "https://github.com/melandlabs/openloomi/releases/download/v0.7.5/openloomi_0.7.5_windows_amd64.exe",
-      arm64: null,
-    },
-    github: "https://github.com/melandlabs/openloomi/releases",
-  };
 
   const detectPlatform = () => {
     if (typeof window === "undefined") {
@@ -131,14 +109,6 @@ export function Footer({
         { name: t("footer.docs"), href: "/docs" },
         { name: t("footer.blogs"), href: "/blogs" },
         { name: t("footer.changelog"), href: "/docs/changelog" },
-        { name: t("footer.support"), href: `${appDomain}/support` },
-      ],
-    },
-    {
-      title: t("footer.legal"),
-      items: [
-        { name: t("footer.privacyPolicy"), href: `${appDomain}/privacy` },
-        { name: t("footer.termsOfService"), href: `${appDomain}/terms` },
       ],
     },
     {

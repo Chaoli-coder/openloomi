@@ -6,7 +6,21 @@ icon: "FaComments"
 
 # Chat
 
-Interact with OpenLoomi through natural conversation. Ask questions, give commands, or request complex tasks—all in plain language.
+Interact with OpenLoomi through natural conversation. Ask questions, give commands, or request complex tasks — all in plain language.
+
+## Goal
+
+By the end of this page you should be able to:
+
+1. Use the chat to ask questions that draw on [Memory](/docs/memory) — emails, messages, decisions, and project context.
+2. Trigger [Skills](/docs/skills) and create Artifacts (mind maps, flowcharts, charts, docs) without leaving the chat.
+3. Hand a draft off into [Loop](/docs/loop) or [Automation](/docs/automation) when you want it to run.
+
+## Before you begin
+
+- OpenLoomi Desktop is installed and an AI provider is configured — see [Getting Started](/docs/getting-started).
+- At least one [Connector](/docs/connectors) is enabled so Memory has signals to draw from.
+- The desktop window (or the messaging-app relay) is the surface you'll chat through.
 
 ---
 
@@ -150,3 +164,26 @@ Ask "Create a product page for my AI podcast app"
     alt="OpenLoomi App Generation"
   />
 </p>
+
+---
+
+## Verify
+
+- A "What did I work on yesterday?" prompt returns an answer grounded in your Memory instead of a generic LLM response.
+- A generated Artifact (chart, mind map, doc) renders inline in the chat and is downloadable.
+- Source references appear beneath any factual answer — click through to confirm the originating message.
+
+## Troubleshooting
+
+- **Empty answers for a Memory-grounded question.** Confirm at least one connector is enabled and has been syncing; Memory needs signals before it can answer.
+- **Skill didn't fire.** Rephrase to make the task explicit ("draft an email to X about Y" rather than "send something to X").
+- **Chat hangs mid-response.** Check the local API port (`127.0.0.1:3414` / `:3515`); the desktop app must be running.
+
+## Related
+
+- [Skills](/docs/skills) — the reusable capabilities Chat can call
+- [Memory](/docs/memory) — what grounds the answers in your history
+- [Loop](/docs/loop) — when Edit Draft hands off from a Decision Card
+- [Messaging Apps](/docs/messaging-apps) — chat through Telegram, WhatsApp, iMessage, QQ, Lark/Feishu
+- [Connectors](/docs/connectors) — the signal sources that fill Memory
+- [Library](/docs/library) — upload files for Chat to reason over

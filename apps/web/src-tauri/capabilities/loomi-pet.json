@@ -22,8 +22,10 @@
     "core:window:allow-set-ignore-cursor-events",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
+    "allow-open-url-custom",
     "allow-emit-dev-state",
     "allow-get-pet-config",
+    "allow-get-pet-context-actions",
     "allow-set-active-theme"
   ],
   "remote": {

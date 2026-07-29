@@ -24,6 +24,8 @@ import {
 import { resolvePlatformLogo } from "./integration-platform-card";
 import { deleteIntegrationAccountRemote } from "@/lib/integrations/client";
 import { getAuthToken } from "@/lib/auth/token-manager";
+import { ConnectorCapabilityBadge } from "@/components/loop/connector-capability-badge";
+import { deriveConnectorCapability, isLoopMonitored } from "@/lib/loop/client";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -248,6 +250,13 @@ export interface PlatformIntegrationsProps {
   onMessengerAuthOpen: () => void;
   onOutlookAuthOpen: () => void;
   onIMessageAuthOpen?: () => void;
+  /**
+   * Skip the "No integrations connected yet" empty-state panel when no
+   * native accounts exist. Set when the parent will render Composio-only
+   * rows beneath this component so the empty-state doesn't contradict
+   * the rows below it (#360 follow-up).
+   */
+  hideEmptyState?: boolean;
 }
 
 /**
@@ -260,6 +269,7 @@ export function PlatformIntegrations({
   onMessengerAuthOpen,
   onOutlookAuthOpen,
   onIMessageAuthOpen,
+  hideEmptyState = false,
 }: PlatformIntegrationsProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -425,11 +435,11 @@ export function PlatformIntegrations({
   return (
     <div className="space-y-6">
       <div className="space-y-6">
-        {connectedAccounts.length === 0 ? (
+        {connectedAccounts.length === 0 && !hideEmptyState ? (
           <div className="rounded-xl border border-[#e5e5e5] bg-white p-4 text-xs text-[#6f6e69]">
             {t("common.noConnectedPlatforms")}
           </div>
-        ) : (
+        ) : connectedAccounts.length === 0 ? null : (
           <div className="flex flex-col gap-3">
             {connectedAccounts.map((account) => {
               const platformInfo = getPlatformDisplayInfo(account.platform, t);
@@ -476,6 +486,22 @@ export function PlatformIntegrations({
                               {t("common.telegramReauth", { userName: "" })}
                             </Badge>
                           ) : null}
+                          {/*
+                           * #361 — render the capability badge next to the
+                           * platform label so the user can see whether an
+                           * authorized integration participates in Loop
+                           * or is chat/memory only. The badge only renders
+                           * once the Loop side has a known capability.
+                           */}
+                          <ConnectorCapabilityBadge
+                            capability={
+                              deriveConnectorCapability({
+                                id: account.platform,
+                                connected: true,
+                                probed: isLoopMonitored(account.platform),
+                              }) ?? undefined
+                            }
+                          />
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <span className="text-[11px] uppercase tracking-wide text-[#a09f9a] whitespace-nowrap">

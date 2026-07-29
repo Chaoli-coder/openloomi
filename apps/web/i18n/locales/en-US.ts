@@ -6,6 +6,14 @@ const en = {
   chat: {
     ...baseEn.chat,
     stopGenerating: "Stop generating",
+    codexTransport: {
+      retrying:
+        "Codex WebSocket timed out. Retrying; the task is still running.",
+      retryingWithAttempt:
+        "Codex WebSocket timed out. Retrying {{attempt}}/{{maxAttempts}}; the task is still running.",
+      fallback:
+        "Codex WebSocket timed out. Switching to HTTPS; the task is still running.",
+    },
   },
   common: {
     ...baseEn.common,
@@ -82,6 +90,15 @@ const en = {
     actionFailed: "Action failed: {{msg}}",
     ranAt: "Ran at {{ts}}",
     dismissedAt: "Dismissed",
+    // #358 — structured execution outcome surfaced by the runner.
+    outcome: {
+      executed: "Executed",
+      skipped: "Skipped",
+      blocked: "Blocked",
+      failed: "Failed",
+      reason: "Reason: {{reason}}",
+    },
+    lastAttemptFailed: "Last attempt failed: {{reason}} — retry Run below.",
     tab: {
       pending: "Pending",
       done: "Done",
@@ -96,13 +113,82 @@ const en = {
         "Dismissed decisions live here so you can revisit them later.",
       runTick: "Run tick",
     },
+    activation: {
+      title: {
+        activated: "Loop is ready",
+        working: "Set up your first decision",
+      },
+      subtitle:
+        "Connect a data source so Loomi can watch for decisions worth your attention.",
+      step: {
+        setup: "Setup",
+        runtime: "Connect a source",
+        source: "First check",
+        check: "Wait for first decision",
+        decision: "Review decision",
+      },
+      cta: {
+        connectSource: "Connect a data source",
+        runFirstCheck: "Run first check",
+        reviewDecision: "Review first decision",
+        finishSetup: "Finish setup",
+        activated: "You're all set",
+      },
+      badge: {
+        decision: "Decision waiting",
+        check: "Run first check",
+        source: "Connect a source",
+        aiProvider: "Add AI key",
+        setup: "Finish setup",
+        title: {
+          decision: "Open the Loop page to review your first decision",
+          next: "Next activation step",
+        },
+      },
+    },
     dialogue: {
-      draftReply:
+      emailReply:
         "This email looks like it's waiting on you — should I draft a reply?",
+      // #363 — replaces the hardcoded RSVP dialogue in server.ts::defaultDialogue
+      rsvp: "This calendar invite needs your call.",
+    },
+    // #363 — RSVP-specific decision card layers (issue #363). Kept under
+    // loop.rsvp.* so the same architecture can be adopted by email_reply /
+    // review_pr etc. without a namespace collision.
+    rsvp: {
+      invitationLabel: "Calendar invitation",
+      decidePrompt: "Will you attend this meeting?",
+      attend: "Attend",
+      decline: "Decline",
+      viewOriginal: "View original",
+      fieldTime: "Time",
+      fieldOrganizer: "Organizer",
+      fieldAttendance: "Attendance",
+      fieldLocation: "Location",
+      fieldConflict: "Conflict",
+      conflictNone: "No conflict",
+      readinessSufficient: "Information is sufficient to decide.",
+      readinessIncomplete:
+        "Information incomplete: {{fields}}. Review the original event before responding.",
+      technicalDetails: "Technical details",
     },
     nextStep: {
       tapRun: "Tap Run to let the agent handle this decision.",
     },
+    // #359 — plain-language decision state. Confidence (if shown elsewhere)
+    // is diagnostic; the state pill is the primary surface and never derived
+    // from classification confidence.
+    readiness: {
+      ready: "Ready to decide",
+      needsContext: "Needs more context",
+      notActionable: "No action needed",
+      confirm: "Confirm carefully",
+      missing: "Missing: {{fields}}",
+    },
+    confirmRun: "Confirm & run",
+    confidenceShort: "conf {{n}}",
+    confidenceDiagnostic:
+      "Classification confidence (diagnostic — not urgency)",
     detailTitle: "Decision",
     backToList: "Back to loop",
     detail: {
@@ -112,6 +198,12 @@ const en = {
         dismissed: "Dismissed",
       },
       confidenceBadge: "conf {{n}}",
+      openFirstDecision: "Open first decision",
+      backToLoop: "Back to Loop",
+      notFoundDesc: {
+        firstTime:
+          "This decision isn't around anymore — but your top pending one is waiting.",
+      },
       created: "Created {{ts}}",
       dryRunLabel: "Dry run plan",
       dryReady: "Ready",
@@ -148,6 +240,15 @@ const en = {
       ranAt: "Ran at {{ts}}",
       dismissedLabel: "Dismissed",
       dismissedNoReason: "No reason recorded.",
+      // #358 — verdict-specific labels for the result panel header and
+      // the resurrect button on a skipped/non-executed done row.
+      executedLabel: "Executed",
+      skippedLabel: "Skipped",
+      executedBadge: "Executed",
+      resurrect: "Run again",
+      resurrectedToast: "Back to pending",
+      resurrectFailed: "Re-run failed: {{msg}}",
+      lastAttemptFailed: "Last attempt failed: {{reason}} — retry Run below.",
       promote: "Promote back to pending",
       promotedToast: "Back to pending",
       promoteFailed: "Promote failed: {{msg}}",
@@ -158,10 +259,44 @@ const en = {
       sourceSignal: "Source signal",
       metaLabel: "Meta",
     },
+    // #365 — idle pill and compact status card copy. The pill text
+    // (loop.idlePill.short / cta) is intentionally short so it fits
+    // inside the 168×168 pet window without overlapping the fox; the
+    // compact card carries the verbose copy under loop.compactCard.*.
+    idlePill: {
+      short: "Loomi is on watch · Nothing needs your attention",
+      cta: "View status",
+      paused: "Monitoring paused",
+      working: "Checking your connected sources…",
+      failure: "Couldn't reach {{source}} · Review needed",
+    },
+    compactCard: {
+      title: {
+        healthy: "Everything is working",
+        checking: "Checking your sources",
+        paused: "Monitoring is paused",
+        failure: "{{source}} needs attention",
+      },
+      subtitle: {
+        healthy:
+          "Nothing needs your attention. Loomi will open a card when a decision needs you.",
+        checking: "Loomi is checking your sources now.",
+        paused: "Loop is paused — nothing will surface until you resume.",
+        failure:
+          "Loomi couldn't update {{source}} recently. Review the original before continuing.",
+      },
+      lastChecked: "Last checked: {{rel}}",
+      lastCheckedNever: "Last checked: never",
+      syncHealthy: "Sync is healthy",
+      sourcesLabel: "Watching",
+      sourcesEmpty: "No sources connected",
+      collapse: "Collapse",
+      openLoop: "Open Loop",
+    },
   },
   settings: {
     ...baseEn.settings,
-    aiSettingsTitle: "API Settings",
+    aiSettingsTitle: "Settings",
     loopSectionTitle: "Loop (proactive execution)",
     loopEnableLabel: "Enable the Loop",
     loopEnableDescription:
@@ -184,6 +319,7 @@ const en = {
       "Anthropic Claude or compatible provider endpoints",
     aiSettingsOverride: "User override",
     aiSettingsSystem: "System default",
+    aiSettingsNotConfigured: "Not configured",
     aiSettingsApiKey: "API Key",
     aiSettingsBaseUrl: "Base URL",
     aiSettingsModel: "Model",
@@ -239,6 +375,8 @@ const en = {
     embeddingLocalOnly: "Use local files only",
     embeddingLocalOnlyDescription:
       "To use your own local model, enter its path and enable this option. Model downloads will be disabled, and only model files already available on this device will be loaded.",
+    embeddingSelectProviderHint:
+      "Pick an embedding provider above to configure it.",
     embeddingLocalDownloadHint:
       "The first test may download the model and take a little longer. After switching models, you need to restart the application.",
     embeddingUsageHint: "Used by knowledge base, memory, and semantic search.",

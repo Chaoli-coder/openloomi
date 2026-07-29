@@ -1,172 +1,206 @@
 ---
 title: "Sales Teams"
-description: "Automate pipeline management, follow-ups, and proposal generation"
+description: "How a RevOps lead stops doing pipeline archaeology every Friday and lets HubSpot signals flow into the queue — Memory carries every prospect, approval still required before anything sends"
 icon: "FaChartLine"
 ---
 
 # Sales Teams
 
-## Your Full Pipeline, Running Itself
+## At a glance
 
-OpenLoomi syncs with HubSpot/Salesforce, auto-updates your pipeline, generates personalized proposals, and manages follow-up sequences — never burns out.
+|                   |                                                                           |
+| ----------------- | ------------------------------------------------------------------------- |
+| **Persona**       | RevOps lead coordinating deals across HubSpot, Slack, email               |
+| **Goal**          | Stop doing pipeline archaeology every Friday                              |
+| **Prerequisites** | HubSpot connector authorized; HubSpot registered as a custom Loop channel |
+| **Outcome**       | Deal signals flow into the queue, drafts are approval-gated               |
 
-**What it does:**
+A RevOps lead at a B2B company used to spend half the week chasing context — opening HubSpot to check a deal stage, scrolling Slack to find the last conversation with a prospect, drafting the same follow-up email for the fifth time. The other half of the week was supposed to be pipeline strategy and forecast calls.
 
-| Step                  | Action                                                           |
-| --------------------- | ---------------------------------------------------------------- |
-| 📊 Pipeline sync      | HubSpot/Salesforce sync — auto-updated pipeline with deal stages |
-| ✉️ Follow-up at scale | Personalized outreach sequences across email, Telegram, LinkedIn |
-| 📄 Generate proposals | Auto-draft proposals from conversation context and CRM data      |
-| 🔄 Never lose a lead  | 5-touch automated sequences, every touch adds value              |
+By Friday afternoon, all that could be remembered was that Acme's stage changed Tuesday, Sarah's been quiet for two weeks, and the proposal promised to the partner from Berlin never got written.
 
-> "I can now manage what used to require a full sales team. OpenLoomi handles the follow-ups, the personalized outreach, the proposal generation — while I focus on closing deals."
+The shortfall isn't discipline. It's the cognitive load of holding 80 active deals + the last conversation with each one at the same time.
 
----
+The user doesn't want another chatbot that waits to be asked. They want an AI assistant that genuinely fits a RevOps lead's week: it watches the CRM continuously, organizes the prospect context, and only finds them when there's a deal decision that genuinely needs to be made.
 
-## See It in Action
-
-### HubSpot Pipeline Sync
-
-Connect HubSpot in **Settings → Connectors** to sync your full pipeline. OpenLoomi reads deal stages, owner assignments, and close dates — keeping your pipeline view always current without manual updates.
+> **Honest about what Loop ships built-in:** Email / Calendar / GitHub / Slack / Linear are the five built-in sources. HubSpot, Salesforce, and Pipedrive aren't in that list — but they can be registered as **custom channels** via the `openloomi-loop` skill, and once registered Loop pulls deal-stage signals alongside email and Slack the same way Loop picks up Linear.
 
 ---
 
-### Personalized Outreach Draft
+## Problem 1: Pipeline archaeology every Friday
 
-OpenLoomi drafts follow-ups that sound like you — not generic AI output. Use the **cold-email** and **revops** skills to generate personalized sequences at scale.
+The painful part of RevOps isn't the forecasting — it's the visibility. The exchange used to go like this:
 
----
+- Open HubSpot, filter to deals, sort by last activity date
+- Scroll the 30 deals touched this week
+- Try to remember "which of these have I emailed this week vs which are sitting"
+- Open Slack, search for each prospect's name, find the last DM
+- Open Gmail, search the same prospect, find the last email thread
+- Stitch the "what's actually happening with this deal" together from memory
 
-### Follow-Up Sequence Automation
+If the week was busy, this got pushed to the next Monday. By then, half of what was wanted to act on had already gone cold.
 
-Set up scheduled tasks for your outreach sequences. OpenLoomi manages the cadence — weekly check-ins, post-demo follow-ups, competitive intel alerts — and drafts each message for your approval.
+This is exactly what AI should be doing. The actual hard part of pipeline management isn't the prioritization — it's gathering the scattered deal context and reorganizing it into something a RevOps lead can act on.
 
----
-
-### Auto-Generated Proposal Draft
-
-OpenLoomi compiles context from past conversations, HubSpot deal data, and your notes into structured proposal drafts. Save hours of manual writing and ensure every proposal reflects what the client actually discussed.
-
----
-
-## Tracking Your Pipeline
-
-OpenLoomi's tracking panel shows pipeline sync executions, outreach messages sent, and proposal drafts generated — giving you full visibility into your AI-powered sales operations.
-
----
-
-## What Changed
-
-| Aspect              | Before                        | After                                   |
-| ------------------- | ----------------------------- | --------------------------------------- |
-| Client management   | 50 clients managed manually   | 500+ with AI assistance                 |
-| Outreach quality    | Generic mass emails           | Personalized at scale                   |
-| Proposal writing    | Hours per proposal            | Auto-drafted from context               |
-| Follow-up cadence   | Dropped leads after one touch | 5-touch sequences, automated            |
-| Pipeline visibility | Stale CRM, manual updates     | Live HubSpot sync, always current       |
-| Competitive intel   | Missed competitor mentions    | Real-time alerts via Interests settings |
-
----
-
-## Reference Case Studies
-
-Companies running AI sales agents report significant pipeline acceleration:
-
-- **Gumloop / Gusto**: 31% higher win rate, $1.5M+ ARR in 3 months from AI sales agents
-- **11x AI / Checkr**: 1.5x increase in qualified meetings
-- **11x AI / canibuild**: $1M+ pipeline generated in first 3 months
-
----
-
-## How to Set Up
-
-**Option 1: Copy & Paste (Easiest)**
-
-Open OpenLoomi and paste this:
+So HubSpot is registered as a custom channel in chat:
 
 ```
-Please help me set up my sales automation workflow.
-
-1. Connect HubSpot in Settings → Connectors so OpenLoomi can read my pipeline (deals, stages, owners, close dates)
-
-2. Set up a personalized outreach system:
-   - When I flag a lead in HubSpot, draft a personalized first outreach using the cold-email skill
-   - Schedule a 5-touch follow-up sequence: day 1, day 3, day 7, day 14, day 21
-   - Each touch should add new value (not just "checking in")
-   - Draft everything — I approve before anything goes out
-
-3. Set up proposal generation:
-   - When a deal reaches the "Proposal" stage in HubSpot, compile context from conversation history, deal data, and notes
-   - Generate a structured proposal draft in my template format
-   - Create the proposal artifact and notify me for review
-
-4. Track everything: log each outreach, follow-up, and proposal draft to my timeline
+Register a custom channel called "hubspot_deals" that polls my HubSpot deals every 30 minutes.
+Wrap the Composio HubSpot toolkit's "list deals" tool.
+Pull the deal name, stage, owner, close date, and last activity date.
 ```
 
-OpenLoomi will automatically create the scheduled tasks for you!
+The skill writes the record to `~/.openloomi/loop/custom-channels.json` and the next Loop tick picks it up. State is per-user, local, human-readable.
+
+If the CRM is Salesforce or Pipedrive rather than HubSpot, it is registered the same way — any Composio toolkit works as a Loop source.
 
 ---
 
-**Option 2: Manual Setup**
+## Problem 2: Generic mass-sent templates
 
-### Step 1: Connect HubSpot
+For warm replies the lead had Loop. For outbound — first touch, follow-ups, re-engagements, proposals — there was no incoming signal yet for Loop to surface, and the templates being sent out were starting to read like templates.
 
-1. Go to **Settings → Connectors**
-2. Find HubSpot in the connector list and click **Connect**
-3. Complete the OAuth flow to authorize OpenLoomi access
+The old approach: a doc of "templates" collected from other RevOps leads was opened, one copied, the blanks filled in with the prospect's company name, and sent. The result always read like a template because it was a template. Reply rates were in the 5–10% range, and the few replies that came back were usually "please remove me from your list".
 
-### Step 2: Configure Personalization
+Drafts are now started in **Chat** with the agent. The agent reads past messages and the matching contact note from `~/.openloomi/data/memory/people/sarah_chen.md`, the matching project note, and the prior thread cluster — so the draft references what the user and the prospect actually discussed, not generic boilerplate.
 
-1. Go to **Settings → Personalization → My Interests**
-2. Add your priority keywords: deal stages, competitors to track
-3. Add communication preferences: formal/informal, preferred phrasing
+The **`cold-email`** skill is the public packaging for personalized B2B outreach; the **`revops`** skill helps track lifecycle stages; the **`hubspot-automation`** skill can update HubSpot properties on the user's behalf.
 
-### Step 3: Create Automation Tasks
+Try:
 
-1. Go to the **Agent** page, then select **Automation** → **New Task**
-2. Create the first task:
+- _"Pull everything we discussed with Sarah Chen from memory and draft a proposal in our standard template."_
+- _"Write a 5-touch follow-up sequence for the Acme deal — each touch should add new value, not just 'checking in.'"_
+- _"Update Sarah Chen's HubSpot deal stage to 'Proposal Sent' and log today's outreach."_
 
-| Field            | Input                                                                                                                                                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Task Name        | `Pipeline Sync & Lead Monitoring`                                                                                                                                                                                          |
-| Task Description | `1. Sync with HubSpot — read all deals, stages, owners, and close dates\n2. Monitor for deals entering "Proposal" stage\n3. Generate proposal draft from conversation context and deal data\n4. Log sync runs to timeline` |
-| Schedule         | `Every 1 hour`                                                                                                                                                                                                             |
-
-3. Create the second task:
-
-| Field            | Input                                                                                                                                                                                                                                                       |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Task Name        | `Outreach Sequence Manager`                                                                                                                                                                                                                                 |
-| Task Description | `1. Check for new leads flagged in HubSpot\n2. Draft personalized first outreach using cold-email skill\n3. Schedule 5-touch follow-up sequence (day 1, 3, 7, 14, 21)\n4. Draft each touch — user approves before sending\n5. Log all outreach to timeline` |
-| Schedule         | `Every 4 hours`                                                                                                                                                                                                                                             |
-
-### Step 4: Use the Right Skills
-
-| Use Case            | Skill to Invoke        | What It Does                                          |
-| ------------------- | ---------------------- | ----------------------------------------------------- |
-| Personalized emails | **cold-email**         | Writes B2B outreach that sounds human, not templated  |
-| Pipeline management | **revops**             | Lead scoring, lifecycle stages, routing rules         |
-| HubSpot automation  | **hubspot-automation** | Contact/deal creation, pipeline search, property sync |
-| Notion proposals    | **notion-api**         | Create and manage proposal documents from templates   |
+For a proposal that used to take 2 hours of context-hunting, it's now 30 minutes of refining a draft the agent already grounded in the actual conversation.
 
 ---
 
-## Why This Works
+## Problem 3: Cross-channel prospect context loss
 
-**🧠 It Sounds Like You, Not AI**
+The other failure mode that kept being hit: the same prospect would email Monday and DM on Slack Wednesday, and the mental model of them was the same person — but the system treated them as two different conversations. A Slack reply would be written that contradicted what was said in the email, and the prospect would notice.
 
-- OpenLoomi reads your communication patterns and mirrors your tone in every draft
-- Prospects get personalized outreach, not mass-sent templates
-- The more you use it, the more it learns your style
+Loop handles this through the memory layer. Per [Loop's memory contract](/docs/loop#how-loop-reads-and-writes-memory):
 
-**📈 Pipeline Without the Admin Work**
+| Loop reads from memory                               | Loop writes after Approve                      |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| Prospect profile, prior thread cluster, project ties | Updated thread cluster, refreshed contact note |
 
-- HubSpot sync keeps your CRM always current — no manual updates
-- Deals auto-advance in OpenLoomi's Focus view as they progress in HubSpot
-- Never lose a lead because you forgot to log an interaction
+The same Sarah Chen who emails Monday and DMs on Slack Wednesday is one person in `people/sarah_chen.md` — Loop doesn't re-learn her per channel. The `im_reply` card on Slack and the `email_reply` card on Gmail both read from the same memory slice, and both write back to the same memory after approval.
 
-**⚡ Scale Without Burnout**
+None of this needs to be curated. A daily analytics refresh surfaces the contacts and projects actually engaged with; a weekly compaction archives stale entries instead of deleting them — so context never silently disappears. The longer it's used, the sharper the draft gets — and it works the same way across every connector.
 
-- 5-touch sequences that actually add value on each touch
-- Proposal drafts in minutes, not hours
-- AI handles the cadence; you focus on closing deals
+The **`contact_update`** card handles the public-signal side of prospect context. When a prospect's bio changes — a promotion, a new role, a link in their company bio — Loop surfaces a card with the proposed update to `people/<name>.md` in memory. **Approve** is tapped and the contact profile gets refreshed; next time they email, the `email_reply` card carries the new context.
+
+---
+
+## What this workflow really solves isn't a few automation scripts
+
+At first the goal was just to save the 2 hours every Friday being spent on pipeline archaeology. But after a few weeks, the realization hit: the real problem isn't a few missing automation scripts — it's that sales work is fundamentally a cross-channel context problem:
+
+- The deal lives in HubSpot, the conversation lives in email, the follow-up lives in Slack
+- The same prospect appears in all three with the same context that has to be reloaded each time
+- Action signals are buried under 200 other CRM rows
+- By the time it's noticed that a deal has gone cold, the close date is two weeks away
+
+In the past, all this context had to be found and pieced together by actively searching. The change OpenLoomi brings is inverting that relationship: instead of constantly searching across systems, AI keeps watching the CRM and the conversations and comes back with the full memory slice at the right moment.
+
+- If a deal stage changes, the `hubspot_deals` channel surfaces a typed card with the new stage and the last activity date.
+- If a prospect emails, the `email_reply` card lands with the draft grounded in what was discussed last quarter.
+- If a prospect DMs on Slack, the `im_reply` card carries the channel context and a grounded draft.
+- If a prospect's public signal changes, the `contact_update` card proposes the memory refresh.
+
+All that's needed is to focus on the parts that genuinely need judgement — the actual message content, the proposal terms, the deal strategy.
+
+---
+
+## From "Friday archaeology" to a continuously running sales loop
+
+To make this work, two kinds of working patterns are configured in OpenLoomi.
+
+**One is event-driven:**
+
+| Trigger                                                         | What happens                                                                                                |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| HubSpot deal-stage change (via custom channel)                  | Typed `todo` or `contact_update` card surfaces with the new stage, last activity, and matching memory slice |
+| Inbound email from a prospect + action word + past reply window | `email_reply` card with draft grounded in memory; four-gesture flow                                         |
+| Inbound DM from a prospect (Slack / Telegram / Lark / iMessage) | `im_reply` card with channel context and draft                                                              |
+| Public signal on a prospect (promotion, new role, link in bio)  | `contact_update` card proposes the memory refresh                                                           |
+
+**The other is scheduled:**
+
+| Task                      | Schedule          | Purpose                                                                           |
+| ------------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| **Brief (Today's To-Do)** | Every day at 9 AM | Pulls today's calendar + open decision cards + deal signals that landed overnight |
+| **Wrap (Today's Done)**   | Every day at 6 PM | Lists the outreach Loop handled for you today + what got parked                   |
+
+Together they form a loop that runs continuously across HubSpot, email, and Slack:
+
+```
+Continuously watch → Organize prospect context → Propose draft or update → Human decides → Send and remember
+```
+
+Compared to configuring an isolated per-channel workflow, the preference is to have OpenLoomi keep understanding _"what's actually happening with each deal right now, and which of them needs a touch today."_
+
+> 💡 **Outbound isn't in this table** because there are no incoming signals yet for cold outreach. It lives in Chat. The main OpenLoomi window is opened, the agent is asked to draft using the `cold-email` skill, then it's refined and sent via the matching connector.
+
+---
+
+## What changed
+
+| Aspect                | Before                                       | After                                                                           |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------- |
+| Pipeline visibility   | Open HubSpot, scroll, manually re-check      | Loop surfaces typed cards as deal stages change                                 |
+| Outreach quality      | Generic mass-sent templates                  | Drafted in chat with the agent, grounded in past phrasing and prospect notes    |
+| Proposal writing      | Hours per proposal, hunting for context      | Agent pulls conversation history from memory, drafts in your template           |
+| Follow-up cadence     | Drop after one touch                         | Follow-up drafts prepared in chat, grounded in what was actually discussed      |
+| Cross-channel context | Prospect is a different person in every tool | One memory, one queue — Sarah's Slack DM has the same memory slice as her email |
+
+What OpenLoomi saves isn't just the 2 hours every Friday. More importantly, there's no need to keep switching between HubSpot, Gmail, and Slack, re-finding the last conversation with each prospect, and worrying about which deal went cold.
+
+---
+
+## How to set this up
+
+### Path A: Connect HubSpot (one-time)
+
+In OpenLoomi Desktop → **Settings → Connectors**, HubSpot is found and **Connect** is clicked. The browser pops up the matching OAuth page. After authorizing, verification runs with `list-accounts` in chat — once HubSpot shows `active`, the connector is wired.
+
+Then in chat, the deal signal source is registered:
+
+```
+Register a custom channel called "hubspot_deals" that polls my HubSpot deals every 30 minutes.
+Wrap the Composio HubSpot toolkit's "list deals" tool.
+```
+
+X lives in Composio's app catalog; the `connect` skill installs Composio on the fly if not already installed. Verification runs with `list-accounts` — once HubSpot shows `active` and the `hubspot_deals` channel appears in chat, Loop picks them up on the next tick.
+
+### Path B: Add the skills needed
+
+In chat, the skills matching the workflow are asked for:
+
+```
+Add the cold-email skill for B2B outreach drafting.
+Add the revops skill for pipeline lifecycle tracking.
+Add the hubspot-automation skill for CRM property updates.
+```
+
+Each skill installs on the fly the first time it's asked for.
+
+### Tune Loop
+
+Loop is on by default at a 10-minute scan. To tune trusted contacts, source toggles, and brief/wrap times, **Settings → Loop** is opened. To tune when Loomi bubbles appear, **Settings → Attention Agent** is opened.
+
+> 💡 HubSpot isn't in Loop's five built-in sources, so the deal signals show up only after the custom channel has been registered. Once registered, the next tick picks them up — and they appear in the Brief and Wrap rollups alongside everything else.
+
+OpenLoomi's audit log records every execution — how many times Loop has polled, which deal signals surfaced, which Approves were tapped, which drafts were edited. This way repetitive triage can be handed off to AI while every action it took remains visible.
+
+---
+
+## Related
+
+- [Loop](/docs/loop) — the deal-signal engine
+- [Connectors](/docs/connectors) — wiring HubSpot + Slack + email
+- [Memory](/docs/memory) — the prospect history drafts are grounded in
+- [Automation](/docs/automation) — schedule the weekly pipeline rollup
+- [Attention Agent](/docs/attention-agent) — where high-value deal signals bubble

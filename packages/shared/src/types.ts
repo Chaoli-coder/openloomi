@@ -108,6 +108,21 @@ export type CustomUIDataTypes = {
     content: string;
     id: string;
   };
+  lifestyleImageConsent: {
+    id: string;
+    prompt: string;
+    reason?: string;
+    createdAt: string;
+  };
+  lifestyleImageStatus: {
+    id: string;
+    status: "loading" | "success" | "error";
+    provider?: string;
+    model?: string;
+    creditsUsed?: number;
+    imageCount?: number;
+    error?: string;
+  };
   hideLoadingText: {
     id: string;
   };
@@ -421,6 +436,21 @@ export type CustomUIDataTypes = {
       emoji?: string;
     }>;
     skillId: string;
+  };
+  /**
+   * Provider-timeout interruption. Emitted alongside an `error` part when the
+   * agent was killed mid-tool-call by an absolute wall-clock deadline (issue
+   * #356). Carries the preserved workspace path and any artifacts that did
+   * manage to land before the deadline so the chat UI can render an explicit
+   * Continue action that reuses the same workspace instead of restarting the
+   * task from scratch.
+   */
+  interruption: {
+    reason: "timeout";
+    timeoutMs?: number;
+    workspacePath?: string;
+    completedArtifacts: string[];
+    canResume: boolean;
   };
 };
 

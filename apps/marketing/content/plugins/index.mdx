@@ -1,11 +1,19 @@
 ---
 title: "Plugins"
 description: "First-party plugins that bridge OpenLoomi to other agent shells — Claude Code and Codex CLI"
+icon: "FaRobot"
 ---
 
 # Plugins
 
 First-party plugins that turn external agent shells into a coding surface for a local OpenLoomi runtime. Each plugin is a thin bridge — no business logic is reimplemented, every side effect lands on the local HTTP runtime, and no command ever prints or forwards your API keys or auth tokens.
+
+## Choose your path
+
+| If you already live in… | Install                                                                                       | First-run setup                   |
+| ----------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- |
+| **Claude Code**         | `/plugin marketplace add melandlabs/plugins` then `/plugin install openloomi`                 | `/openloomi:setup`                |
+| **Codex CLI**           | `codex plugin marketplace add melandlabs/plugins` then `codex plugin add openloomi@openloomi` | `@OpenLoomi Run first-use setup.` |
 
 ## Overview
 
@@ -16,9 +24,14 @@ Both plugins follow the same contract:
 - A Node bridge that talks to the local OpenLoomi runtime over HTTP (`127.0.0.1:3414`, falling back to `127.0.0.1:3515`).
 - A `setup-status` command that reports readiness as stable JSON (`mode`, `installed`, `tokenPresent`, `aiProviderConfigured`, `ready`, `nextAction`, `reason`).
 - An auto-enable wizard (`setup`) that walks the install → launch → guest login → token-mint → recheck state machine.
-- An opt-in Pet mirror that maps plugin lifecycle events onto the [Pet](/docs/pet) without ever blocking the user's turn.
+- An opt-in Pet mirror that maps plugin lifecycle events onto the [Attention Agent](/docs/attention-agent) without ever blocking the user's turn.
 
-> 🔐 **Secret handling is identical across both plugins.** API keys, OAuth tokens, connector secrets, and auth tokens never appear in chat, argv, stdout, stderr, or logs. The bridge only reports _presence_ (`hasApiKey`, `baseUrlPresent`, `modelPresent`, etc.) — never values.
+<Callout type="info">
+  **Secret handling is identical across both plugins.** API keys, OAuth tokens,
+  connector secrets, and auth tokens never appear in chat, argv, stdout, stderr,
+  or logs. The bridge only reports _presence_ (`hasApiKey`, `baseUrlPresent`,
+  `modelPresent`, etc.) — never values.
+</Callout>
 
 ## Available plugins
 
@@ -27,6 +40,6 @@ Both plugins follow the same contract:
 
 ## Related
 
-- [Pet](/docs/pet) — the desktop companion that mirrors plugin lifecycle events
-- [Onboarding](/docs/onboarding) — first-run setup for the OpenLoomi desktop app itself
+- [Attention Agent](/docs/attention-agent) — the desktop companion that mirrors plugin lifecycle events
+- [Getting Started](/docs/getting-started) — first-run setup for the OpenLoomi desktop app itself
 - [Claude Agent Runtime](/docs/reference/agent-runtimes/claude) · [Codex CLI Runtime](/docs/reference/agent-runtimes/codex) — how OpenLoomi drives the underlying runtimes

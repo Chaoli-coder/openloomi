@@ -59,6 +59,9 @@ const zhHans = {
     sources: "来源",
     noSources: "暂无引用来源",
     temporary: "临时",
+    // #357 — 文件卡片上表示"最新一次工具调用失败/超时"的徽标，用于在
+    // 对话产物列表中区分"未完成"与"最终交付物"。
+    incomplete: "未完成",
     previewImage: "预览图片",
     preview: "预览",
     pin: "置顶",
@@ -677,6 +680,14 @@ const zhHans = {
         description: "处理请求时遇到问题。",
         suggestions: ["稍后重试", "如果问题持续存在，请联系支持"],
       },
+      codexCompatibilityError: {
+        title: "Codex 配置需要处理",
+        suggestions: [
+          "升级 Codex，然后重启 OpenLoomi",
+          "或选择当前 Codex CLI 支持的模型",
+        ],
+        docsAction: "打开 Codex 安装指南",
+      },
       fileNotFoundError: {
         title: "文件未找到",
         description: "找不到指定的文件。",
@@ -784,6 +795,63 @@ const zhHans = {
   },
   connectors: {
     pageDescription: "关联您的平台或订阅您关心的内容 — openloomi 为您守望。",
+    // #361 — capability state labels. 与单纯的 "connected" 措辞分开，让
+    // 用户清楚"已授权"与"被 Loop 监听"是两件事。
+    capabilityConnected: "已连接",
+    capabilityLoopMonitored: "Loop 监听中",
+    capabilityDecisionCapable: "可产出决策",
+    capabilityNeedsSetup: "需要配置",
+    capabilityUnsupported: "暂未支持映射",
+    capabilityReasonNoMapping:
+      "OpenLoomi 识别此集成，但其信号类型尚未映射到具体决策。",
+    capabilityReasonNotLoopMonitored:
+      "已授权用于聊天与记忆；Loop 暂未从此来源拉取信号。",
+    capabilitySummary:
+      "{{connected}} 已连接 · {{monitored}} 被 Loop 监听 · {{decision}} 可产出决策",
+    unsupportedSignalsNote:
+      "{{count}} 条信号被丢弃 —— 来源缺少 Loop 标准映射。",
+    needsSetupAction: "让智能体接入 Loop",
+    // #391 — `/connectors` 页面同步 Composio 后端账户。同步按钮触发
+    // Loop 后台重新探测,展示给用户的账户可能落后于实际授权状态。
+    sync: "同步",
+    sourceComposio: "Composio",
+    sourceComposioHint: "通过 Composio（智能体管理）连接",
+    probeError: "最近同步失败",
+    // #412 — 每种探测失败类型对应的提示与一键修复。详见
+    // `apps/web/components/loop/probe-error-callout.tsx`。
+    probeRetry: "重新探测",
+    probeRetrying: "重新探测中…",
+    probeKindTitle: {
+      cli_not_found: "未安装 Composio CLI",
+      cli_unauthorized: "Composio CLI 未登录",
+      timeout: "探测超时",
+      transport_error: "无法连接智能体",
+      agent_http_error: "智能体返回错误",
+      empty_response: "智能体未返回数据",
+      malformed_response: "智能体输出无法解析",
+      cli_malformed: "Composio CLI 返回异常输出",
+    },
+    probeKindDesc: {
+      cli_not_found: "请先用 `npm i -g @composio/cli` 安装,再点击重试。",
+      cli_unauthorized: "请让智能体登录,或在终端运行 `composio login`。",
+      timeout:
+        "请到 `~/.openloomi/loop/preferences.json` 缩短探测间隔,或检查网络。",
+      transport_error: "智能体服务未响应,请检查网络后重试。",
+      agent_http_error: "智能体返回了非正常状态码,请稍后重试。",
+      empty_response: "探测完成但未返回内容,可重试。",
+      malformed_response: "智能体未返回可识别的 `connectors` 结构,可重试。",
+      cli_malformed:
+        "CLI 已返回但 JSON 无法解析。请运行 `composio dev init` 后重试。",
+    },
+    probeKindInstall: "复制安装命令",
+    probeKindCopied: "已复制",
+    probeKindSignIn: "让智能体登录",
+    probeKindSignInPrompt:
+      "请在用户终端运行 `composio login --no-wait` 完成 Loop 探测的身份验证,然后重新探测。",
+    probeKindHttpTooltip: "上游状态:{{status}}",
+    healthOk: "正常",
+    healthDegraded: "部分降级",
+    healthError: "连接异常",
   },
   integrations: {
     description: "在一个地方管理您的连接平台、RSS 订阅和已保存文件。",
@@ -2289,6 +2357,12 @@ const zhHans = {
           "尝试简化任务或拆分成多个小任务",
           "检查网络连接",
         ],
+        // 提供方超时中断卡片：当长任务在工具调用过程中被强制停止时
+        // 渲染这些文案。注意此处与上面的通用超时说明措辞不同 —— 本场景
+        // 没有自动重试，因此不能承诺会重试。
+        completedArtifacts:
+          "上一轮已生成 {{count}} 个文件，保留在工作目录中可以继续复用。",
+        continueAction: "从断点继续",
       },
       genericError: {
         title: "发生错误",
@@ -5828,6 +5902,41 @@ const zhHans = {
     downloadDone: "下载完成，安装包已打开，请按提示完成安装后重新启动应用。",
     alreadyUpToDate: "已是最新版本，无需更新！",
     manualDownloadHint: "如果更新过程中遇到问题，可前往官网手动下载",
+  },
+  // Loomi Pet theme system — desktop pet appearance customization.
+  // String sources: apps/web/public/loomi-widget.html context menu + theme picker.
+  pet: {
+    menu: {
+      title: "菜单",
+      openLoomi: "打开 Loomi",
+      settings: "设置",
+      theme: "主题",
+      themeFox: "狐狸",
+      themeCapybara: "水豚",
+      pauseReminders: "暂停提醒 1 小时",
+      checkNow: "立即检查",
+      quit: "退出 Loomi",
+    },
+    theme: {
+      customDirHelp: "把 PNG 放到 ~/.openloomi/pet-custom/<名称>/",
+      overrideHelp: "编辑 ~/.openloomi/pet-config.json",
+      statePrefixHelp: "文件名需包含状态名,如 idle.png、thinking.png",
+      noCustomThemes: "暂未发现自定义主题",
+      loadedToast: "主题 {{name}} 已加载",
+      loadFailedToast: "主题加载失败:{{reason}}",
+    },
+    state: {
+      idle: "空闲",
+      thinking: "思考中",
+      working: "工作中",
+      juggling: "多任务并行",
+      needsinput: "等你回复",
+      greet: "打个招呼",
+      sleeping: "睡觉中",
+      sweeping: "已忽略",
+      happy: "开心",
+      presenting: "有结果要看",
+    },
   },
 };
 
