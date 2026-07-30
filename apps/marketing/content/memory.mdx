@@ -25,7 +25,7 @@ The memory is not a document library, nor a chat log. It is a **living archive w
 
 3. **Entity relationships** — entities are not isolated. "Customer A" → "Ticket #1234" → "VP Zhang" has an "approved-by" edge. Edges are not predefined — they emerge from use. The more often two entities are pulled together, the stronger the connection.
 
-4. **Temporal validity** — every fact has an explicit "valid from / superseded by" interval. The system can answer "what did I tell you about X last quarter?" by re-entering the snapshot at that point in time. See [Time-Travel Queries](#temporal-reasoning-time-travel-queries) for the query surface.
+4. **Temporal validity** — every fact has an explicit "valid from / superseded by" interval. The system can answer "what did I tell you about X last quarter?" by re-entering the snapshot at that point in time. See [Time-Travel Queries](#temporal-reasoning-time-travel-queries) for the query surface. The same interval semantics apply to **commitments** — "I'll have it Friday" is one interval, "pushing to next Wednesday" is a second interval that **supersedes** the first. The earlier interval is not deleted; it is closed and linked as the source of the transition.
 
 5. **Source and credibility** — every belief carries a source tag distinguishing "the user said it" from "the AI inferred it." The two have different weights. A VP's approval in a private Slack DM is high-weight evidence; an AI-inferred possibility is low-weight evidence.
 
@@ -41,6 +41,62 @@ The memory is not a document library, nor a chat log. It is a **living archive w
   Multi-tenant scope isolation is **not yet fully implemented**. Single-user
   isolation is in place; cross-tenant / cross-workspace boundaries are the next
   step.
+</Callout>
+
+---
+
+## Commitment Lifecycle
+
+The hardest thing to keep straight across tools is not _what was said_, but _what is still true_. A commitment is not a static sentence — it is a small **state machine** that moves over time, often across channels. This is what makes OpenLoomi a context **runtime**, not a memory store: the state machine is the unit of work, and the [Holistic Context](#mental-model) underneath it is the substrate that records and replays every transition.
+
+> **For developers building on Claude Code / Codex / OpenClaw / Hermes:** the same primitives — attributable entities, time-bounded validity, supersession, and Approve-before-action — are what let your agent answer _"what changed since yesterday?"_ and _"which earlier belief is now stale?"_ without you wiring that logic yourself. See the [Attention Agent](/docs/attention-agent) for how those primitives surface to the user, and [Loop](/docs/loop) for how they turn into decision cards.
+
+```
+proposed → accepted → changed → done
+                       ↘ dropped
+```
+
+"I will send the investor update by Friday" and "pushing the investor update to next Wednesday" are not two independent facts. The second message is a **state transition** that supersedes the first. If a system stores both as facts and reminds you of both, it has failed at the only job that matters: keeping the current state correct.
+
+OpenLoomi models commitments as first-class objects so this stays auditable:
+
+| Field              | What it captures                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| `owner`            | Who is accountable for the deliverable                                             |
+| `object`           | What is owed ("investor update", "Q2 retro doc", "design review for PR #482")      |
+| `currentDueDate`   | The deadline as of _now_, not as originally said                                   |
+| `lifecycleStatus`  | `proposed` / `accepted` / `changed` / `done` / `dropped`                           |
+| `previousStates[]` | The history of prior states — what the deadline used to be, when it changed, why   |
+| `supersededBy`     | Pointer to the event (and source) that replaced the prior state                    |
+| `source`           | Where it was first proposed — Slack thread, PR comment, email, doc                 |
+| `lastVerifiedAt`   | When the system last saw evidence that this commitment is still the current belief |
+| `confidence`       | How sure the system is that the current state is the right one (not the prior one) |
+
+The two design choices that matter most:
+
+1. **States are replaced, events are append-only.** A commitment moves from `accepted → changed`, but the original message that proposed it is preserved verbatim. The "what did we believe on Tuesday?" query stays replayable.
+2. **Uncertainty is surfaced, not silently resolved.** If a later message might supersede an earlier one but the system isn't certain, it doesn't quietly update state. It marks the entity `disputed` and asks the user to confirm. **Auditable uncertainty beats confident wrongness** — a tracker that is right 80% of the time forces people to verify everything, which is more work than no tracker at all.
+
+### How a commitment moves through the lifecycle
+
+A concrete walk-through is more useful than a diagram:
+
+| Day | Event                                                                                   | System action                                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mon | Slack: _"I'll send the investor update by Friday."_                                     | Create commitment `c_8421`: owner Alice, object "investor update", due Fri, status `accepted`                                                                                          |
+| Tue | GitHub PR comment: _"Pushing the investor update to next Wednesday — metrics changed."_ | Detect supersession; update `c_8421`: `currentDueDate` = Wed, `lifecycleStatus` = `changed`, link the PR comment as the superseding source, append the prior state to `previousStates` |
+| Wed | Slack: _"Final investor update is ready."_                                              | Update `c_8421`: status `done`, set `completedAt`, link the document                                                                                                                   |
+| Any | User asks: _"What changed about Alice's investor update?"_                              | Replay the chain: original Slack message → Tuesday PR comment → Wednesday Slack message                                                                                                |
+
+This is what makes OpenLoomi different from "a memory system that stores sentences." The useful unit of recall is not a sentence — it is a commitment with a current state, a history of prior states, and an evidence trail for every transition.
+
+<Callout type="info">
+  Commitment tracking is one of the workloads the Holistic Context primitives
+  are designed for — entity attribution, time-bounded validity, evidence
+  preservation, and supersession. It is being actively validated against real
+  workflows; see [Benchmarks](/docs/benchmark) for the underlying temporal
+  reasoning numbers and [Connectors](/docs/connectors#trust-ladder) for how the
+  system earns the right to read the data that drives these transitions.
 </Callout>
 
 ## Mental model
