@@ -41,7 +41,16 @@ import {
 import { formatAgentStreamErrorForUser } from "@/lib/ai/runtime/format-error";
 import { parseCodexInterruptedError } from "@/lib/ai/extensions/agent/codex/interrupt-marker";
 import { createCodexTransportStatusController } from "@/lib/ai/extensions/agent/codex/transport-status";
-import { detectLifestyleImageTrigger } from "@/lib/ai/image-generation/lifestyle-trigger";
+import {
+  createLifestyleImageSkillFallbackRoute,
+  isLifestyleImageSkillRouteResult,
+  shouldGenerateLifestyleImageFromClassifierFallback,
+  type LifestyleImageSkillRouteResult,
+} from "@/lib/ai/image-generation/lifestyle-skill-router";
+import {
+  buildLifestyleReferenceImages,
+  type LifestyleReferenceImagePayload,
+} from "@/lib/ai/image-generation/lifestyle-reference-images";
 
 // Max retry attempts for stream errors
 const MAX_STREAM_RETRY_ATTEMPTS = 3;
@@ -116,6 +125,7 @@ export interface ChatContextValue {
     chatId: string;
     assistantMessageId: string;
     prompt: string;
+    referenceImages?: LifestyleReferenceImagePayload[];
   }) => Promise<void>;
   declineLifestyleImageGeneration: (input: {
     chatId: string;
@@ -214,6 +224,64 @@ function getLifestyleImageUrl(
     (response.b64Json ? `data:${mimeType};base64,${response.b64Json}` : null);
 
   return url ? { url, mediaType: mimeType } : null;
+}
+
+function messageHasImageAttachment(message: unknown): boolean {
+  if (!message || typeof message !== "object") return false;
+  const parts = (message as { parts?: unknown }).parts;
+  if (!Array.isArray(parts)) return false;
+
+  return parts.some((part) => {
+    if (!part || typeof part !== "object") return false;
+    const mediaType = (part as { mediaType?: unknown }).mediaType;
+    return typeof mediaType === "string" && mediaType.startsWith("image/");
+  });
+}
+
+async function requestLifestyleImageSkillRoute(input: {
+  message: string;
+  hasReferenceImage: boolean;
+  model: string;
+}): Promise<LifestyleImageSkillRouteResult> {
+  try {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    let authToken: string | null = null;
+    try {
+      authToken = getAuthToken();
+    } catch (error) {
+      console.error("[LifestyleImageIntent] Failed to read auth token", error);
+    }
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch("/api/ai/v1/images/lifestyle/intent", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      return createLifestyleImageSkillFallbackRoute("classifier_error");
+    }
+
+    const data = (await response.json().catch(() => null)) as {
+      route?: unknown;
+    } | null;
+    if (!isLifestyleImageSkillRouteResult(data?.route)) {
+      return createLifestyleImageSkillFallbackRoute("invalid_schema");
+    }
+
+    return data.route;
+  } catch (error) {
+    console.error(
+      "[LifestyleImageIntent] Failed to resolve skill route",
+      error,
+    );
+    return createLifestyleImageSkillFallbackRoute("classifier_error");
+  }
 }
 
 export function ChatContextProvider({ children }: { children: ReactNode }) {
@@ -339,11 +407,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
   // 400KB stays well under Vercel's 4.5MB body limit and protects small images too.
   const TUS_SIZE_THRESHOLD = 400 * 1024;
 
-  function isImageFile(mediaType?: string): boolean {
-    return mediaType?.startsWith("image/") ?? false;
+  function isImageFile(mediaType?: unknown): boolean {
+    return typeof mediaType === "string" && mediaType.startsWith("image/");
   }
 
   type ImageMessagePart = {
+    type?: unknown;
     name?: unknown;
     mediaType?: unknown;
     file?: unknown;
@@ -522,6 +591,47 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
     return undefined;
   }
 
+  async function collectLifestyleReferenceImages(
+    messageObject: unknown,
+  ): Promise<LifestyleReferenceImagePayload[]> {
+    const parts =
+      messageObject &&
+      typeof messageObject === "object" &&
+      Array.isArray((messageObject as { parts?: unknown }).parts)
+        ? ((messageObject as { parts: unknown[] }).parts ?? [])
+        : [];
+    if (parts.length === 0) return [];
+
+    const sources: Array<{ data: string; mimeType: string; role: "style" }> =
+      [];
+    for (const part of parts) {
+      if (!part || typeof part !== "object") continue;
+      const imagePart = part as ImageMessagePart;
+      if (imagePart.type !== "file" || !isImageFile(imagePart.mediaType)) {
+        continue;
+      }
+
+      try {
+        const image = await resolveImagePartToBase64(imagePart, messageObject);
+        if (image) {
+          sources.push({
+            data: image.data,
+            mimeType: image.mimeType,
+            role: "style",
+          });
+        }
+      } catch (error) {
+        console.error(
+          "[LifestyleImage] Failed to resolve reference image:",
+          imagePart.name,
+          error,
+        );
+      }
+    }
+
+    return buildLifestyleReferenceImages(sources);
+  }
+
   // Set isAgentRunning for a specific chatId (used by stream callbacks to clear lock for correct chat)
   // Defined early to avoid initialization order issues with sendMessage
   const setIsAgentRunningForChatFn = useCallback(
@@ -609,11 +719,13 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
       prompt,
       assistantMessageId,
       sourceUserMessageId,
+      referenceImages,
     }: {
       chatId: string;
       prompt: string;
       assistantMessageId?: string;
       sourceUserMessageId?: string;
+      referenceImages?: LifestyleReferenceImagePayload[];
     }) => {
       const replyId = assistantMessageId || generateUUID();
       const replyCreatedAt = new Date();
@@ -675,6 +787,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             outputFormat: "png",
             responseFormat: "data_url",
             imageCount: 1,
+            ...(referenceImages?.length
+              ? {
+                  referenceImages,
+                  passReferenceImagesToProvider: true,
+                }
+              : {}),
           }),
         });
         const data = (await response
@@ -816,12 +934,13 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
   const confirmLifestyleImageGeneration = useCallback<
     ChatContextValue["confirmLifestyleImageGeneration"]
   >(
-    async ({ chatId, assistantMessageId, prompt }) => {
+    async ({ chatId, assistantMessageId, prompt, referenceImages }) => {
       acceptLifestyleImageConsent();
       await generateLifestyleImageReply({
         chatId,
         prompt,
         assistantMessageId,
+        referenceImages,
       });
     },
     [generateLifestyleImageReply],
@@ -945,12 +1064,31 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
               metadata?: Record<string, unknown>;
             })
           : null;
-      const lifestyleTrigger = detectLifestyleImageTrigger(messageContent);
+      const hasLifestyleReferenceImage =
+        messageHasImageAttachment(triggerMessageObject);
+      const shouldSkipLifestyleImageSkill =
+        triggerMessageObject?.metadata?.skipLifestyleImageTrigger === true;
+      const lifestyleSkillRoute = shouldSkipLifestyleImageSkill
+        ? createLifestyleImageSkillFallbackRoute("intent_not_matched")
+        : await requestLifestyleImageSkillRoute({
+            message: messageContent,
+            hasReferenceImage: hasLifestyleReferenceImage,
+            model:
+              selectedModel === "default" ? DEFAULT_AI_MODEL : selectedModel,
+          });
+      const lifestyleSkillDecision = lifestyleSkillRoute.decision;
+      const shouldGenerateFromClassifierFallback =
+        shouldGenerateLifestyleImageFromClassifierFallback({
+          route: lifestyleSkillRoute,
+          message: messageContent,
+          hasReferenceImage: hasLifestyleReferenceImage,
+        });
       if (
-        lifestyleTrigger.matched &&
-        lifestyleTrigger.confidence === "high" &&
-        triggerMessageObject?.metadata?.skipLifestyleImageTrigger !== true
+        (lifestyleSkillRoute.shouldGenerate && lifestyleSkillDecision) ||
+        shouldGenerateFromClassifierFallback
       ) {
+        const generationPrompt =
+          lifestyleSkillDecision?.refinedPrompt || messageContent;
         const userMessageCreatedAt = new Date();
         const userMessage = {
           role: "user" as const,
@@ -963,8 +1101,14 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             ...triggerMessageObject?.metadata,
             createdAt: userMessageCreatedAt.toISOString(),
             lifestyleImageTrigger: {
-              kind: lifestyleTrigger.kind,
-              reason: lifestyleTrigger.reason,
+              kind: lifestyleSkillDecision
+                ? "skill_lifestyle_image_request"
+                : "classifier_fallback_lifestyle_image_request",
+              reason:
+                lifestyleSkillDecision?.reason ||
+                lifestyleSkillRoute.fallbackReason,
+              confidence: lifestyleSkillDecision?.confidence || "low",
+              hasReferenceImage: hasLifestyleReferenceImage,
             },
           },
           id: generateUUID(),
@@ -972,6 +1116,9 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
         setMessages((prev) => [...prev, userMessage], chatIdForMessages);
         await saveUserMessageAndUpdateHistory(userMessage, chatIdForMessages);
 
+        const referenceImages = hasLifestyleReferenceImage
+          ? await collectLifestyleReferenceImages(triggerMessageObject)
+          : [];
         if (!hasAcceptedLifestyleImageConsent()) {
           const consentMessageId = generateUUID();
           const consentCreatedAt = new Date(userMessageCreatedAt.getTime() + 1);
@@ -985,9 +1132,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 type: "data-lifestyleImageConsent" as const,
                 data: {
                   id: consentMessageId,
-                  prompt: messageContent,
-                  reason: lifestyleTrigger.reason,
+                  prompt: generationPrompt,
+                  reason:
+                    lifestyleSkillDecision?.reason ||
+                    lifestyleSkillRoute.fallbackReason,
                   createdAt: new Date().toISOString(),
+                  ...(referenceImages.length ? { referenceImages } : {}),
                 },
               },
             ],
@@ -1007,8 +1157,9 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
 
         await generateLifestyleImageReply({
           chatId: chatIdForMessages,
-          prompt: messageContent,
+          prompt: generationPrompt,
           sourceUserMessageId: userMessage.id,
+          referenceImages,
         });
         return Promise.resolve();
       }
