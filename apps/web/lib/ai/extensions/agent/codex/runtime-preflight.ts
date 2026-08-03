@@ -169,7 +169,8 @@ async function runPreflight(
   let availableModels: string[];
   try {
     availableModels = await probeCodexModels(options);
-  } catch {
+  } catch (probeError) {
+    console.error("[DIAG] probeCodexModels failed:", probeError);
     return {
       version,
       modelCatalogChecked: false,
