@@ -1,20 +1,20 @@
 import {
-  MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT,
-  type MemorySummaryRecord,
-  type RawMessage,
-  type RawMessageQuery,
-  createRawMessageMemoryGraphStore,
-  isMemorySummaryPublicationPendingRecord,
-  materializeMemoryGraphNodeIds,
-  memoryGraphLedgerMessageId,
-  queryMemoryWithFallback,
-  runMemoryForgettingCycle,
-  storeRawMessagesWithGraphEvolution,
+	MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT,
+	type MemorySummaryRecord,
+	type RawMessage,
+	type RawMessageQuery,
+	createRawMessageMemoryGraphStore,
+	isMemorySummaryPublicationPendingRecord,
+	materializeMemoryGraphNodeIds,
+	memoryGraphLedgerMessageId,
+	queryMemoryWithFallback,
+	runMemoryForgettingCycle,
+	storeRawMessagesWithGraphEvolution,
 } from "@openloomi/indexeddb";
 import {
-  type OwnerScope,
-  buildGraphAwareRetrievalDryRun,
-  createGraphAwareRetrievalDryRunRetriever,
+	type OwnerScope,
+	buildGraphAwareRetrievalDryRun,
+	createGraphAwareRetrievalDryRunRetriever,
 } from "@openloomi/memory-consolidation";
 import { describe, expect, it } from "vitest";
 
@@ -22,1407 +22,1407 @@ const NOW = 1_700_000_000_000;
 const OWNER = { userId: "user-1" } satisfies OwnerScope;
 
 class GraphLifecycleTestManager {
-  readonly messages = new Map<string, RawMessage>();
-  readonly summaries = new Map<string, MemorySummaryRecord>();
-  nextId = 1;
-  failSummaryWrites = 0;
-  summaryWriteCount = 0;
-  readonly failSummaryWriteNumbers = new Set<number>();
-  failDeprecationWrites = 0;
-  ledgerWriteCount = 0;
-  readonly failLedgerWriteNumbers = new Set<number>();
-  hardDeleted = 0;
-  deprecateMessages?: (
-    messageIds: string[],
-    input?: {
-      userId?: string;
-      deprecatedAt?: number;
-      reason?: string;
-      supersededBySummaryId?: string;
-    },
-  ) => Promise<number>;
+	readonly messages = new Map<string, RawMessage>();
+	readonly summaries = new Map<string, MemorySummaryRecord>();
+	nextId = 1;
+	failSummaryWrites = 0;
+	summaryWriteCount = 0;
+	readonly failSummaryWriteNumbers = new Set<number>();
+	failDeprecationWrites = 0;
+	ledgerWriteCount = 0;
+	readonly failLedgerWriteNumbers = new Set<number>();
+	hardDeleted = 0;
+	deprecateMessages?: (
+		messageIds: string[],
+		input?: {
+			userId?: string;
+			deprecatedAt?: number;
+			reason?: string;
+			supersededBySummaryId?: string;
+		},
+	) => Promise<number>;
 
-  constructor(input: { supportsDeprecation?: boolean } = {}) {
-    if (input.supportsDeprecation !== false) {
-      this.deprecateMessages = async (messageIds, options = {}) => {
-        if (this.failDeprecationWrites > 0) {
-          this.failDeprecationWrites -= 1;
-          throw new Error("deprecation write failed");
-        }
-        let changed = 0;
-        for (const messageId of messageIds) {
-          const message = this.messages.get(messageId);
-          if (
-            !message ||
-            message.deprecatedAt !== undefined ||
-            (options.userId && message.userId !== options.userId)
-          ) {
-            continue;
-          }
-          this.messages.set(messageId, {
-            ...message,
-            deprecatedAt: options.deprecatedAt ?? Date.now(),
-            deprecationReason: options.reason,
-            supersededBySummaryId: options.supersededBySummaryId,
-          });
-          changed += 1;
-        }
-        return changed;
-      };
-    }
-  }
+	constructor(input: { supportsDeprecation?: boolean } = {}) {
+		if (input.supportsDeprecation !== false) {
+			this.deprecateMessages = async (messageIds, options = {}) => {
+				if (this.failDeprecationWrites > 0) {
+					this.failDeprecationWrites -= 1;
+					throw new Error("deprecation write failed");
+				}
+				let changed = 0;
+				for (const messageId of messageIds) {
+					const message = this.messages.get(messageId);
+					if (
+						!message ||
+						message.deprecatedAt !== undefined ||
+						(options.userId && message.userId !== options.userId)
+					) {
+						continue;
+					}
+					this.messages.set(messageId, {
+						...message,
+						deprecatedAt: options.deprecatedAt ?? Date.now(),
+						deprecationReason: options.reason,
+						supersededBySummaryId: options.supersededBySummaryId,
+					});
+					changed += 1;
+				}
+				return changed;
+			};
+		}
+	}
 
-  async storeMessage(message: RawMessage): Promise<number> {
-    if (message.messageId.startsWith("__openloomi_memory_graph__")) {
-      this.ledgerWriteCount += 1;
-      if (this.failLedgerWriteNumbers.has(this.ledgerWriteCount)) {
-        throw new Error("ledger write failed");
-      }
-    }
-    const existing = this.messages.get(message.messageId);
-    const id = existing?.id ?? this.nextId++;
-    this.messages.set(message.messageId, { ...message, id });
-    return id;
-  }
+	async storeMessage(message: RawMessage): Promise<number> {
+		if (message.messageId.startsWith("__openloomi_memory_graph__")) {
+			this.ledgerWriteCount += 1;
+			if (this.failLedgerWriteNumbers.has(this.ledgerWriteCount)) {
+				throw new Error("ledger write failed");
+			}
+		}
+		const existing = this.messages.get(message.messageId);
+		const id = existing?.id ?? this.nextId++;
+		this.messages.set(message.messageId, { ...message, id });
+		return id;
+	}
 
-  async storeMessages(messages: RawMessage[]): Promise<number[]> {
-    return Promise.all(messages.map((message) => this.storeMessage(message)));
-  }
+	async storeMessages(messages: RawMessage[]): Promise<number[]> {
+		return Promise.all(messages.map((message) => this.storeMessage(message)));
+	}
 
-  async compareAndSwapGraphLedger(
-    message: RawMessage,
-    input: { expectedVersion: string; metadataKey: string },
-  ): Promise<boolean> {
-    const current = this.messages.get(message.messageId);
-    const ledger = current?.metadata?.[input.metadataKey] as
-      | { snapshot?: { version?: unknown } }
-      | undefined;
-    const currentVersion =
-      typeof ledger?.snapshot?.version === "string"
-        ? ledger.snapshot.version
-        : "0";
-    if (currentVersion !== input.expectedVersion) return false;
-    await this.storeMessage(message);
-    return true;
-  }
+	async compareAndSwapGraphLedger(
+		message: RawMessage,
+		input: { expectedVersion: string; metadataKey: string },
+	): Promise<boolean> {
+		const current = this.messages.get(message.messageId);
+		const ledger = current?.metadata?.[input.metadataKey] as
+			| { snapshot?: { version?: unknown } }
+			| undefined;
+		const currentVersion =
+			typeof ledger?.snapshot?.version === "string"
+				? ledger.snapshot.version
+				: "0";
+		if (currentVersion !== input.expectedVersion) return false;
+		await this.storeMessage(message);
+		return true;
+	}
 
-  async getMessageById(messageId: string): Promise<RawMessage | null> {
-    return this.messages.get(messageId) ?? null;
-  }
+	async getMessageById(messageId: string): Promise<RawMessage | null> {
+		return this.messages.get(messageId) ?? null;
+	}
 
-  async queryMessages(query: RawMessageQuery): Promise<RawMessage[]> {
-    let messages = [...this.messages.values()];
-    if (query.userId) {
-      messages = messages.filter((message) => message.userId === query.userId);
-    }
-    if (!query.includeArchived) {
-      messages = messages.filter((message) => message.archivedAt === undefined);
-    }
-    if (!query.includeDeprecated) {
-      messages = messages.filter(
-        (message) => message.deprecatedAt === undefined,
-      );
-    }
-    if (query.memoryStages) {
-      messages = messages.filter(
-        (message) =>
-          message.memoryStage !== undefined &&
-          query.memoryStages?.includes(message.memoryStage),
-      );
-    }
-    messages.sort((left, right) =>
-      query.reverse === false
-        ? left.timestamp - right.timestamp
-        : right.timestamp - left.timestamp,
-    );
-    const offset = query.offset ?? 0;
-    const limit = query.limit ?? query.pageSize ?? messages.length;
-    return messages.slice(offset, offset + limit);
-  }
+	async queryMessages(query: RawMessageQuery): Promise<RawMessage[]> {
+		let messages = [...this.messages.values()];
+		if (query.userId) {
+			messages = messages.filter((message) => message.userId === query.userId);
+		}
+		if (!query.includeArchived) {
+			messages = messages.filter((message) => message.archivedAt === undefined);
+		}
+		if (!query.includeDeprecated) {
+			messages = messages.filter(
+				(message) => message.deprecatedAt === undefined,
+			);
+		}
+		if (query.memoryStages) {
+			messages = messages.filter(
+				(message) =>
+					message.memoryStage !== undefined &&
+					query.memoryStages?.includes(message.memoryStage),
+			);
+		}
+		messages.sort((left, right) =>
+			query.reverse === false
+				? left.timestamp - right.timestamp
+				: right.timestamp - left.timestamp,
+		);
+		const offset = query.offset ?? 0;
+		const limit = query.limit ?? query.pageSize ?? messages.length;
+		return messages.slice(offset, offset + limit);
+	}
 
-  async upsertSummaries(summaries: MemorySummaryRecord[]): Promise<void> {
-    this.summaryWriteCount += 1;
-    if (this.failSummaryWriteNumbers.has(this.summaryWriteCount)) {
-      throw new Error("summary write failed");
-    }
-    if (this.failSummaryWrites > 0) {
-      this.failSummaryWrites -= 1;
-      throw new Error("summary write failed");
-    }
-    for (const summary of summaries) {
-      const existing = this.summaries.get(summary.summaryId);
-      if (existing && existing.userId !== summary.userId) {
-        throw new Error(MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT);
-      }
-      if (
-        existing &&
-        !isMemorySummaryPublicationPendingRecord(existing) &&
-        isMemorySummaryPublicationPendingRecord(summary)
-      ) {
-        continue;
-      }
-      this.summaries.set(summary.summaryId, {
-        ...summary,
-        createdAt: existing?.createdAt ?? summary.createdAt,
-      });
-    }
-  }
+	async upsertSummaries(summaries: MemorySummaryRecord[]): Promise<void> {
+		this.summaryWriteCount += 1;
+		if (this.failSummaryWriteNumbers.has(this.summaryWriteCount)) {
+			throw new Error("summary write failed");
+		}
+		if (this.failSummaryWrites > 0) {
+			this.failSummaryWrites -= 1;
+			throw new Error("summary write failed");
+		}
+		for (const summary of summaries) {
+			const existing = this.summaries.get(summary.summaryId);
+			if (existing && existing.userId !== summary.userId) {
+				throw new Error(MEMORY_SUMMARY_OWNER_SCOPE_CONFLICT);
+			}
+			if (
+				existing &&
+				!isMemorySummaryPublicationPendingRecord(existing) &&
+				isMemorySummaryPublicationPendingRecord(summary)
+			) {
+				continue;
+			}
+			this.summaries.set(summary.summaryId, {
+				...summary,
+				createdAt: existing?.createdAt ?? summary.createdAt,
+			});
+		}
+	}
 
-  async querySummaries(input: {
-    userId?: string;
-    summaryIds?: string[];
-    pageSize?: number;
-  }): Promise<MemorySummaryRecord[]> {
-    let summaries = [...this.summaries.values()].filter(
-      (summary) => !input.userId || summary.userId === input.userId,
-    );
-    if (input.summaryIds?.length) {
-      summaries = summaries.filter((summary) =>
-        input.summaryIds?.includes(summary.summaryId),
-      );
-    }
-    return summaries.slice(0, input.pageSize);
-  }
+	async querySummaries(input: {
+		userId?: string;
+		summaryIds?: string[];
+		pageSize?: number;
+	}): Promise<MemorySummaryRecord[]> {
+		let summaries = [...this.summaries.values()].filter(
+			(summary) => !input.userId || summary.userId === input.userId,
+		);
+		if (input.summaryIds?.length) {
+			summaries = summaries.filter((summary) =>
+				input.summaryIds?.includes(summary.summaryId),
+			);
+		}
+		return summaries.slice(0, input.pageSize);
+	}
 
-  async markMessagesAccessed(): Promise<number> {
-    return 0;
-  }
+	async markMessagesAccessed(): Promise<number> {
+		return 0;
+	}
 
-  async hardDeleteArchived(): Promise<number> {
-    return this.hardDeleted;
-  }
+	async hardDeleteArchived(): Promise<number> {
+		return this.hardDeleted;
+	}
 }
 
 function rawMessage(
-  messageId: string,
-  input: {
-    relationValue?: string;
-    sourceIdentity?: string;
-    applicability?: Record<string, unknown>;
-    timestamp?: number;
-  } = {},
+	messageId: string,
+	input: {
+		relationValue?: string;
+		sourceIdentity?: string;
+		applicability?: Record<string, unknown>;
+		timestamp?: number;
+	} = {},
 ): RawMessage {
-  return {
-    messageId,
-    platform: "slack",
-    botId: "bot-1",
-    userId: OWNER.userId,
-    timestamp: input.timestamp ?? Math.floor(NOW / 1000),
-    content: `User language preference: ${input.relationValue ?? "zh"}`,
-    attachments: [],
-    metadata: {
-      relationGroup: "language",
-      relationValue: input.relationValue ?? "zh",
-      sourceIdentity: input.sourceIdentity ?? `source:${messageId}`,
-      memoryApplicability: input.applicability ?? { scope: "global" },
-    },
-    createdAt: input.timestamp ?? Math.floor(NOW / 1000),
-    memoryStage: "short",
-  };
+	return {
+		messageId,
+		platform: "slack",
+		botId: "bot-1",
+		userId: OWNER.userId,
+		timestamp: input.timestamp ?? Math.floor(NOW / 1000),
+		content: `User language preference: ${input.relationValue ?? "zh"}`,
+		attachments: [],
+		metadata: {
+			relationGroup: "language",
+			relationValue: input.relationValue ?? "zh",
+			sourceIdentity: input.sourceIdentity ?? `source:${messageId}`,
+			memoryApplicability: input.applicability ?? { scope: "global" },
+		},
+		createdAt: input.timestamp ?? Math.floor(NOW / 1000),
+		memoryStage: "short",
+	};
 }
 
 async function storeEvidence(
-  manager: GraphLifecycleTestManager,
-  messages: RawMessage[],
-  input: { workspaceId?: string; tenantId?: string; now?: number } = {},
+	manager: GraphLifecycleTestManager,
+	messages: RawMessage[],
+	input: { workspaceId?: string; tenantId?: string; now?: number } = {},
 ) {
-  return storeRawMessagesWithGraphEvolution({
-    storage: manager,
-    messages,
-    graphEvolution: {
-      enabled: true,
-      workspaceId: input.workspaceId,
-      tenantId: input.tenantId,
-    },
-    now: input.now ?? NOW,
-  });
+	return storeRawMessagesWithGraphEvolution({
+		storage: manager,
+		messages,
+		graphEvolution: {
+			enabled: true,
+			workspaceId: input.workspaceId,
+			tenantId: input.tenantId,
+		},
+		now: input.now ?? NOW,
+	});
 }
 
 async function snapshot(
-  manager: GraphLifecycleTestManager,
-  ownerScope: OwnerScope = OWNER,
+	manager: GraphLifecycleTestManager,
+	ownerScope: OwnerScope = OWNER,
 ) {
-  return createRawMessageMemoryGraphStore({
-    storage: manager,
-    ownerScope,
-    now: () => NOW,
-  }).readSnapshot({ ownerScope, includeAuditOnly: true });
+	return createRawMessageMemoryGraphStore({
+		storage: manager,
+		ownerScope,
+		now: () => NOW,
+	}).readSnapshot({ ownerScope, includeAuditOnly: true });
 }
 
 describe("memory graph lifecycle forgetting runtime", () => {
-  it("persists a representative before soft-deprecating stable cluster sources", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("zh-1")], { now: NOW });
-    await storeEvidence(
-      manager,
-      [rawMessage("zh-2", { timestamp: Math.floor(NOW / 1000) + 1 })],
-      { now: NOW + 1000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("zh-3", { timestamp: Math.floor(NOW / 1000) + 2 })],
-      { now: NOW + 2000 },
-    );
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      {
-        now: NOW + 3000,
-        graphLifecycle: { enabled: true },
-      },
-    );
-
-    expect(result.graphLifecycle).toEqual(
-      expect.objectContaining({
-        status: "applied",
-        stableClusters: 1,
-        createdSummaries: 1,
-        deprecatedRecords: 3,
-      }),
-    );
-    const storedSummary = [...manager.summaries.values()][0];
-    if (!storedSummary) {
-      throw new Error("expected a persisted graph representative summary");
-    }
-    expect(storedSummary).toEqual(
-      expect.objectContaining({
-        sourceRecordIds: ["zh-1", "zh-2", "zh-3"],
-        messageCount: 3,
-      }),
-    );
-    expect(
-      await manager.querySummaries({ userId: OWNER.userId, pageSize: 10 }),
-    ).toEqual([storedSummary]);
-    const defaultRetrieval = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 1,
-    });
-    expect(defaultRetrieval.items).toEqual([
-      expect.objectContaining({
-        sourceType: "summary",
-        summary: expect.objectContaining({
-          summaryId: storedSummary?.summaryId,
-        }),
-      }),
-    ]);
-    const defaultRaw = await manager.queryMessages({
-      userId: OWNER.userId,
-      includeArchived: false,
-      includeDeprecated: false,
-    });
-    expect(defaultRaw.map((message) => message.messageId)).toEqual([]);
-    const auditRaw = await manager.queryMessages({
-      userId: OWNER.userId,
-      includeArchived: false,
-      includeDeprecated: true,
-    });
-    expect(
-      auditRaw.filter((message) => !message.messageId.startsWith("__")),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          messageId: "zh-1",
-          deprecatedAt: NOW + 3000,
-          supersededBySummaryId: storedSummary?.summaryId,
-        }),
-      ]),
-    );
-    const graph = await snapshot(manager);
-    const materialized = await materializeMemoryGraphNodeIds({
-      manager: manager as never,
-      ownerScope: OWNER,
-      snapshot: graph,
-      nodeIds: [storedSummary.summaryId, "zh-1"],
-    });
-    expect(materialized).toEqual([
-      expect.objectContaining({
-        sourceType: "summary",
-        summary: expect.objectContaining({
-          summaryId: storedSummary.summaryId,
-          sourceRecordIds: ["zh-1", "zh-2", "zh-3"],
-        }),
-      }),
-      expect.objectContaining({
-        sourceType: "raw",
-        record: expect.objectContaining({
-          id: "zh-1",
-          deprecatedAt: NOW + 3000,
-          deprecationReason: `summarized_into:${storedSummary.summaryId}`,
-          supersededBySummaryId: storedSummary.summaryId,
-        }),
-      }),
-    ]);
-    expect(
-      graph.nodes.find((node) => node.id === storedSummary.summaryId),
-    ).toEqual(
-      expect.objectContaining({ type: "summary", visibility: "default" }),
-    );
-    expect(
-      graph.nodes
-        .filter((node) => ["zh-1", "zh-2", "zh-3"].includes(node.id))
-        .every((node) => node.visibility === "audit-only"),
-    ).toBe(true);
-    expect(graph.clusters[0]).toEqual(
-      expect.objectContaining({
-        lifecycleStatus: "stable",
-        representativeNodeId: storedSummary?.summaryId,
-      }),
-    );
-    const audit = await createRawMessageMemoryGraphStore({
-      storage: manager,
-      ownerScope: OWNER,
-      now: () => NOW,
-    }).readAuditTrail({
-      ownerScope: OWNER,
-      nodeId: storedSummary?.summaryId ?? "",
-    });
-    expect(audit.sourceNodeIds).toEqual(
-      expect.arrayContaining(["zh-1", "zh-2", "zh-3"]),
-    );
-    expect(audit.operationIds.length).toBeGreaterThan(0);
-  });
-
-  it("publishes a new revision when a summarized cluster becomes stable again", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("revision-1")], { now: NOW });
-    await storeEvidence(manager, [rawMessage("revision-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("revision-3")], {
-      now: NOW + 2000,
-    });
-
-    const first = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-    expect(first.graphLifecycle?.status).toBe("applied");
-    const firstSummary = [...manager.summaries.values()][0];
-    expect(firstSummary?.sourceRecordIds).toHaveLength(3);
-
-    await storeEvidence(
-      manager,
-      [
-        rawMessage("revision-4", { timestamp: Math.floor(NOW / 1000) + 4 }),
-        rawMessage("revision-5", { timestamp: Math.floor(NOW / 1000) + 5 }),
-        rawMessage("revision-6", { timestamp: Math.floor(NOW / 1000) + 6 }),
-      ],
-      { now: NOW + 4000 },
-    );
-    const second = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(second.graphLifecycle?.status).toBe("applied");
-    expect(manager.summaries.size).toBe(1);
-    const revisedSummary = [...manager.summaries.values()][0];
-    expect(revisedSummary?.sourceRecordIds).toEqual([
-      "revision-4",
-      "revision-5",
-      "revision-6",
-    ]);
-    const graph = await snapshot(manager);
-    const summaryNode = graph.nodes.find(
-      (node) => node.id === revisedSummary?.summaryId,
-    );
-    expect(summaryNode?.metadata?.publicationRevision).toBe(
-      revisedSummary?.dimensions?.__openloomiMemoryPublicationRevision,
-    );
-  });
-
-  it("converges when replacement publication fails after graph persistence", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("replacement-1")], { now: NOW });
-    await storeEvidence(manager, [rawMessage("replacement-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("replacement-3")], {
-      now: NOW + 2000,
-    });
-    await runMemoryForgettingCycle(manager as never, OWNER.userId, {
-      now: NOW + 3000,
-      graphLifecycle: { enabled: true },
-    });
-    const original = [...manager.summaries.values()][0];
-
-    await storeEvidence(
-      manager,
-      [
-        rawMessage("replacement-4", {
-          timestamp: Math.floor(NOW / 1000) + 4,
-        }),
-        rawMessage("replacement-5", {
-          timestamp: Math.floor(NOW / 1000) + 5,
-        }),
-        rawMessage("replacement-6", {
-          timestamp: Math.floor(NOW / 1000) + 6,
-        }),
-      ],
-      { now: NOW + 4000 },
-    );
-    manager.failSummaryWriteNumbers.add(manager.summaryWriteCount + 1);
-    const failed = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-    expect(failed.graphLifecycle?.status).toBe("partial-failure");
-    expect([...manager.summaries.values()][0]).toEqual(original);
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 6000, graphLifecycle: { enabled: true } },
-    );
-    expect(retried.graphLifecycle?.status).toBe("applied");
-    expect([...manager.summaries.values()][0]?.sourceRecordIds).toEqual([
-      "replacement-4",
-      "replacement-5",
-      "replacement-6",
-    ]);
-  });
-
-  it("persists owner scope on summaries used for graph materialization", async () => {
-    const manager = new GraphLifecycleTestManager();
-    const ownerScope = {
-      userId: OWNER.userId,
-      workspaceId: "workspace-scoped",
-      tenantId: "tenant-scoped",
-    } satisfies OwnerScope;
-    for (let index = 0; index < 3; index += 1) {
-      await storeEvidence(
-        manager,
-        [
-          rawMessage(`scoped-${index + 1}`, {
-            timestamp: Math.floor(NOW / 1000) + index,
-          }),
-        ],
-        {
-          workspaceId: ownerScope.workspaceId,
-          tenantId: ownerScope.tenantId,
-          now: NOW + index * 1000,
-        },
-      );
-    }
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      ownerScope.userId,
-      {
-        now: NOW + 3000,
-        graphLifecycle: {
-          enabled: true,
-          workspaceId: ownerScope.workspaceId,
-          tenantId: ownerScope.tenantId,
-        },
-      },
-    );
-    expect(result.graphLifecycle?.status).toBe("applied");
-
-    const storedSummary = [...manager.summaries.values()][0];
-    if (!storedSummary) throw new Error("expected scoped summary");
-    expect(storedSummary.dimensions).toMatchObject({
-      workspaceId: ownerScope.workspaceId,
-      tenantId: ownerScope.tenantId,
-    });
-    const graph = await snapshot(manager, ownerScope);
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: graph,
-        nodeIds: [storedSummary.summaryId],
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        sourceType: "summary",
-        summary: expect.objectContaining({
-          summaryId: storedSummary.summaryId,
-          dimensions: expect.objectContaining({
-            workspaceId: ownerScope.workspaceId,
-            tenantId: ownerScope.tenantId,
-          }),
-        }),
-      }),
-    ]);
-  });
-  it("fails closed for missing, cross-scope, and pending persisted nodes", async () => {
-    const manager = new GraphLifecycleTestManager();
-    const ownerScope = {
-      userId: OWNER.userId,
-      workspaceId: "workspace-a",
-    } satisfies OwnerScope;
-    await storeEvidence(manager, [rawMessage("scope-checked")], {
-      workspaceId: ownerScope.workspaceId,
-    });
-    const graph = await snapshot(manager, ownerScope);
-    const sourceNode = graph.nodes.find((node) => node.id === "scope-checked");
-    if (!sourceNode) {
-      throw new Error("expected persisted source node");
-    }
-
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: graph,
-        nodeIds: ["missing-node"],
-      }),
-    ).resolves.toBeUndefined();
-
-    manager.summaries.set("pending-summary", {
-      summaryId: "pending-summary",
-      userId: ownerScope.userId,
-      summaryTier: "L1",
-      sourceTier: "short",
-      startTimestamp: NOW,
-      endTimestamp: NOW,
-      messageCount: 1,
-      sourceRecordIds: ["scope-checked"],
-      keyPoints: ["pending"],
-      keywords: ["pending"],
-      keywordsText: "pending",
-      summaryText: "Pending representative",
-      dimensions: {
-        __openloomiMemoryPublication: "pending",
-      },
-      createdAt: NOW,
-      updatedAt: NOW,
-    });
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: {
-          ...graph,
-          nodes: [
-            ...graph.nodes,
-            {
-              ...sourceNode,
-              id: "pending-summary",
-              type: "summary",
-              sourceId: "scope-checked",
-              visibility: "default",
-            },
-          ],
-        },
-        nodeIds: ["pending-summary"],
-      }),
-    ).resolves.toBeUndefined();
-
-    const pendingSummary = manager.summaries.get("pending-summary");
-    if (!pendingSummary) throw new Error("expected pending summary fixture");
-    manager.summaries.set("cross-workspace-summary", {
-      ...pendingSummary,
-      summaryId: "cross-workspace-summary",
-      dimensions: { workspaceId: "workspace-b" },
-    });
-    const broadOwnerScope = { userId: ownerScope.userId } satisfies OwnerScope;
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope: broadOwnerScope,
-        snapshot: {
-          ownerScope: broadOwnerScope,
-          nodes: [
-            {
-              ...sourceNode,
-              id: "cross-workspace-summary",
-              type: "summary",
-              ownerScope: broadOwnerScope,
-              sourceId: "scope-checked",
-              visibility: "default",
-            },
-          ],
-          edges: [],
-          clusters: [],
-          capturedAt: NOW,
-        },
-        nodeIds: ["cross-workspace-summary"],
-      }),
-    ).resolves.toBeUndefined();
-
-    const visibleRaw = manager.messages.get("scope-checked");
-    if (!visibleRaw) throw new Error("expected visible persisted raw");
-    manager.messages.set("scope-checked", {
-      ...visibleRaw,
-      deprecatedAt: NOW,
-    });
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: graph,
-        nodeIds: ["scope-checked"],
-      }),
-    ).resolves.toBeUndefined();
-    manager.messages.set("scope-checked", visibleRaw);
-
-    const storedRaw = manager.messages.get("scope-checked");
-    if (!storedRaw) {
-      throw new Error("expected persisted source raw");
-    }
-    manager.messages.set("scope-checked", {
-      ...storedRaw,
-      metadata: {
-        ...(storedRaw.metadata ?? {}),
-        memoryOwnerScope: {
-          userId: ownerScope.userId,
-          workspaceId: "workspace-b",
-        },
-      },
-    });
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: graph,
-        nodeIds: ["scope-checked"],
-      }),
-    ).resolves.toBeUndefined();
-
-    await expect(
-      materializeMemoryGraphNodeIds({
-        manager: manager as never,
-        ownerScope,
-        snapshot: {
-          ...graph,
-          nodes: graph.nodes.map((node) => ({
-            ...node,
-            ownerScope: {
-              userId: ownerScope.userId,
-              workspaceId: "workspace-b",
-            },
-          })),
-        },
-        nodeIds: ["scope-checked"],
-      }),
-    ).resolves.toBeUndefined();
-  });
-
-  it("materializes only exact-applicability competing alternatives", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(
-      manager,
-      [
-        rawMessage("global-en", {
-          relationValue: "en",
-          timestamp: Math.floor(NOW / 1000),
-        }),
-      ],
-      { now: NOW },
-    );
-    await storeEvidence(
-      manager,
-      [
-        rawMessage("global-zh", {
-          relationValue: "zh",
-          timestamp: Math.floor(NOW / 1000) + 1,
-        }),
-      ],
-      { now: NOW + 1000 },
-    );
-    const graph = await snapshot(manager);
-
-    const result = await queryMemoryWithFallback(
-      manager as never,
-      {
-        userId: OWNER.userId,
-        keywords: ["zh"],
-        pageSize: 3,
-        minRawResultsWithoutFallback: 2,
-        conflictSensitive: true,
-      },
-      {
-        graphRetrieval: {
-          enabled: true,
-          retriever: createGraphAwareRetrievalDryRunRetriever(),
-          ownerScope: OWNER,
-          snapshotProvider: async () => graph,
-          materializeNodeIds: ({ ownerScope, snapshot, nodeIds }) =>
-            materializeMemoryGraphNodeIds({
-              manager: manager as never,
-              ownerScope,
-              snapshot,
-              nodeIds,
-            }),
-        },
-      },
-    );
-
-    expect(result.graphRetrieval?.status).toBe("applied");
-    expect(result.graphRetrieval?.reasonCodes).toContain(
-      "competing_alternatives_exposed",
-    );
-    expect(
-      result.items.map((item) =>
-        item.sourceType === "raw" ? item.record.id : item.summary.summaryId,
-      ),
-    ).toEqual(expect.arrayContaining(["global-zh", "global-en"]));
-    expect(result.graphRetrieval?.result?.auditTrail).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          nodeId: "global-en",
-          edgeIds: expect.arrayContaining([expect.any(String)]),
-          reasonCodes: expect.arrayContaining([
-            "competing_alternative_provenance",
-          ]),
-        }),
-      ]),
-    );
-
-    const alternativeCluster = graph.clusters.find((cluster) =>
-      cluster.nodeIds.includes("global-en"),
-    );
-    if (!alternativeCluster) {
-      throw new Error("expected competing alternative cluster");
-    }
-    const mismatched = buildGraphAwareRetrievalDryRun({
-      ownerScope: OWNER,
-      query: "language preference",
-      baselineNodeIds: ["global-zh"],
-      snapshot: {
-        ...graph,
-        clusters: graph.clusters.map((cluster) =>
-          cluster.clusterId === alternativeCluster.clusterId
-            ? {
-                ...cluster,
-                applicability: { scope: "task", key: "other-task" },
-              }
-            : cluster,
-        ),
-      },
-      visibilityMode: "conflict",
-    });
-    expect(mismatched.rankedNodeIds).not.toContain("global-en");
-    expect(mismatched.reasonCodes).not.toContain(
-      "competing_alternatives_exposed",
-    );
-
-    const conflictResultForEdges = (edges: typeof graph.edges) =>
-      buildGraphAwareRetrievalDryRun({
-        ownerScope: OWNER,
-        query: "language preference",
-        baselineNodeIds: ["global-zh"],
-        snapshot: { ...graph, edges },
-        visibilityMode: "conflict",
-      });
-    const inactiveCompetitionEdges = graph.edges.map((edge) =>
-      edge.kind === "compete"
-        ? { ...edge, metadata: { ...edge.metadata, inactive: true } }
-        : edge,
-    );
-    const rolledBackCompetitionEdges = graph.edges.map((edge) =>
-      edge.kind === "compete"
-        ? { ...edge, metadata: { ...edge.metadata, rolledBack: true } }
-        : edge,
-    );
-    for (const noActiveCompetition of [
-      conflictResultForEdges(
-        graph.edges.filter((edge) => edge.kind !== "compete"),
-      ),
-      conflictResultForEdges(inactiveCompetitionEdges),
-      conflictResultForEdges(rolledBackCompetitionEdges),
-    ]) {
-      expect(noActiveCompetition.rankedNodeIds).not.toContain("global-en");
-      expect(noActiveCompetition.reasonCodes).not.toContain(
-        "competing_alternatives_exposed",
-      );
-    }
-  });
-
-  it("keeps sources visible when summary persistence fails", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("fail-1")]);
-    await storeEvidence(manager, [rawMessage("fail-2")], { now: NOW + 1000 });
-    await storeEvidence(manager, [rawMessage("fail-3")], { now: NOW + 2000 });
-    manager.failSummaryWrites = 1;
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(result.graphLifecycle?.status).toBe("partial-failure");
-    expect(manager.summaries.size).toBe(0);
-    expect(
-      (
-        await manager.queryMessages({
-          userId: OWNER.userId,
-          includeArchived: false,
-          includeDeprecated: false,
-        })
-      ).filter((message) => !message.messageId.startsWith("__")),
-    ).toHaveLength(3);
-    expect(
-      (await snapshot(manager)).clusters[0].representativeNodeId,
-    ).toBeUndefined();
-  });
-
-  it("does not deprecate sources when representative graph persistence fails", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("representative-fail-1")]);
-    await storeEvidence(manager, [rawMessage("representative-fail-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("representative-fail-3")], {
-      now: NOW + 2000,
-    });
-    manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 2);
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(result.graphLifecycle?.status).toBe("partial-failure");
-    expect(manager.summaries.size).toBe(1);
-    const pendingRecall = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(pendingRecall.items.map((item) => item.sourceType)).toEqual([
-      "raw",
-      "raw",
-      "raw",
-    ]);
-    expect(
-      manager.messages.get("representative-fail-1")?.deprecatedAt,
-    ).toBeUndefined();
-    expect(
-      (await snapshot(manager)).clusters[0].representativeNodeId,
-    ).toBeUndefined();
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 4000, graphLifecycle: { enabled: true } },
-    );
-    expect(retried.graphLifecycle?.status).toBe("applied");
-    const publishedRecall = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(publishedRecall.items).toEqual([
-      expect.objectContaining({
-        sourceType: "summary",
-        summary: expect.objectContaining({ summaryId: expect.any(String) }),
-      }),
-    ]);
-  });
-
-  it("retries a final summary publication failure before deprecating sources", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("publication-fail-1")]);
-    await storeEvidence(manager, [rawMessage("publication-fail-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("publication-fail-3")], {
-      now: NOW + 2000,
-    });
-    // The staged write succeeds; the publish write after graph persistence fails.
-    manager.failSummaryWriteNumbers.add(2);
-
-    const failed = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(failed.graphLifecycle?.status).toBe("partial-failure");
-    const pendingSummary = [...manager.summaries.values()][0];
-    expect(pendingSummary?.dimensions).toEqual(
-      expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
-    );
-    expect(
-      manager.messages.get("publication-fail-1")?.deprecatedAt,
-    ).toBeUndefined();
-    const pendingRecall = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(pendingRecall.items.map((item) => item.sourceType)).toEqual([
-      "raw",
-      "raw",
-      "raw",
-    ]);
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 4000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(retried.graphLifecycle?.status).toBe("applied");
-    expect(manager.summaries.size).toBe(1);
-    expect([...manager.summaries.values()][0]?.dimensions).not.toEqual(
-      expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
-    );
-    expect(manager.messages.get("publication-fail-1")?.deprecatedAt).toBe(
-      NOW + 4000,
-    );
-    const publishedRecall = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(publishedRecall.items).toEqual([
-      expect.objectContaining({
-        sourceType: "summary",
-        summary: expect.objectContaining({ summaryId: expect.any(String) }),
-      }),
-    ]);
-  });
-
-  it("retries a partial deprecation failure without duplicating the summary", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("retry-1")]);
-    await storeEvidence(manager, [rawMessage("retry-2")], { now: NOW + 1000 });
-    await storeEvidence(manager, [rawMessage("retry-3")], { now: NOW + 2000 });
-    manager.failDeprecationWrites = 1;
-
-    const failed = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-    expect(failed.graphLifecycle?.status).toBe("partial-failure");
-    expect(manager.summaries.size).toBe(1);
-    expect(manager.messages.get("retry-1")?.deprecatedAt).toBeUndefined();
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 4000, graphLifecycle: { enabled: true } },
-    );
-    expect(retried.graphLifecycle?.status).toBe("applied");
-    expect(manager.summaries.size).toBe(1);
-    expect(manager.messages.get("retry-1")?.deprecatedAt).toBe(NOW + 4000);
-
-    const replay = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-    expect(replay.graphLifecycle?.status).toBe("no-op");
-    expect(manager.messages.get("retry-1")?.deprecatedAt).toBe(NOW + 4000);
-  });
-
-  it("reconciles graph visibility after it fails following raw deprecation", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("visibility-retry-1")]);
-    await storeEvidence(manager, [rawMessage("visibility-retry-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("visibility-retry-3")], {
-      now: NOW + 2000,
-    });
-    // Lifecycle transition and representative persistence consume the first
-    // two writes; fail only the subsequent graph visibility update.
-    manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 3);
-
-    const failed = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(failed.graphLifecycle?.status).toBe("partial-failure");
-    expect(manager.messages.get("visibility-retry-1")?.deprecatedAt).toBe(
-      NOW + 3000,
-    );
-    expect(
-      (await snapshot(manager)).nodes.find(
-        (node) => node.id === "visibility-retry-1",
-      )?.visibility,
-    ).toBe("default");
-
-    const publishedSummary = [...manager.summaries.values()][0];
-    expect(publishedSummary?.dimensions).not.toEqual(
-      expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
-    );
-
-    // A retry must not downgrade the published summary while it is staging.
-    // Fail the publish call after that stage to model an interrupted retry.
-    manager.failSummaryWriteNumbers.add(manager.summaryWriteCount + 2);
-    const interruptedRetry = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 4000, graphLifecycle: { enabled: true } },
-    );
-    expect(interruptedRetry.graphLifecycle?.status).toBe("partial-failure");
-    expect([...manager.summaries.values()][0]).toEqual(publishedSummary);
-    const recallDuringRetry = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(recallDuringRetry.items).toEqual([
-      expect.objectContaining({ sourceType: "summary" }),
-    ]);
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(retried.graphLifecycle?.status).toBe("applied");
-    expect(manager.summaries.size).toBe(1);
-    expect(
-      (await snapshot(manager)).nodes
-        .filter((node) => node.id.startsWith("visibility-retry-"))
-        .every((node) => node.visibility === "audit-only"),
-    ).toBe(true);
-  });
-
-  it("does not publish a stale summary when graph provenance differs", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("provenance-retry-1")]);
-    await storeEvidence(manager, [rawMessage("provenance-retry-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("provenance-retry-3")], {
-      now: NOW + 2000,
-    });
-    manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 3);
-
-    const failed = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-    expect(failed.graphLifecycle?.status).toBe("partial-failure");
-    const publishedSummary = [...manager.summaries.values()][0];
-    const ledgerId = memoryGraphLedgerMessageId(OWNER);
-    const ledger = manager.messages.get(ledgerId);
-    const payload = ledger?.metadata?.memoryGraphLedger as
-      | {
-          snapshot?: {
-            nodes?: Array<{
-              id: string;
-              metadata?: Record<string, unknown>;
-            }>;
-          };
-        }
-      | undefined;
-    if (!ledger || !payload?.snapshot?.nodes || !publishedSummary) {
-      throw new Error("expected published graph summary");
-    }
-    payload.snapshot.nodes = payload.snapshot.nodes.map((node) =>
-      node.id === publishedSummary.summaryId
-        ? {
-            ...node,
-            metadata: {
-              ...(node.metadata ?? {}),
-              publicationRevision: "stale-revision",
-            },
-          }
-        : node,
-    );
-    manager.messages.set(ledgerId, {
-      ...ledger,
-      metadata: { ...ledger.metadata, memoryGraphLedger: payload },
-    });
-
-    const retried = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 4000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(retried.graphLifecycle?.status).toBe("partial-failure");
-    expect(retried.graphLifecycle?.reasonCodes).toContain(
-      "memory_graph_representative_provenance_mismatch",
-    );
-    expect([...manager.summaries.values()][0]).toEqual(publishedSummary);
-    const recall = await queryMemoryWithFallback(manager as never, {
-      userId: OWNER.userId,
-      limit: 10,
-      minRawResultsWithoutFallback: 10,
-    });
-    expect(recall.items).toEqual([
-      expect.objectContaining({ sourceType: "summary" }),
-    ]);
-  });
-
-  it("keeps summaries and raw visibility when the adapter cannot deprecate", async () => {
-    const manager = new GraphLifecycleTestManager({
-      supportsDeprecation: false,
-    });
-    await storeEvidence(manager, [rawMessage("no-adapter-1")]);
-    await storeEvidence(manager, [rawMessage("no-adapter-2")], {
-      now: NOW + 1000,
-    });
-    await storeEvidence(manager, [rawMessage("no-adapter-3")], {
-      now: NOW + 2000,
-    });
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 3000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(result.graphLifecycle).toEqual(
-      expect.objectContaining({
-        status: "partial-failure",
-        createdSummaries: 1,
-        deprecatedRecords: 0,
-        reasonCodes: expect.arrayContaining([
-          "adapter_missing_deprecate_records",
-        ]),
-      }),
-    );
-    expect(manager.messages.get("no-adapter-1")?.deprecatedAt).toBeUndefined();
-    const graph = await snapshot(manager);
-    expect(
-      graph.nodes.find((node) => node.id === "no-adapter-1")?.visibility,
-    ).toBe("default");
-  });
-
-  it("supersedes sustained same-context competition but preserves contextual exceptions", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [
-      rawMessage("global-zh", { relationValue: "zh" }),
-    ]);
-    await storeEvidence(
-      manager,
-      [
-        rawMessage("task-en", {
-          relationValue: "en",
-          applicability: { scope: "task", key: "task-42" },
-        }),
-      ],
-      { now: NOW + 1000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("global-en-1", { relationValue: "en" })],
-      { now: NOW + 2000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("global-en-2", { relationValue: "en" })],
-      { now: NOW + 3000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("global-en-3", { relationValue: "en" })],
-      { now: NOW + 4000 },
-    );
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-
-    expect(result.graphLifecycle?.createdSummaries).toBe(1);
-    const graph = await snapshot(manager);
-    const taskCluster = graph.clusters.find((cluster) =>
-      cluster.nodeIds.includes("task-en"),
-    );
-    const oldGlobalCluster = graph.clusters.find((cluster) =>
-      cluster.nodeIds.includes("global-zh"),
-    );
-    const newGlobalCluster = graph.clusters.find((cluster) =>
-      cluster.nodeIds.includes("global-en-1"),
-    );
-    expect(taskCluster?.lifecycleStatus).toBe("forming");
-    expect(oldGlobalCluster?.lifecycleStatus).toBe("superseded");
-    expect(newGlobalCluster).toEqual(
-      expect.objectContaining({
-        lifecycleStatus: "stable",
-        representativeNodeId: expect.any(String),
-      }),
-    );
-    expect(manager.messages.get("global-zh")?.deprecationReason).toMatch(
-      /^superseded_by_summary:/,
-    );
-    expect(manager.messages.get("global-en-1")?.deprecationReason).toMatch(
-      /^summarized_into:/,
-    );
-  });
-
-  it("resolves all alternatives in a connected multi-way competition", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [
-      rawMessage("multi-zh", { relationValue: "zh" }),
-    ]);
-    await storeEvidence(
-      manager,
-      [rawMessage("multi-en", { relationValue: "en" })],
-      { now: NOW + 1000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("multi-ja-1", { relationValue: "ja" })],
-      { now: NOW + 2000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("multi-ja-2", { relationValue: "ja" })],
-      { now: NOW + 3000 },
-    );
-    await storeEvidence(
-      manager,
-      [rawMessage("multi-ja-3", { relationValue: "ja" })],
-      { now: NOW + 4000 },
-    );
-
-    const result = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      { now: NOW + 5000, graphLifecycle: { enabled: true } },
-    );
-    expect(result.graphLifecycle?.createdSummaries).toBe(1);
-    const graph = await snapshot(manager);
-    expect(
-      graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-zh"))
-        ?.lifecycleStatus,
-    ).toBe("superseded");
-    expect(
-      graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-en"))
-        ?.lifecycleStatus,
-    ).toBe("superseded");
-    expect(
-      graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-ja-1")),
-    ).toEqual(
-      expect.objectContaining({
-        lifecycleStatus: "stable",
-        representativeNodeId: expect.any(String),
-      }),
-    );
-  });
-
-  it("supports dry-run, owner-scope isolation, and stale singleton decay", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("workspace-a")], {
-      workspaceId: "workspace-a",
-      now: NOW,
-    });
-
-    const wrongScope = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      {
-        now: NOW + 1000,
-        graphLifecycle: { enabled: true, workspaceId: "workspace-b" },
-      },
-    );
-    expect(wrongScope.graphLifecycle).toEqual(
-      expect.objectContaining({ status: "no-op", scannedClusters: 0 }),
-    );
-
-    const dryRun = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      {
-        dryRun: true,
-        now: NOW + 2000,
-        graphLifecycle: {
-          enabled: true,
-          workspaceId: "workspace-a",
-          decayAfterMs: 0,
-        },
-      },
-    );
-    expect(dryRun.graphLifecycle).toEqual(
-      expect.objectContaining({
-        status: "planned",
-        decayingClusters: 1,
-        createdSummaries: 0,
-      }),
-    );
-    expect(manager.summaries.size).toBe(0);
-    expect(
-      (
-        await snapshot(manager, {
-          userId: OWNER.userId,
-          workspaceId: "workspace-a",
-        })
-      ).clusters[0].lifecycleStatus,
-    ).toBe("forming");
-    expect(
-      manager.messages.has(
-        memoryGraphLedgerMessageId({
-          userId: OWNER.userId,
-          workspaceId: "workspace-a",
-        }),
-      ),
-    ).toBe(true);
-  });
-
-  it("applies the same lifecycle transition again after an explicit reset", async () => {
-    const manager = new GraphLifecycleTestManager();
-    await storeEvidence(manager, [rawMessage("repeat-decay")], { now: NOW });
-
-    const firstDecay = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      {
-        now: NOW + 1000,
-        graphLifecycle: { enabled: true, decayAfterMs: 0 },
-      },
-    );
-    expect(firstDecay.graphLifecycle?.status).toBe("applied");
-
-    const graphStore = createRawMessageMemoryGraphStore({
-      storage: manager,
-      ownerScope: OWNER,
-      now: () => NOW + 2000,
-    });
-    const decayed = await graphStore.readSnapshot({
-      ownerScope: OWNER,
-      includeAuditOnly: true,
-    });
-    const cluster = decayed.clusters[0];
-    expect(cluster.lifecycleStatus).toBe("decaying");
-    await graphStore.persistPlan({
-      planId: "test-reset-lifecycle",
-      ownerScope: OWNER,
-      candidateNodes: [],
-      candidateEdges: [],
-      candidateClusters: [{ ...cluster, lifecycleStatus: "forming" }],
-      operations: [
-        {
-          operationId: "test-reset-lifecycle-operation",
-          ownerScope: OWNER,
-          kind: "set-cluster-lifecycle",
-          nodeIds: [...cluster.nodeIds],
-          clusterId: cluster.clusterId,
-          fromStatus: "decaying",
-          toStatus: "forming",
-          reasonCodes: ["test_explicit_reset"],
-        },
-      ],
-      expectedVersion: decayed.version,
-      persistence: { mode: "write", enabled: true },
-      reasonCodes: ["test_explicit_reset"],
-    });
-
-    const repeatedDecay = await runMemoryForgettingCycle(
-      manager as never,
-      OWNER.userId,
-      {
-        now: NOW + 3000,
-        graphLifecycle: { enabled: true, decayAfterMs: 0 },
-      },
-    );
-    expect(repeatedDecay.graphLifecycle?.status).toBe("applied");
-    expect((await snapshot(manager)).clusters[0].lifecycleStatus).toBe(
-      "decaying",
-    );
-  });
+	it("persists a representative before soft-deprecating stable cluster sources", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("zh-1")], { now: NOW });
+		await storeEvidence(
+			manager,
+			[rawMessage("zh-2", { timestamp: Math.floor(NOW / 1000) + 1 })],
+			{ now: NOW + 1000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("zh-3", { timestamp: Math.floor(NOW / 1000) + 2 })],
+			{ now: NOW + 2000 },
+		);
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{
+				now: NOW + 3000,
+				graphLifecycle: { enabled: true },
+			},
+		);
+
+		expect(result.graphLifecycle).toEqual(
+			expect.objectContaining({
+				status: "applied",
+				stableClusters: 1,
+				createdSummaries: 1,
+				deprecatedRecords: 3,
+			}),
+		);
+		const storedSummary = [...manager.summaries.values()][0];
+		if (!storedSummary) {
+			throw new Error("expected a persisted graph representative summary");
+		}
+		expect(storedSummary).toEqual(
+			expect.objectContaining({
+				sourceRecordIds: ["zh-1", "zh-2", "zh-3"],
+				messageCount: 3,
+			}),
+		);
+		expect(
+			await manager.querySummaries({ userId: OWNER.userId, pageSize: 10 }),
+		).toEqual([storedSummary]);
+		const defaultRetrieval = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 1,
+		});
+		expect(defaultRetrieval.items).toEqual([
+			expect.objectContaining({
+				sourceType: "summary",
+				summary: expect.objectContaining({
+					summaryId: storedSummary?.summaryId,
+				}),
+			}),
+		]);
+		const defaultRaw = await manager.queryMessages({
+			userId: OWNER.userId,
+			includeArchived: false,
+			includeDeprecated: false,
+		});
+		expect(defaultRaw.map((message) => message.messageId)).toEqual([]);
+		const auditRaw = await manager.queryMessages({
+			userId: OWNER.userId,
+			includeArchived: false,
+			includeDeprecated: true,
+		});
+		expect(
+			auditRaw.filter((message) => !message.messageId.startsWith("__")),
+		).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					messageId: "zh-1",
+					deprecatedAt: NOW + 3000,
+					supersededBySummaryId: storedSummary?.summaryId,
+				}),
+			]),
+		);
+		const graph = await snapshot(manager);
+		const materialized = await materializeMemoryGraphNodeIds({
+			manager: manager as never,
+			ownerScope: OWNER,
+			snapshot: graph,
+			nodeIds: [storedSummary.summaryId, "zh-1"],
+		});
+		expect(materialized).toEqual([
+			expect.objectContaining({
+				sourceType: "summary",
+				summary: expect.objectContaining({
+					summaryId: storedSummary.summaryId,
+					sourceRecordIds: ["zh-1", "zh-2", "zh-3"],
+				}),
+			}),
+			expect.objectContaining({
+				sourceType: "raw",
+				record: expect.objectContaining({
+					id: "zh-1",
+					deprecatedAt: NOW + 3000,
+					deprecationReason: `summarized_into:${storedSummary.summaryId}`,
+					supersededBySummaryId: storedSummary.summaryId,
+				}),
+			}),
+		]);
+		expect(
+			graph.nodes.find((node) => node.id === storedSummary.summaryId),
+		).toEqual(
+			expect.objectContaining({ type: "summary", visibility: "default" }),
+		);
+		expect(
+			graph.nodes
+				.filter((node) => ["zh-1", "zh-2", "zh-3"].includes(node.id))
+				.every((node) => node.visibility === "audit-only"),
+		).toBe(true);
+		expect(graph.clusters[0]).toEqual(
+			expect.objectContaining({
+				lifecycleStatus: "stable",
+				representativeNodeId: storedSummary?.summaryId,
+			}),
+		);
+		const audit = await createRawMessageMemoryGraphStore({
+			storage: manager,
+			ownerScope: OWNER,
+			now: () => NOW,
+		}).readAuditTrail({
+			ownerScope: OWNER,
+			nodeId: storedSummary?.summaryId ?? "",
+		});
+		expect(audit.sourceNodeIds).toEqual(
+			expect.arrayContaining(["zh-1", "zh-2", "zh-3"]),
+		);
+		expect(audit.operationIds.length).toBeGreaterThan(0);
+	});
+
+	it("publishes a new revision when a summarized cluster becomes stable again", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("revision-1")], { now: NOW });
+		await storeEvidence(manager, [rawMessage("revision-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("revision-3")], {
+			now: NOW + 2000,
+		});
+
+		const first = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+		expect(first.graphLifecycle?.status).toBe("applied");
+		const firstSummary = [...manager.summaries.values()][0];
+		expect(firstSummary?.sourceRecordIds).toHaveLength(3);
+
+		await storeEvidence(
+			manager,
+			[
+				rawMessage("revision-4", { timestamp: Math.floor(NOW / 1000) + 4 }),
+				rawMessage("revision-5", { timestamp: Math.floor(NOW / 1000) + 5 }),
+				rawMessage("revision-6", { timestamp: Math.floor(NOW / 1000) + 6 }),
+			],
+			{ now: NOW + 4000 },
+		);
+		const second = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(second.graphLifecycle?.status).toBe("applied");
+		expect(manager.summaries.size).toBe(1);
+		const revisedSummary = [...manager.summaries.values()][0];
+		expect(revisedSummary?.sourceRecordIds).toEqual([
+			"revision-4",
+			"revision-5",
+			"revision-6",
+		]);
+		const graph = await snapshot(manager);
+		const summaryNode = graph.nodes.find(
+			(node) => node.id === revisedSummary?.summaryId,
+		);
+		expect(summaryNode?.metadata?.publicationRevision).toBe(
+			revisedSummary?.dimensions?.__openloomiMemoryPublicationRevision,
+		);
+	});
+
+	it("converges when replacement publication fails after graph persistence", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("replacement-1")], { now: NOW });
+		await storeEvidence(manager, [rawMessage("replacement-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("replacement-3")], {
+			now: NOW + 2000,
+		});
+		await runMemoryForgettingCycle(manager as never, OWNER.userId, {
+			now: NOW + 3000,
+			graphLifecycle: { enabled: true },
+		});
+		const original = [...manager.summaries.values()][0];
+
+		await storeEvidence(
+			manager,
+			[
+				rawMessage("replacement-4", {
+					timestamp: Math.floor(NOW / 1000) + 4,
+				}),
+				rawMessage("replacement-5", {
+					timestamp: Math.floor(NOW / 1000) + 5,
+				}),
+				rawMessage("replacement-6", {
+					timestamp: Math.floor(NOW / 1000) + 6,
+				}),
+			],
+			{ now: NOW + 4000 },
+		);
+		manager.failSummaryWriteNumbers.add(manager.summaryWriteCount + 1);
+		const failed = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+		expect(failed.graphLifecycle?.status).toBe("partial-failure");
+		expect([...manager.summaries.values()][0]).toEqual(original);
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 6000, graphLifecycle: { enabled: true } },
+		);
+		expect(retried.graphLifecycle?.status).toBe("applied");
+		expect([...manager.summaries.values()][0]?.sourceRecordIds).toEqual([
+			"replacement-4",
+			"replacement-5",
+			"replacement-6",
+		]);
+	});
+
+	it("persists owner scope on summaries used for graph materialization", async () => {
+		const manager = new GraphLifecycleTestManager();
+		const ownerScope = {
+			userId: OWNER.userId,
+			workspaceId: "workspace-scoped",
+			tenantId: "tenant-scoped",
+		} satisfies OwnerScope;
+		for (let index = 0; index < 3; index += 1) {
+			await storeEvidence(
+				manager,
+				[
+					rawMessage(`scoped-${index + 1}`, {
+						timestamp: Math.floor(NOW / 1000) + index,
+					}),
+				],
+				{
+					workspaceId: ownerScope.workspaceId,
+					tenantId: ownerScope.tenantId,
+					now: NOW + index * 1000,
+				},
+			);
+		}
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			ownerScope.userId,
+			{
+				now: NOW + 3000,
+				graphLifecycle: {
+					enabled: true,
+					workspaceId: ownerScope.workspaceId,
+					tenantId: ownerScope.tenantId,
+				},
+			},
+		);
+		expect(result.graphLifecycle?.status).toBe("applied");
+
+		const storedSummary = [...manager.summaries.values()][0];
+		if (!storedSummary) throw new Error("expected scoped summary");
+		expect(storedSummary.dimensions).toMatchObject({
+			workspaceId: ownerScope.workspaceId,
+			tenantId: ownerScope.tenantId,
+		});
+		const graph = await snapshot(manager, ownerScope);
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: graph,
+				nodeIds: [storedSummary.summaryId],
+			}),
+		).resolves.toEqual([
+			expect.objectContaining({
+				sourceType: "summary",
+				summary: expect.objectContaining({
+					summaryId: storedSummary.summaryId,
+					dimensions: expect.objectContaining({
+						workspaceId: ownerScope.workspaceId,
+						tenantId: ownerScope.tenantId,
+					}),
+				}),
+			}),
+		]);
+	});
+	it("fails closed for missing, cross-scope, and pending persisted nodes", async () => {
+		const manager = new GraphLifecycleTestManager();
+		const ownerScope = {
+			userId: OWNER.userId,
+			workspaceId: "workspace-a",
+		} satisfies OwnerScope;
+		await storeEvidence(manager, [rawMessage("scope-checked")], {
+			workspaceId: ownerScope.workspaceId,
+		});
+		const graph = await snapshot(manager, ownerScope);
+		const sourceNode = graph.nodes.find((node) => node.id === "scope-checked");
+		if (!sourceNode) {
+			throw new Error("expected persisted source node");
+		}
+
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: graph,
+				nodeIds: ["missing-node"],
+			}),
+		).resolves.toBeUndefined();
+
+		manager.summaries.set("pending-summary", {
+			summaryId: "pending-summary",
+			userId: ownerScope.userId,
+			summaryTier: "L1",
+			sourceTier: "short",
+			startTimestamp: NOW,
+			endTimestamp: NOW,
+			messageCount: 1,
+			sourceRecordIds: ["scope-checked"],
+			keyPoints: ["pending"],
+			keywords: ["pending"],
+			keywordsText: "pending",
+			summaryText: "Pending representative",
+			dimensions: {
+				__openloomiMemoryPublication: "pending",
+			},
+			createdAt: NOW,
+			updatedAt: NOW,
+		});
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: {
+					...graph,
+					nodes: [
+						...graph.nodes,
+						{
+							...sourceNode,
+							id: "pending-summary",
+							type: "summary",
+							sourceId: "scope-checked",
+							visibility: "default",
+						},
+					],
+				},
+				nodeIds: ["pending-summary"],
+			}),
+		).resolves.toBeUndefined();
+
+		const pendingSummary = manager.summaries.get("pending-summary");
+		if (!pendingSummary) throw new Error("expected pending summary fixture");
+		manager.summaries.set("cross-workspace-summary", {
+			...pendingSummary,
+			summaryId: "cross-workspace-summary",
+			dimensions: { workspaceId: "workspace-b" },
+		});
+		const broadOwnerScope = { userId: ownerScope.userId } satisfies OwnerScope;
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope: broadOwnerScope,
+				snapshot: {
+					ownerScope: broadOwnerScope,
+					nodes: [
+						{
+							...sourceNode,
+							id: "cross-workspace-summary",
+							type: "summary",
+							ownerScope: broadOwnerScope,
+							sourceId: "scope-checked",
+							visibility: "default",
+						},
+					],
+					edges: [],
+					clusters: [],
+					capturedAt: NOW,
+				},
+				nodeIds: ["cross-workspace-summary"],
+			}),
+		).resolves.toBeUndefined();
+
+		const visibleRaw = manager.messages.get("scope-checked");
+		if (!visibleRaw) throw new Error("expected visible persisted raw");
+		manager.messages.set("scope-checked", {
+			...visibleRaw,
+			deprecatedAt: NOW,
+		});
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: graph,
+				nodeIds: ["scope-checked"],
+			}),
+		).resolves.toBeUndefined();
+		manager.messages.set("scope-checked", visibleRaw);
+
+		const storedRaw = manager.messages.get("scope-checked");
+		if (!storedRaw) {
+			throw new Error("expected persisted source raw");
+		}
+		manager.messages.set("scope-checked", {
+			...storedRaw,
+			metadata: {
+				...(storedRaw.metadata ?? {}),
+				memoryOwnerScope: {
+					userId: ownerScope.userId,
+					workspaceId: "workspace-b",
+				},
+			},
+		});
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: graph,
+				nodeIds: ["scope-checked"],
+			}),
+		).resolves.toBeUndefined();
+
+		await expect(
+			materializeMemoryGraphNodeIds({
+				manager: manager as never,
+				ownerScope,
+				snapshot: {
+					...graph,
+					nodes: graph.nodes.map((node) => ({
+						...node,
+						ownerScope: {
+							userId: ownerScope.userId,
+							workspaceId: "workspace-b",
+						},
+					})),
+				},
+				nodeIds: ["scope-checked"],
+			}),
+		).resolves.toBeUndefined();
+	});
+
+	it("materializes only exact-applicability competing alternatives", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(
+			manager,
+			[
+				rawMessage("global-en", {
+					relationValue: "en",
+					timestamp: Math.floor(NOW / 1000),
+				}),
+			],
+			{ now: NOW },
+		);
+		await storeEvidence(
+			manager,
+			[
+				rawMessage("global-zh", {
+					relationValue: "zh",
+					timestamp: Math.floor(NOW / 1000) + 1,
+				}),
+			],
+			{ now: NOW + 1000 },
+		);
+		const graph = await snapshot(manager);
+
+		const result = await queryMemoryWithFallback(
+			manager as never,
+			{
+				userId: OWNER.userId,
+				keywords: ["zh"],
+				pageSize: 3,
+				minRawResultsWithoutFallback: 2,
+				conflictSensitive: true,
+			},
+			{
+				graphRetrieval: {
+					enabled: true,
+					retriever: createGraphAwareRetrievalDryRunRetriever(),
+					ownerScope: OWNER,
+					snapshotProvider: async () => graph,
+					materializeNodeIds: ({ ownerScope, snapshot, nodeIds }) =>
+						materializeMemoryGraphNodeIds({
+							manager: manager as never,
+							ownerScope,
+							snapshot,
+							nodeIds,
+						}),
+				},
+			},
+		);
+
+		expect(result.graphRetrieval?.status).toBe("applied");
+		expect(result.graphRetrieval?.reasonCodes).toContain(
+			"competing_alternatives_exposed",
+		);
+		expect(
+			result.items.map((item) =>
+				item.sourceType === "raw" ? item.record.id : item.summary.summaryId,
+			),
+		).toEqual(expect.arrayContaining(["global-zh", "global-en"]));
+		expect(result.graphRetrieval?.result?.auditTrail).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					nodeId: "global-en",
+					edgeIds: expect.arrayContaining([expect.any(String)]),
+					reasonCodes: expect.arrayContaining([
+						"competing_alternative_provenance",
+					]),
+				}),
+			]),
+		);
+
+		const alternativeCluster = graph.clusters.find((cluster) =>
+			cluster.nodeIds.includes("global-en"),
+		);
+		if (!alternativeCluster) {
+			throw new Error("expected competing alternative cluster");
+		}
+		const mismatched = buildGraphAwareRetrievalDryRun({
+			ownerScope: OWNER,
+			query: "language preference",
+			baselineNodeIds: ["global-zh"],
+			snapshot: {
+				...graph,
+				clusters: graph.clusters.map((cluster) =>
+					cluster.clusterId === alternativeCluster.clusterId
+						? {
+								...cluster,
+								applicability: { scope: "task", key: "other-task" },
+							}
+						: cluster,
+				),
+			},
+			visibilityMode: "conflict",
+		});
+		expect(mismatched.rankedNodeIds).not.toContain("global-en");
+		expect(mismatched.reasonCodes).not.toContain(
+			"competing_alternatives_exposed",
+		);
+
+		const conflictResultForEdges = (edges: typeof graph.edges) =>
+			buildGraphAwareRetrievalDryRun({
+				ownerScope: OWNER,
+				query: "language preference",
+				baselineNodeIds: ["global-zh"],
+				snapshot: { ...graph, edges },
+				visibilityMode: "conflict",
+			});
+		const inactiveCompetitionEdges = graph.edges.map((edge) =>
+			edge.kind === "compete"
+				? { ...edge, metadata: { ...edge.metadata, inactive: true } }
+				: edge,
+		);
+		const rolledBackCompetitionEdges = graph.edges.map((edge) =>
+			edge.kind === "compete"
+				? { ...edge, metadata: { ...edge.metadata, rolledBack: true } }
+				: edge,
+		);
+		for (const noActiveCompetition of [
+			conflictResultForEdges(
+				graph.edges.filter((edge) => edge.kind !== "compete"),
+			),
+			conflictResultForEdges(inactiveCompetitionEdges),
+			conflictResultForEdges(rolledBackCompetitionEdges),
+		]) {
+			expect(noActiveCompetition.rankedNodeIds).not.toContain("global-en");
+			expect(noActiveCompetition.reasonCodes).not.toContain(
+				"competing_alternatives_exposed",
+			);
+		}
+	});
+
+	it("keeps sources visible when summary persistence fails", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("fail-1")]);
+		await storeEvidence(manager, [rawMessage("fail-2")], { now: NOW + 1000 });
+		await storeEvidence(manager, [rawMessage("fail-3")], { now: NOW + 2000 });
+		manager.failSummaryWrites = 1;
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(result.graphLifecycle?.status).toBe("partial-failure");
+		expect(manager.summaries.size).toBe(0);
+		expect(
+			(
+				await manager.queryMessages({
+					userId: OWNER.userId,
+					includeArchived: false,
+					includeDeprecated: false,
+				})
+			).filter((message) => !message.messageId.startsWith("__")),
+		).toHaveLength(3);
+		expect(
+			(await snapshot(manager)).clusters[0].representativeNodeId,
+		).toBeUndefined();
+	});
+
+	it("does not deprecate sources when representative graph persistence fails", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("representative-fail-1")]);
+		await storeEvidence(manager, [rawMessage("representative-fail-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("representative-fail-3")], {
+			now: NOW + 2000,
+		});
+		manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 2);
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(result.graphLifecycle?.status).toBe("partial-failure");
+		expect(manager.summaries.size).toBe(1);
+		const pendingRecall = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(pendingRecall.items.map((item) => item.sourceType)).toEqual([
+			"raw",
+			"raw",
+			"raw",
+		]);
+		expect(
+			manager.messages.get("representative-fail-1")?.deprecatedAt,
+		).toBeUndefined();
+		expect(
+			(await snapshot(manager)).clusters[0].representativeNodeId,
+		).toBeUndefined();
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 4000, graphLifecycle: { enabled: true } },
+		);
+		expect(retried.graphLifecycle?.status).toBe("applied");
+		const publishedRecall = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(publishedRecall.items).toEqual([
+			expect.objectContaining({
+				sourceType: "summary",
+				summary: expect.objectContaining({ summaryId: expect.any(String) }),
+			}),
+		]);
+	});
+
+	it("retries a final summary publication failure before deprecating sources", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("publication-fail-1")]);
+		await storeEvidence(manager, [rawMessage("publication-fail-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("publication-fail-3")], {
+			now: NOW + 2000,
+		});
+		// The staged write succeeds; the publish write after graph persistence fails.
+		manager.failSummaryWriteNumbers.add(2);
+
+		const failed = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(failed.graphLifecycle?.status).toBe("partial-failure");
+		const pendingSummary = [...manager.summaries.values()][0];
+		expect(pendingSummary?.dimensions).toEqual(
+			expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
+		);
+		expect(
+			manager.messages.get("publication-fail-1")?.deprecatedAt,
+		).toBeUndefined();
+		const pendingRecall = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(pendingRecall.items.map((item) => item.sourceType)).toEqual([
+			"raw",
+			"raw",
+			"raw",
+		]);
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 4000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(retried.graphLifecycle?.status).toBe("applied");
+		expect(manager.summaries.size).toBe(1);
+		expect([...manager.summaries.values()][0]?.dimensions).not.toEqual(
+			expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
+		);
+		expect(manager.messages.get("publication-fail-1")?.deprecatedAt).toBe(
+			NOW + 4000,
+		);
+		const publishedRecall = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(publishedRecall.items).toEqual([
+			expect.objectContaining({
+				sourceType: "summary",
+				summary: expect.objectContaining({ summaryId: expect.any(String) }),
+			}),
+		]);
+	});
+
+	it("retries a partial deprecation failure without duplicating the summary", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("retry-1")]);
+		await storeEvidence(manager, [rawMessage("retry-2")], { now: NOW + 1000 });
+		await storeEvidence(manager, [rawMessage("retry-3")], { now: NOW + 2000 });
+		manager.failDeprecationWrites = 1;
+
+		const failed = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+		expect(failed.graphLifecycle?.status).toBe("partial-failure");
+		expect(manager.summaries.size).toBe(1);
+		expect(manager.messages.get("retry-1")?.deprecatedAt).toBeUndefined();
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 4000, graphLifecycle: { enabled: true } },
+		);
+		expect(retried.graphLifecycle?.status).toBe("applied");
+		expect(manager.summaries.size).toBe(1);
+		expect(manager.messages.get("retry-1")?.deprecatedAt).toBe(NOW + 4000);
+
+		const replay = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+		expect(replay.graphLifecycle?.status).toBe("no-op");
+		expect(manager.messages.get("retry-1")?.deprecatedAt).toBe(NOW + 4000);
+	});
+
+	it("reconciles graph visibility after it fails following raw deprecation", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("visibility-retry-1")]);
+		await storeEvidence(manager, [rawMessage("visibility-retry-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("visibility-retry-3")], {
+			now: NOW + 2000,
+		});
+		// Lifecycle transition and representative persistence consume the first
+		// two writes; fail only the subsequent graph visibility update.
+		manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 3);
+
+		const failed = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(failed.graphLifecycle?.status).toBe("partial-failure");
+		expect(manager.messages.get("visibility-retry-1")?.deprecatedAt).toBe(
+			NOW + 3000,
+		);
+		expect(
+			(await snapshot(manager)).nodes.find(
+				(node) => node.id === "visibility-retry-1",
+			)?.visibility,
+		).toBe("default");
+
+		const publishedSummary = [...manager.summaries.values()][0];
+		expect(publishedSummary?.dimensions).not.toEqual(
+			expect.objectContaining({ __openloomiMemoryPublication: "pending" }),
+		);
+
+		// A retry must not downgrade the published summary while it is staging.
+		// Fail the publish call after that stage to model an interrupted retry.
+		manager.failSummaryWriteNumbers.add(manager.summaryWriteCount + 2);
+		const interruptedRetry = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 4000, graphLifecycle: { enabled: true } },
+		);
+		expect(interruptedRetry.graphLifecycle?.status).toBe("partial-failure");
+		expect([...manager.summaries.values()][0]).toEqual(publishedSummary);
+		const recallDuringRetry = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(recallDuringRetry.items).toEqual([
+			expect.objectContaining({ sourceType: "summary" }),
+		]);
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(retried.graphLifecycle?.status).toBe("applied");
+		expect(manager.summaries.size).toBe(1);
+		expect(
+			(await snapshot(manager)).nodes
+				.filter((node) => node.id.startsWith("visibility-retry-"))
+				.every((node) => node.visibility === "audit-only"),
+		).toBe(true);
+	});
+
+	it("does not publish a stale summary when graph provenance differs", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("provenance-retry-1")]);
+		await storeEvidence(manager, [rawMessage("provenance-retry-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("provenance-retry-3")], {
+			now: NOW + 2000,
+		});
+		manager.failLedgerWriteNumbers.add(manager.ledgerWriteCount + 3);
+
+		const failed = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+		expect(failed.graphLifecycle?.status).toBe("partial-failure");
+		const publishedSummary = [...manager.summaries.values()][0];
+		const ledgerId = memoryGraphLedgerMessageId(OWNER);
+		const ledger = manager.messages.get(ledgerId);
+		const payload = ledger?.metadata?.memoryGraphLedger as
+			| {
+					snapshot?: {
+						nodes?: Array<{
+							id: string;
+							metadata?: Record<string, unknown>;
+						}>;
+					};
+			  }
+			| undefined;
+		if (!ledger || !payload?.snapshot?.nodes || !publishedSummary) {
+			throw new Error("expected published graph summary");
+		}
+		payload.snapshot.nodes = payload.snapshot.nodes.map((node) =>
+			node.id === publishedSummary.summaryId
+				? {
+						...node,
+						metadata: {
+							...(node.metadata ?? {}),
+							publicationRevision: "stale-revision",
+						},
+					}
+				: node,
+		);
+		manager.messages.set(ledgerId, {
+			...ledger,
+			metadata: { ...ledger.metadata, memoryGraphLedger: payload },
+		});
+
+		const retried = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 4000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(retried.graphLifecycle?.status).toBe("partial-failure");
+		expect(retried.graphLifecycle?.reasonCodes).toContain(
+			"memory_graph_representative_provenance_mismatch",
+		);
+		expect([...manager.summaries.values()][0]).toEqual(publishedSummary);
+		const recall = await queryMemoryWithFallback(manager as never, {
+			userId: OWNER.userId,
+			limit: 10,
+			minRawResultsWithoutFallback: 10,
+		});
+		expect(recall.items).toEqual([
+			expect.objectContaining({ sourceType: "summary" }),
+		]);
+	});
+
+	it("keeps summaries and raw visibility when the adapter cannot deprecate", async () => {
+		const manager = new GraphLifecycleTestManager({
+			supportsDeprecation: false,
+		});
+		await storeEvidence(manager, [rawMessage("no-adapter-1")]);
+		await storeEvidence(manager, [rawMessage("no-adapter-2")], {
+			now: NOW + 1000,
+		});
+		await storeEvidence(manager, [rawMessage("no-adapter-3")], {
+			now: NOW + 2000,
+		});
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 3000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(result.graphLifecycle).toEqual(
+			expect.objectContaining({
+				status: "partial-failure",
+				createdSummaries: 1,
+				deprecatedRecords: 0,
+				reasonCodes: expect.arrayContaining([
+					"adapter_missing_deprecate_records",
+				]),
+			}),
+		);
+		expect(manager.messages.get("no-adapter-1")?.deprecatedAt).toBeUndefined();
+		const graph = await snapshot(manager);
+		expect(
+			graph.nodes.find((node) => node.id === "no-adapter-1")?.visibility,
+		).toBe("default");
+	});
+
+	it("supersedes sustained same-context competition but preserves contextual exceptions", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [
+			rawMessage("global-zh", { relationValue: "zh" }),
+		]);
+		await storeEvidence(
+			manager,
+			[
+				rawMessage("task-en", {
+					relationValue: "en",
+					applicability: { scope: "task", key: "task-42" },
+				}),
+			],
+			{ now: NOW + 1000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("global-en-1", { relationValue: "en" })],
+			{ now: NOW + 2000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("global-en-2", { relationValue: "en" })],
+			{ now: NOW + 3000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("global-en-3", { relationValue: "en" })],
+			{ now: NOW + 4000 },
+		);
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+
+		expect(result.graphLifecycle?.createdSummaries).toBe(1);
+		const graph = await snapshot(manager);
+		const taskCluster = graph.clusters.find((cluster) =>
+			cluster.nodeIds.includes("task-en"),
+		);
+		const oldGlobalCluster = graph.clusters.find((cluster) =>
+			cluster.nodeIds.includes("global-zh"),
+		);
+		const newGlobalCluster = graph.clusters.find((cluster) =>
+			cluster.nodeIds.includes("global-en-1"),
+		);
+		expect(taskCluster?.lifecycleStatus).toBe("forming");
+		expect(oldGlobalCluster?.lifecycleStatus).toBe("superseded");
+		expect(newGlobalCluster).toEqual(
+			expect.objectContaining({
+				lifecycleStatus: "stable",
+				representativeNodeId: expect.any(String),
+			}),
+		);
+		expect(manager.messages.get("global-zh")?.deprecationReason).toMatch(
+			/^superseded_by_summary:/,
+		);
+		expect(manager.messages.get("global-en-1")?.deprecationReason).toMatch(
+			/^summarized_into:/,
+		);
+	});
+
+	it("resolves all alternatives in a connected multi-way competition", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [
+			rawMessage("multi-zh", { relationValue: "zh" }),
+		]);
+		await storeEvidence(
+			manager,
+			[rawMessage("multi-en", { relationValue: "en" })],
+			{ now: NOW + 1000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("multi-ja-1", { relationValue: "ja" })],
+			{ now: NOW + 2000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("multi-ja-2", { relationValue: "ja" })],
+			{ now: NOW + 3000 },
+		);
+		await storeEvidence(
+			manager,
+			[rawMessage("multi-ja-3", { relationValue: "ja" })],
+			{ now: NOW + 4000 },
+		);
+
+		const result = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{ now: NOW + 5000, graphLifecycle: { enabled: true } },
+		);
+		expect(result.graphLifecycle?.createdSummaries).toBe(1);
+		const graph = await snapshot(manager);
+		expect(
+			graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-zh"))
+				?.lifecycleStatus,
+		).toBe("superseded");
+		expect(
+			graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-en"))
+				?.lifecycleStatus,
+		).toBe("superseded");
+		expect(
+			graph.clusters.find((cluster) => cluster.nodeIds.includes("multi-ja-1")),
+		).toEqual(
+			expect.objectContaining({
+				lifecycleStatus: "stable",
+				representativeNodeId: expect.any(String),
+			}),
+		);
+	});
+
+	it("supports dry-run, owner-scope isolation, and stale singleton decay", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("workspace-a")], {
+			workspaceId: "workspace-a",
+			now: NOW,
+		});
+
+		const wrongScope = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{
+				now: NOW + 1000,
+				graphLifecycle: { enabled: true, workspaceId: "workspace-b" },
+			},
+		);
+		expect(wrongScope.graphLifecycle).toEqual(
+			expect.objectContaining({ status: "no-op", scannedClusters: 0 }),
+		);
+
+		const dryRun = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{
+				dryRun: true,
+				now: NOW + 2000,
+				graphLifecycle: {
+					enabled: true,
+					workspaceId: "workspace-a",
+					decayAfterMs: 0,
+				},
+			},
+		);
+		expect(dryRun.graphLifecycle).toEqual(
+			expect.objectContaining({
+				status: "planned",
+				decayingClusters: 1,
+				createdSummaries: 0,
+			}),
+		);
+		expect(manager.summaries.size).toBe(0);
+		expect(
+			(
+				await snapshot(manager, {
+					userId: OWNER.userId,
+					workspaceId: "workspace-a",
+				})
+			).clusters[0].lifecycleStatus,
+		).toBe("forming");
+		expect(
+			manager.messages.has(
+				memoryGraphLedgerMessageId({
+					userId: OWNER.userId,
+					workspaceId: "workspace-a",
+				}),
+			),
+		).toBe(true);
+	});
+
+	it("applies the same lifecycle transition again after an explicit reset", async () => {
+		const manager = new GraphLifecycleTestManager();
+		await storeEvidence(manager, [rawMessage("repeat-decay")], { now: NOW });
+
+		const firstDecay = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{
+				now: NOW + 1000,
+				graphLifecycle: { enabled: true, decayAfterMs: 0 },
+			},
+		);
+		expect(firstDecay.graphLifecycle?.status).toBe("applied");
+
+		const graphStore = createRawMessageMemoryGraphStore({
+			storage: manager,
+			ownerScope: OWNER,
+			now: () => NOW + 2000,
+		});
+		const decayed = await graphStore.readSnapshot({
+			ownerScope: OWNER,
+			includeAuditOnly: true,
+		});
+		const cluster = decayed.clusters[0];
+		expect(cluster.lifecycleStatus).toBe("decaying");
+		await graphStore.persistPlan({
+			planId: "test-reset-lifecycle",
+			ownerScope: OWNER,
+			candidateNodes: [],
+			candidateEdges: [],
+			candidateClusters: [{ ...cluster, lifecycleStatus: "forming" }],
+			operations: [
+				{
+					operationId: "test-reset-lifecycle-operation",
+					ownerScope: OWNER,
+					kind: "set-cluster-lifecycle",
+					nodeIds: [...cluster.nodeIds],
+					clusterId: cluster.clusterId,
+					fromStatus: "decaying",
+					toStatus: "forming",
+					reasonCodes: ["test_explicit_reset"],
+				},
+			],
+			expectedVersion: decayed.version,
+			persistence: { mode: "write", enabled: true },
+			reasonCodes: ["test_explicit_reset"],
+		});
+
+		const repeatedDecay = await runMemoryForgettingCycle(
+			manager as never,
+			OWNER.userId,
+			{
+				now: NOW + 3000,
+				graphLifecycle: { enabled: true, decayAfterMs: 0 },
+			},
+		);
+		expect(repeatedDecay.graphLifecycle?.status).toBe("applied");
+		expect((await snapshot(manager)).clusters[0].lifecycleStatus).toBe(
+			"decaying",
+		);
+	});
 });

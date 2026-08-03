@@ -1,116 +1,122 @@
 import { test } from "vitest";
 
 const hasRequiredEnv = Boolean(
-  process.env.TG_SESSION &&
-  process.env.SLACK_USER_TOKEN &&
-  process.env.GOOGLE_GMAIL_ADDRESS &&
-  process.env.GOOGLE_APP_PASSWORD,
+	process.env.TG_SESSION &&
+		process.env.SLACK_USER_TOKEN &&
+		process.env.GOOGLE_GMAIL_ADDRESS &&
+		process.env.GOOGLE_APP_PASSWORD,
 );
 const runTest = hasRequiredEnv ? test : test.skip;
 
 runTest(
-  "slack message by hours",
-  async () => {
-    const { generateProjectInsights } =
-      await import("@/lib/ai/subagents/insights");
-    const { SlackAdapter } = await import("@/lib/integrations/slack");
-    const adapter = new SlackAdapter();
-    // Get all channels including general channels and peoples
-    const messages = await adapter.getChatsByHours();
-    const jsonData = JSON.stringify(messages);
-    const data = await generateProjectInsights(
-      "test_user_123",
-      jsonData,
-      "",
-      "slack",
-    );
-    console.log(data);
-  },
-  300000,
+	"slack message by hours",
+	async () => {
+		const { generateProjectInsights } = await import(
+			"@/lib/ai/subagents/insights"
+		);
+		const { SlackAdapter } = await import("@/lib/integrations/slack");
+		const adapter = new SlackAdapter();
+		// Get all channels including general channels and peoples
+		const messages = await adapter.getChatsByHours();
+		const jsonData = JSON.stringify(messages);
+		const data = await generateProjectInsights(
+			"test_user_123",
+			jsonData,
+			"",
+			"slack",
+		);
+		console.log(data);
+	},
+	300000,
 );
 
 runTest(
-  "telegram message by chunk",
-  async () => {
-    const { generateProjectInsights } =
-      await import("@/lib/ai/subagents/insights");
-    const { TelegramAdapter } =
-      await import("@openloomi/integrations/telegram");
-    const adapter = new TelegramAdapter({
-      session: process.env.TG_SESSION,
-    });
-    let historyInsight = "";
-    while (true) {
-      const { messages, hasMore } = await adapter.getChatsByChunkHours();
-      console.log("The messages length", messages.length, hasMore);
-      const jsonData = JSON.stringify(messages);
-      const data = await generateProjectInsights(
-        "test_user_123",
-        jsonData,
-        historyInsight,
-        "telegram",
-      );
-      historyInsight = JSON.stringify(data);
-      console.log(data);
-      if (!hasMore) {
-        break;
-      }
-    }
-  },
-  300000,
+	"telegram message by chunk",
+	async () => {
+		const { generateProjectInsights } = await import(
+			"@/lib/ai/subagents/insights"
+		);
+		const { TelegramAdapter } = await import(
+			"@openloomi/integrations/telegram"
+		);
+		const adapter = new TelegramAdapter({
+			session: process.env.TG_SESSION,
+		});
+		let historyInsight = "";
+		while (true) {
+			const { messages, hasMore } = await adapter.getChatsByChunkHours();
+			console.log("The messages length", messages.length, hasMore);
+			const jsonData = JSON.stringify(messages);
+			const data = await generateProjectInsights(
+				"test_user_123",
+				jsonData,
+				historyInsight,
+				"telegram",
+			);
+			historyInsight = JSON.stringify(data);
+			console.log(data);
+			if (!hasMore) {
+				break;
+			}
+		}
+	},
+	300000,
 );
 
 runTest(
-  "telegram message insight by hours",
-  async () => {
-    const { generateProjectInsights } =
-      await import("@/lib/ai/subagents/insights");
-    const { TelegramAdapter } =
-      await import("@openloomi/integrations/telegram");
-    const adapter = new TelegramAdapter({
-      session: process.env.TG_SESSION,
-    });
-    const messages = await adapter.getChatsByHours();
-    console.log(await adapter.getDialogs());
-    const jsonData = JSON.stringify(messages);
-    const historyInsight = "";
-    const customPrompt = "";
-    const data = await generateProjectInsights(
-      "test_user_123",
-      jsonData,
-      historyInsight,
-      "telegram",
-      customPrompt,
-    );
-    console.log(data);
-  },
-  300000,
+	"telegram message insight by hours",
+	async () => {
+		const { generateProjectInsights } = await import(
+			"@/lib/ai/subagents/insights"
+		);
+		const { TelegramAdapter } = await import(
+			"@openloomi/integrations/telegram"
+		);
+		const adapter = new TelegramAdapter({
+			session: process.env.TG_SESSION,
+		});
+		const messages = await adapter.getChatsByHours();
+		console.log(await adapter.getDialogs());
+		const jsonData = JSON.stringify(messages);
+		const historyInsight = "";
+		const customPrompt = "";
+		const data = await generateProjectInsights(
+			"test_user_123",
+			jsonData,
+			historyInsight,
+			"telegram",
+			customPrompt,
+		);
+		console.log(data);
+	},
+	300000,
 );
 
 runTest(
-  "telegram send messages",
-  async () => {
-    const { TelegramAdapter } =
-      await import("@openloomi/integrations/telegram");
-    const adapter = new TelegramAdapter({
-      session: process.env.TG_SESSION,
-    });
-    await adapter.sendMessage(
-      "private",
-      "8373890313",
-      "Hello from openloomi! (Generated by openloomi AI - https://openloomi.ai)." as unknown as string,
-    );
-  },
-  300000,
+	"telegram send messages",
+	async () => {
+		const { TelegramAdapter } = await import(
+			"@openloomi/integrations/telegram"
+		);
+		const adapter = new TelegramAdapter({
+			session: process.env.TG_SESSION,
+		});
+		await adapter.sendMessage(
+			"private",
+			"8373890313",
+			"Hello from openloomi! (Generated by openloomi AI - https://openloomi.ai)." as unknown as string,
+		);
+	},
+	300000,
 );
 
 runTest(
-  "gmail app password recieve messages",
-  async () => {
-    const { EmailAdapter } = await import("@/lib/integrations/email");
-    const adapter = new EmailAdapter();
-    const emails = await adapter.getEmailsByHours(1);
-    console.log("emails", JSON.stringify(emails, null, 2));
-  },
-  300000,
+	"gmail app password recieve messages",
+	async () => {
+		const { EmailAdapter } = await import("@/lib/integrations/email");
+		const adapter = new EmailAdapter();
+		const emails = await adapter.getEmailsByHours(1);
+		console.log("emails", JSON.stringify(emails, null, 2));
+	},
+	300000,
 );

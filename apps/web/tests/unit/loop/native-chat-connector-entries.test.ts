@@ -22,330 +22,330 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  NATIVE_CHAT_INTEGRATIONS,
-  buildNativeChatConnectorEntries,
-  buildNativeConnectorReadinessEntries,
-  filterComposioOnlyEntries,
-  mergeNativeConnectorEntries,
+	NATIVE_CHAT_INTEGRATIONS,
+	buildNativeChatConnectorEntries,
+	buildNativeConnectorReadinessEntries,
+	filterComposioOnlyEntries,
+	mergeNativeConnectorEntries,
 } from "@/lib/loop/connectors-pure";
 import type { ConnectorEntry } from "@/lib/loop/types";
 
 function acc(over: {
-  id?: string;
-  platform: string;
-  displayName?: string;
-  externalId?: string;
-  status?: string;
+	id?: string;
+	platform: string;
+	displayName?: string;
+	externalId?: string;
+	status?: string;
 }): {
-  id: string;
-  platform: string;
-  displayName?: string;
-  externalId?: string;
-  status: string;
+	id: string;
+	platform: string;
+	displayName?: string;
+	externalId?: string;
+	status: string;
 } {
-  return {
-    id: over.id ?? `${over.platform}-${over.externalId ?? "0"}`,
-    platform: over.platform,
-    displayName: over.displayName,
-    externalId: over.externalId,
-    status: over.status ?? "active",
-  };
+	return {
+		id: over.id ?? `${over.platform}-${over.externalId ?? "0"}`,
+		platform: over.platform,
+		displayName: over.displayName,
+		externalId: over.externalId,
+		status: over.status ?? "active",
+	};
 }
 
 describe("NATIVE_CHAT_INTEGRATIONS", () => {
-  it("includes the nine chat platforms but NOT the Loop-monitored six", () => {
-    expect(NATIVE_CHAT_INTEGRATIONS.has("telegram")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("weixin")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("whatsapp")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("feishu")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("lark")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("imessage")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("qqbot")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("dingtalk")).toBe(true);
-    expect(NATIVE_CHAT_INTEGRATIONS.has("discord")).toBe(true);
+	it("includes the nine chat platforms but NOT the Loop-monitored six", () => {
+		expect(NATIVE_CHAT_INTEGRATIONS.has("telegram")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("weixin")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("whatsapp")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("feishu")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("lark")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("imessage")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("qqbot")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("dingtalk")).toBe(true);
+		expect(NATIVE_CHAT_INTEGRATIONS.has("discord")).toBe(true);
 
-    // Loop-monitored six must NOT collide with the native chat set so the
-    // route's merged `items` array never double-renders a platform.
-    for (const id of [
-      "gmail",
-      "google_calendar",
-      "github",
-      "slack",
-      "linear",
-      "obsidian",
-    ]) {
-      expect(NATIVE_CHAT_INTEGRATIONS.has(id)).toBe(false);
-    }
-  });
+		// Loop-monitored six must NOT collide with the native chat set so the
+		// route's merged `items` array never double-renders a platform.
+		for (const id of [
+			"gmail",
+			"google_calendar",
+			"github",
+			"slack",
+			"linear",
+			"obsidian",
+		]) {
+			expect(NATIVE_CHAT_INTEGRATIONS.has(id)).toBe(false);
+		}
+	});
 });
 
 describe("buildNativeChatConnectorEntries", () => {
-  it("drops accounts whose platform is not in the native chat set", () => {
-    const out = buildNativeChatConnectorEntries([
-      acc({ platform: "gmail" }), // would collide with Loop row → ignored
-      acc({ platform: "google_calendar" }), // same
-      acc({ platform: "notion" }), // arbitrary unknown → ignored
-    ]);
-    expect(out).toEqual([]);
-  });
+	it("drops accounts whose platform is not in the native chat set", () => {
+		const out = buildNativeChatConnectorEntries([
+			acc({ platform: "gmail" }), // would collide with Loop row → ignored
+			acc({ platform: "google_calendar" }), // same
+			acc({ platform: "notion" }), // arbitrary unknown → ignored
+		]);
+		expect(out).toEqual([]);
+	});
 
-  it("returns an empty list when given no accounts", () => {
-    expect(buildNativeChatConnectorEntries([])).toEqual([]);
-  });
+	it("returns an empty list when given no accounts", () => {
+		expect(buildNativeChatConnectorEntries([])).toEqual([]);
+	});
 
-  it("emits one row per platform for a single account each", () => {
-    const out = buildNativeChatConnectorEntries([
-      acc({
-        id: "tg-1",
-        platform: "telegram",
-        displayName: "Alice",
-        externalId: "@alice",
-        status: "active",
-      }),
-      acc({
-        id: "wx-1",
-        platform: "weixin",
-        displayName: "Bob",
-        status: "active",
-      }),
-    ]);
-    expect(out).toHaveLength(2);
-    expect(out.map((e) => e.id).sort()).toEqual(["telegram", "weixin"]);
-    const telegram = out.find((e) => e.id === "telegram");
-    expect(telegram).toBeDefined();
-    if (!telegram) return;
-    expect(telegram.label).toBe("Alice");
-    expect(telegram.connected).toBe(true);
-    expect(telegram.accountCount).toBe(1);
-    expect(telegram.accounts).toEqual([
-      { id: "tg-1", label: "Alice", healthy: true },
-    ]);
-    expect(telegram.probed).toBe(true);
-    expect(telegram.fetchedAt).toMatch(/T/);
-    // Capability stamp is applied: connected + non-loop → "needs_setup"
-    expect(telegram.capability).toBe("needs_setup");
-    expect(telegram.loopMonitored).toBe(false);
-    expect(telegram.decisionCapable).toBe(false);
-  });
+	it("emits one row per platform for a single account each", () => {
+		const out = buildNativeChatConnectorEntries([
+			acc({
+				id: "tg-1",
+				platform: "telegram",
+				displayName: "Alice",
+				externalId: "@alice",
+				status: "active",
+			}),
+			acc({
+				id: "wx-1",
+				platform: "weixin",
+				displayName: "Bob",
+				status: "active",
+			}),
+		]);
+		expect(out).toHaveLength(2);
+		expect(out.map((e) => e.id).sort()).toEqual(["telegram", "weixin"]);
+		const telegram = out.find((e) => e.id === "telegram");
+		expect(telegram).toBeDefined();
+		if (!telegram) return;
+		expect(telegram.label).toBe("Alice");
+		expect(telegram.connected).toBe(true);
+		expect(telegram.accountCount).toBe(1);
+		expect(telegram.accounts).toEqual([
+			{ id: "tg-1", label: "Alice", healthy: true },
+		]);
+		expect(telegram.probed).toBe(true);
+		expect(telegram.fetchedAt).toMatch(/T/);
+		// Capability stamp is applied: connected + non-loop → "needs_setup"
+		expect(telegram.capability).toBe("needs_setup");
+		expect(telegram.loopMonitored).toBe(false);
+		expect(telegram.decisionCapable).toBe(false);
+	});
 
-  it("collapses multiple accounts of the same platform into one row", () => {
-    const out = buildNativeChatConnectorEntries([
-      acc({
-        id: "wa-1",
-        platform: "whatsapp",
-        displayName: "+1 555 0100",
-        externalId: "100",
-        status: "active",
-      }),
-      acc({
-        id: "wa-2",
-        platform: "whatsapp",
-        displayName: "+1 555 0101",
-        externalId: "101",
-        status: "active",
-      }),
-      acc({
-        id: "wa-3",
-        platform: "whatsapp",
-        displayName: "+1 555 0102",
-        externalId: "102",
-        status: "expired",
-      }),
-    ]);
-    expect(out).toHaveLength(1);
-    const row = out[0];
-    expect(row.id).toBe("whatsapp");
-    expect(row.label).toBe("+1 555 0100"); // first account's displayName
-    expect(row.accountCount).toBe(3);
-    expect(row.accounts).toBeDefined();
-    if (!row.accounts) return;
-    expect(row.accounts).toHaveLength(3);
-    expect(row.accounts[0]).toEqual({
-      id: "wa-1",
-      label: "+1 555 0100",
-      healthy: true,
-    });
-    expect(row.accounts[2].healthy).toBe(false);
-    // OR semantic — at least one account is active → row is connected
-    expect(row.connected).toBe(true);
-  });
+	it("collapses multiple accounts of the same platform into one row", () => {
+		const out = buildNativeChatConnectorEntries([
+			acc({
+				id: "wa-1",
+				platform: "whatsapp",
+				displayName: "+1 555 0100",
+				externalId: "100",
+				status: "active",
+			}),
+			acc({
+				id: "wa-2",
+				platform: "whatsapp",
+				displayName: "+1 555 0101",
+				externalId: "101",
+				status: "active",
+			}),
+			acc({
+				id: "wa-3",
+				platform: "whatsapp",
+				displayName: "+1 555 0102",
+				externalId: "102",
+				status: "expired",
+			}),
+		]);
+		expect(out).toHaveLength(1);
+		const row = out[0];
+		expect(row.id).toBe("whatsapp");
+		expect(row.label).toBe("+1 555 0100"); // first account's displayName
+		expect(row.accountCount).toBe(3);
+		expect(row.accounts).toBeDefined();
+		if (!row.accounts) return;
+		expect(row.accounts).toHaveLength(3);
+		expect(row.accounts[0]).toEqual({
+			id: "wa-1",
+			label: "+1 555 0100",
+			healthy: true,
+		});
+		expect(row.accounts[2].healthy).toBe(false);
+		// OR semantic — at least one account is active → row is connected
+		expect(row.connected).toBe(true);
+	});
 
-  it("marks the row offline when every account is non-active", () => {
-    const out = buildNativeChatConnectorEntries([
-      acc({ id: "dd-1", platform: "dingtalk", status: "expired" }),
-      acc({ id: "dd-2", platform: "dingtalk", status: "revoked" }),
-    ]);
-    expect(out).toHaveLength(1);
-    expect(out[0].connected).toBe(false);
-    expect(out[0].accountCount).toBe(2);
-    expect(out[0].accounts?.every((a) => a.healthy === false)).toBe(true);
-  });
+	it("marks the row offline when every account is non-active", () => {
+		const out = buildNativeChatConnectorEntries([
+			acc({ id: "dd-1", platform: "dingtalk", status: "expired" }),
+			acc({ id: "dd-2", platform: "dingtalk", status: "revoked" }),
+		]);
+		expect(out).toHaveLength(1);
+		expect(out[0].connected).toBe(false);
+		expect(out[0].accountCount).toBe(2);
+		expect(out[0].accounts?.every((a) => a.healthy === false)).toBe(true);
+	});
 
-  it("falls back to platform id when no displayName is available", () => {
-    const out = buildNativeChatConnectorEntries([
-      acc({ platform: "feishu", displayName: undefined, externalId: "" }),
-    ]);
-    expect(out).toHaveLength(1);
-    expect(out[0].label).toBe("feishu");
-    expect(out[0].accounts?.[0].label).toBe("feishu");
-  });
+	it("falls back to platform id when no displayName is available", () => {
+		const out = buildNativeChatConnectorEntries([
+			acc({ platform: "feishu", displayName: undefined, externalId: "" }),
+		]);
+		expect(out).toHaveLength(1);
+		expect(out[0].label).toBe("feishu");
+		expect(out[0].accounts?.[0].label).toBe("feishu");
+	});
 
-  it("never collides with Loop-monitored rows — composio filter doesn't drop them", () => {
-    // The route merges native rows into `items`. The React side calls
-    // `filterComposioOnlyEntries` against a `nativePlatforms` set built
-    // from `useIntegrations()`. If our id ever appeared in that set, the
-    // native row would be silently dropped — a regression. Pin the
-    // disjointness here so any future change to either side surfaces.
-    const out: ConnectorEntry[] = buildNativeChatConnectorEntries([
-      acc({ platform: "telegram" }),
-      acc({ platform: "discord" }),
-      acc({ platform: "imessage" }),
-    ]);
-    const nativePlatformsFromDB = new Set(["telegram", "discord", "imessage"]);
-    // No Loop row happens to share an id with any native chat id, so a
-    // composio-only row with one of these ids shouldn't exist in the
-    // fixture. If it ever did, the filter would drop it — assert the
-    // disjoint direction by feeding empty items.
-    expect(filterComposioOnlyEntries([], nativePlatformsFromDB)).toEqual([]);
-    // And the native rows themselves pass the filter unchanged (they're
-    // connected + probed + id is the platform).
-    expect(filterComposioOnlyEntries(out, new Set())).toEqual(out);
-  });
+	it("never collides with Loop-monitored rows — composio filter doesn't drop them", () => {
+		// The route merges native rows into `items`. The React side calls
+		// `filterComposioOnlyEntries` against a `nativePlatforms` set built
+		// from `useIntegrations()`. If our id ever appeared in that set, the
+		// native row would be silently dropped — a regression. Pin the
+		// disjointness here so any future change to either side surfaces.
+		const out: ConnectorEntry[] = buildNativeChatConnectorEntries([
+			acc({ platform: "telegram" }),
+			acc({ platform: "discord" }),
+			acc({ platform: "imessage" }),
+		]);
+		const nativePlatformsFromDB = new Set(["telegram", "discord", "imessage"]);
+		// No Loop row happens to share an id with any native chat id, so a
+		// composio-only row with one of these ids shouldn't exist in the
+		// fixture. If it ever did, the filter would drop it — assert the
+		// disjoint direction by feeding empty items.
+		expect(filterComposioOnlyEntries([], nativePlatformsFromDB)).toEqual([]);
+		// And the native rows themselves pass the filter unchanged (they're
+		// connected + probed + id is the platform).
+		expect(filterComposioOnlyEntries(out, new Set())).toEqual(out);
+	});
 });
 
 describe("buildNativeConnectorReadinessEntries", () => {
-  it("emits active native Gmail as a Loop-ready connector row", () => {
-    const out = buildNativeConnectorReadinessEntries([
-      acc({
-        id: "gmail-native-1",
-        platform: "gmail",
-        displayName: "Work Gmail",
-        externalId: "work@example.com",
-        status: "active",
-      }),
-    ]);
+	it("emits active native Gmail as a Loop-ready connector row", () => {
+		const out = buildNativeConnectorReadinessEntries([
+			acc({
+				id: "gmail-native-1",
+				platform: "gmail",
+				displayName: "Work Gmail",
+				externalId: "work@example.com",
+				status: "active",
+			}),
+		]);
 
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({
-      id: "gmail",
-      label: "Gmail",
-      connected: true,
-      accountCount: 1,
-      probed: true,
-      source: "native",
-      capability: "decision_capable",
-      loopMonitored: true,
-      decisionCapable: true,
-    });
-    expect(out[0].accounts).toEqual([
-      { id: "gmail-native-1", label: "Work Gmail", healthy: true },
-    ]);
-  });
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({
+			id: "gmail",
+			label: "Gmail",
+			connected: true,
+			accountCount: 1,
+			probed: true,
+			source: "native",
+			capability: "decision_capable",
+			loopMonitored: true,
+			decisionCapable: true,
+		});
+		expect(out[0].accounts).toEqual([
+			{ id: "gmail-native-1", label: "Work Gmail", healthy: true },
+		]);
+	});
 
-  it("emits active native Outlook without claiming Loop monitoring", () => {
-    const out = buildNativeConnectorReadinessEntries([
-      acc({
-        id: "outlook-native-1",
-        platform: "outlook",
-        displayName: "Outlook",
-        status: "active",
-      }),
-    ]);
+	it("emits active native Outlook without claiming Loop monitoring", () => {
+		const out = buildNativeConnectorReadinessEntries([
+			acc({
+				id: "outlook-native-1",
+				platform: "outlook",
+				displayName: "Outlook",
+				status: "active",
+			}),
+		]);
 
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({
-      id: "outlook",
-      label: "Outlook",
-      connected: true,
-      accountCount: 1,
-      probed: true,
-      source: "native",
-      capability: "needs_setup",
-      loopMonitored: false,
-      decisionCapable: false,
-    });
-  });
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({
+			id: "outlook",
+			label: "Outlook",
+			connected: true,
+			accountCount: 1,
+			probed: true,
+			source: "native",
+			capability: "needs_setup",
+			loopMonitored: false,
+			decisionCapable: false,
+		});
+	});
 
-  it("does not emit inactive native Gmail rows that could override Composio", () => {
-    const out = buildNativeConnectorReadinessEntries([
-      acc({ id: "gmail-paused", platform: "gmail", status: "paused" }),
-      acc({ id: "gmail-disabled", platform: "gmail", status: "disabled" }),
-    ]);
+	it("does not emit inactive native Gmail rows that could override Composio", () => {
+		const out = buildNativeConnectorReadinessEntries([
+			acc({ id: "gmail-paused", platform: "gmail", status: "paused" }),
+			acc({ id: "gmail-disabled", platform: "gmail", status: "disabled" }),
+		]);
 
-    expect(out).toEqual([]);
-  });
+		expect(out).toEqual([]);
+	});
 });
 
 describe("mergeNativeConnectorEntries", () => {
-  it("lets active native Gmail override a failed Loop/Composio probe row without duplicating it", () => {
-    const loopItems: ConnectorEntry[] = [
-      {
-        id: "gmail",
-        label: "Gmail",
-        connected: false,
-        accountCount: 0,
-        probed: true,
-        fetchedAt: "2026-07-23T00:00:00.000Z",
-        lastError: "composio probe failed",
-        capability: "needs_setup",
-      },
-    ];
-    const nativeEntries = buildNativeConnectorReadinessEntries([
-      acc({
-        id: "native-gmail",
-        platform: "gmail",
-        displayName: "Gmail",
-        status: "active",
-      }),
-    ]);
+	it("lets active native Gmail override a failed Loop/Composio probe row without duplicating it", () => {
+		const loopItems: ConnectorEntry[] = [
+			{
+				id: "gmail",
+				label: "Gmail",
+				connected: false,
+				accountCount: 0,
+				probed: true,
+				fetchedAt: "2026-07-23T00:00:00.000Z",
+				lastError: "composio probe failed",
+				capability: "needs_setup",
+			},
+		];
+		const nativeEntries = buildNativeConnectorReadinessEntries([
+			acc({
+				id: "native-gmail",
+				platform: "gmail",
+				displayName: "Gmail",
+				status: "active",
+			}),
+		]);
 
-    const out = mergeNativeConnectorEntries(loopItems, nativeEntries);
+		const out = mergeNativeConnectorEntries(loopItems, nativeEntries);
 
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({
-      id: "gmail",
-      label: "Gmail",
-      connected: true,
-      accountCount: 1,
-      probed: true,
-      source: "native",
-      capability: "decision_capable",
-      loopMonitored: true,
-      decisionCapable: true,
-    });
-    expect(out[0].lastError).toBeUndefined();
-  });
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({
+			id: "gmail",
+			label: "Gmail",
+			connected: true,
+			accountCount: 1,
+			probed: true,
+			source: "native",
+			capability: "decision_capable",
+			loopMonitored: true,
+			decisionCapable: true,
+		});
+		expect(out[0].lastError).toBeUndefined();
+	});
 
-  it("preserves unrelated Loop rows while appending native-only rows", () => {
-    const loopItems: ConnectorEntry[] = [
-      {
-        id: "linear",
-        label: "Linear",
-        connected: true,
-        accountCount: 1,
-        probed: true,
-        fetchedAt: "2026-07-23T00:00:00.000Z",
-        capability: "decision_capable",
-      },
-    ];
-    const nativeEntries = [
-      ...buildNativeConnectorReadinessEntries([
-        acc({ id: "native-gmail", platform: "gmail", status: "active" }),
-      ]),
-      ...buildNativeChatConnectorEntries([
-        acc({ id: "native-telegram", platform: "telegram", status: "active" }),
-      ]),
-    ];
+	it("preserves unrelated Loop rows while appending native-only rows", () => {
+		const loopItems: ConnectorEntry[] = [
+			{
+				id: "linear",
+				label: "Linear",
+				connected: true,
+				accountCount: 1,
+				probed: true,
+				fetchedAt: "2026-07-23T00:00:00.000Z",
+				capability: "decision_capable",
+			},
+		];
+		const nativeEntries = [
+			...buildNativeConnectorReadinessEntries([
+				acc({ id: "native-gmail", platform: "gmail", status: "active" }),
+			]),
+			...buildNativeChatConnectorEntries([
+				acc({ id: "native-telegram", platform: "telegram", status: "active" }),
+			]),
+		];
 
-    const out = mergeNativeConnectorEntries(loopItems, nativeEntries);
+		const out = mergeNativeConnectorEntries(loopItems, nativeEntries);
 
-    expect(out.map((entry) => entry.id)).toEqual([
-      "linear",
-      "gmail",
-      "telegram",
-    ]);
-    expect(out.find((entry) => entry.id === "linear")?.connected).toBe(true);
-    expect(out.find((entry) => entry.id === "gmail")?.connected).toBe(true);
-    expect(out.find((entry) => entry.id === "telegram")?.connected).toBe(true);
-  });
+		expect(out.map((entry) => entry.id)).toEqual([
+			"linear",
+			"gmail",
+			"telegram",
+		]);
+		expect(out.find((entry) => entry.id === "linear")?.connected).toBe(true);
+		expect(out.find((entry) => entry.id === "gmail")?.connected).toBe(true);
+		expect(out.find((entry) => entry.id === "telegram")?.connected).toBe(true);
+	});
 });

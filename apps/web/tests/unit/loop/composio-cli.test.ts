@@ -36,18 +36,18 @@
  * identifier.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // `composio-cli.ts` imports `./connectors` (for `writeConnectorSnapshot`)
 // and `./store` (for `log`). Both need mocks so the on-disk cache is
@@ -56,26 +56,26 @@ let LOOP_HOME = "";
 let CONNECTORS_PATH = "";
 
 vi.mock("@/lib/loop/paths", () => ({
-  LOOP_PATHS: new Proxy(
-    {},
-    {
-      get: (_t, prop: string) => {
-        if (prop === "home") return LOOP_HOME;
-        if (prop === "connectors") return CONNECTORS_PATH;
-        return join(LOOP_HOME, `${prop}.json`);
-      },
-    },
-  ),
-  ensureDirs: () => {},
-  migrate: () => null,
+	LOOP_PATHS: new Proxy(
+		{},
+		{
+			get: (_t, prop: string) => {
+				if (prop === "home") return LOOP_HOME;
+				if (prop === "connectors") return CONNECTORS_PATH;
+				return join(LOOP_HOME, `${prop}.json`);
+			},
+		},
+	),
+	ensureDirs: () => {},
+	migrate: () => null,
 }));
 
 const writeConnectorSnapshot = vi.fn();
 const writeProbeError = vi.fn();
 vi.mock("@/lib/loop/connectors", () => ({
-  writeConnectorSnapshot: (...args: unknown[]) =>
-    writeConnectorSnapshot(...args),
-  writeProbeError: (...args: unknown[]) => writeProbeError(...args),
+	writeConnectorSnapshot: (...args: unknown[]) =>
+		writeConnectorSnapshot(...args),
+	writeProbeError: (...args: unknown[]) => writeProbeError(...args),
 }));
 vi.mock("@/lib/loop/store", () => ({ log: () => {} }));
 
@@ -85,25 +85,25 @@ const { probeViaCli } = await import("@/lib/loop/composio-cli");
 let tmp: string;
 
 beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "loop-cli-"));
-  LOOP_HOME = tmp;
-  CONNECTORS_PATH = join(tmp, "connectors.json");
-  writeConnectorSnapshot.mockReset();
-  writeProbeError.mockReset();
+	tmp = mkdtempSync(join(tmpdir(), "loop-cli-"));
+	LOOP_HOME = tmp;
+	CONNECTORS_PATH = join(tmp, "connectors.json");
+	writeConnectorSnapshot.mockReset();
+	writeProbeError.mockReset();
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
-  if (tmp) {
-    try {
-      rmSync(tmp, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
-    tmp = "";
-    LOOP_HOME = "";
-    CONNECTORS_PATH = "";
-  }
+	vi.clearAllMocks();
+	if (tmp) {
+		try {
+			rmSync(tmp, { recursive: true, force: true });
+		} catch {
+			/* ignore */
+		}
+		tmp = "";
+		LOOP_HOME = "";
+		CONNECTORS_PATH = "";
+	}
 });
 
 // ---------------------------------------------------------------------------
@@ -111,355 +111,355 @@ afterEach(() => {
 // the SUT's `runCli` wrapper doesn't have to special-case tests.
 // ---------------------------------------------------------------------------
 interface ExecCall {
-  cmd: string;
-  args: string[];
+	cmd: string;
+	args: string[];
 }
 
 interface ExecScript {
-  // args prefix match → either a successful {stdout, stderr} or a thrown error
-  match: (call: ExecCall) => boolean;
-  resolve?: { stdout: string; stderr: string };
-  reject?: {
-    code?: string;
-    stderr?: string;
-    stdout?: string;
-    message?: string;
-    killed?: boolean;
-    signal?: string;
-  };
+	// args prefix match → either a successful {stdout, stderr} or a thrown error
+	match: (call: ExecCall) => boolean;
+	resolve?: { stdout: string; stderr: string };
+	reject?: {
+		code?: string;
+		stderr?: string;
+		stdout?: string;
+		message?: string;
+		killed?: boolean;
+		signal?: string;
+	};
 }
 
 function makeExec(script: ExecScript[]) {
-  return async (cmd: string, args: string[], _opts: unknown) => {
-    const call = { cmd, args };
-    for (const step of script) {
-      if (!step.match(call)) continue;
-      if (step.resolve) return step.resolve;
-      throw step.reject ?? new Error("unhandled");
-    }
-    throw new Error(`unhandled call: ${cmd} ${args.join(" ")}`);
-  };
+	return async (cmd: string, args: string[], _opts: unknown) => {
+		const call = { cmd, args };
+		for (const step of script) {
+			if (!step.match(call)) continue;
+			if (step.resolve) return step.resolve;
+			throw step.reject ?? new Error("unhandled");
+		}
+		throw new Error(`unhandled call: ${cmd} ${args.join(" ")}`);
+	};
 }
 
 const whoamiSuccess = {
-  match: (c: ExecCall) => c.args[0] === "whoami",
-  resolve: {
-    stdout: JSON.stringify({
-      account_type: "human",
-      email: "timi@example.com",
-      current_org_name: "timi_workspace",
-    }),
-    stderr: "",
-  },
+	match: (c: ExecCall) => c.args[0] === "whoami",
+	resolve: {
+		stdout: JSON.stringify({
+			account_type: "human",
+			email: "timi@example.com",
+			current_org_name: "timi_workspace",
+		}),
+		stderr: "",
+	},
 };
 
 const listSuccess = (stdoutJson: unknown) => ({
-  match: (c: ExecCall) => c.args[0] === "connections" && c.args[1] === "list",
-  resolve: { stdout: JSON.stringify(stdoutJson), stderr: "" },
+	match: (c: ExecCall) => c.args[0] === "connections" && c.args[1] === "list",
+	resolve: { stdout: JSON.stringify(stdoutJson), stderr: "" },
 });
 
 const listMalformed = {
-  match: (c: ExecCall) => c.args[0] === "connections" && c.args[1] === "list",
-  resolve: { stdout: "<html>nope</html>", stderr: "" },
+	match: (c: ExecCall) => c.args[0] === "connections" && c.args[1] === "list",
+	resolve: { stdout: "<html>nope</html>", stderr: "" },
 };
 
 const enoentError = (args: string[]) => ({
-  match: (c: ExecCall) => c.args[0] === args[0],
-  reject: {
-    code: "ENOENT",
-    message: "spawn composio ENOENT",
-    stderr: "",
-    stdout: "",
-  },
+	match: (c: ExecCall) => c.args[0] === args[0],
+	reject: {
+		code: "ENOENT",
+		message: "spawn composio ENOENT",
+		stderr: "",
+		stdout: "",
+	},
 });
 
 // ---------------------------------------------------------------------------
 // Happy path — both calls succeed; entries are persisted
 // ---------------------------------------------------------------------------
 describe("probeViaCli happy path", () => {
-  it("discovers the default ~/.composio/composio install with a Finder-like PATH", async () => {
-    const composioDir = join(tmp, ".composio");
-    const composioBinary = join(composioDir, "composio");
-    mkdirSync(composioDir, { recursive: true });
-    writeFileSync(composioBinary, "");
-    chmodSync(composioBinary, 0o755);
+	it("discovers the default ~/.composio/composio install with a Finder-like PATH", async () => {
+		const composioDir = join(tmp, ".composio");
+		const composioBinary = join(composioDir, "composio");
+		mkdirSync(composioDir, { recursive: true });
+		writeFileSync(composioBinary, "");
+		chmodSync(composioBinary, 0o755);
 
-    const calls: Array<ExecCall & { opts: unknown }> = [];
-    const exec = async (cmd: string, args: string[], opts: unknown) => {
-      calls.push({ cmd, args, opts });
-      if (args[0] === "whoami") {
-        return whoamiSuccess.resolve;
-      }
-      if (args[0] === "connections" && args[1] === "list") {
-        return {
-          stdout: JSON.stringify({
-            github: [
-              {
-                status: "ACTIVE",
-                alias: "semiok",
-                word_id: "github_active",
-              },
-            ],
-            linear: [
-              {
-                status: "ACTIVE",
-                alias: "semiok@example.com",
-                word_id: "linear_active",
-              },
-            ],
-          }),
-          stderr: "",
-        };
-      }
-      throw new Error(`unhandled call: ${cmd} ${args.join(" ")}`);
-    };
+		const calls: Array<ExecCall & { opts: unknown }> = [];
+		const exec = async (cmd: string, args: string[], opts: unknown) => {
+			calls.push({ cmd, args, opts });
+			if (args[0] === "whoami") {
+				return whoamiSuccess.resolve;
+			}
+			if (args[0] === "connections" && args[1] === "list") {
+				return {
+					stdout: JSON.stringify({
+						github: [
+							{
+								status: "ACTIVE",
+								alias: "semiok",
+								word_id: "github_active",
+							},
+						],
+						linear: [
+							{
+								status: "ACTIVE",
+								alias: "semiok@example.com",
+								word_id: "linear_active",
+							},
+						],
+					}),
+					stderr: "",
+				};
+			}
+			throw new Error(`unhandled call: ${cmd} ${args.join(" ")}`);
+		};
 
-    const outcome = await probeViaCli({
-      execImpl: exec,
-      env: {
-        ...process.env,
-        HOME: tmp,
-        PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
-      },
-    });
+		const outcome = await probeViaCli({
+			execImpl: exec,
+			env: {
+				...process.env,
+				HOME: tmp,
+				PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+			},
+		});
 
-    expect(outcome.kind).toBe("ok");
-    if (outcome.kind !== "ok") return;
-    expect(calls.map((call) => call.cmd)).toEqual([
-      composioBinary,
-      composioBinary,
-    ]);
-    expect(
-      calls.map((call) => (call.opts as { env?: NodeJS.ProcessEnv }).env?.PATH),
-    ).toEqual([
-      "/usr/bin:/bin:/usr/sbin:/sbin",
-      "/usr/bin:/bin:/usr/sbin:/sbin",
-    ]);
-    expect(outcome.entries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "github",
-          connected: true,
-          accountCount: 1,
-        }),
-        expect.objectContaining({
-          id: "linear",
-          connected: true,
-          accountCount: 1,
-        }),
-      ]),
-    );
-  });
+		expect(outcome.kind).toBe("ok");
+		if (outcome.kind !== "ok") return;
+		expect(calls.map((call) => call.cmd)).toEqual([
+			composioBinary,
+			composioBinary,
+		]);
+		expect(
+			calls.map((call) => (call.opts as { env?: NodeJS.ProcessEnv }).env?.PATH),
+		).toEqual([
+			"/usr/bin:/bin:/usr/sbin:/sbin",
+			"/usr/bin:/bin:/usr/sbin:/sbin",
+		]);
+		expect(outcome.entries).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: "github",
+					connected: true,
+					accountCount: 1,
+				}),
+				expect.objectContaining({
+					id: "linear",
+					connected: true,
+					accountCount: 1,
+				}),
+			]),
+		);
+	});
 
-  it("returns ok with parsed entries and persists the snapshot", async () => {
-    const exec = makeExec([
-      whoamiSuccess,
-      listSuccess({
-        gmail: [
-          {
-            status: "ACTIVE",
-            alias: "timi@gmail.com",
-            word_id: "gmail_aaa",
-            permission_group: null,
-          },
-        ],
-        googlecalendar: [
-          {
-            status: "ACTIVE",
-            alias: null,
-            word_id: "googlecalendar_walrus-situla",
-            permission_group: null,
-          },
-        ],
-      }),
-    ]);
+	it("returns ok with parsed entries and persists the snapshot", async () => {
+		const exec = makeExec([
+			whoamiSuccess,
+			listSuccess({
+				gmail: [
+					{
+						status: "ACTIVE",
+						alias: "timi@gmail.com",
+						word_id: "gmail_aaa",
+						permission_group: null,
+					},
+				],
+				googlecalendar: [
+					{
+						status: "ACTIVE",
+						alias: null,
+						word_id: "googlecalendar_walrus-situla",
+						permission_group: null,
+					},
+				],
+			}),
+		]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("ok");
-    if (outcome.kind !== "ok") return;
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("ok");
+		if (outcome.kind !== "ok") return;
 
-    expect(outcome.surfaces).toEqual(["cli"]);
-    const byId = new Map(outcome.entries.map((e) => [e.id, e]));
+		expect(outcome.surfaces).toEqual(["cli"]);
+		const byId = new Map(outcome.entries.map((e) => [e.id, e]));
 
-    // gmail: alias used as label, one account, healthy.
-    expect(byId.get("gmail")?.connected).toBe(true);
-    expect(byId.get("gmail")?.accountCount).toBe(1);
-    expect(byId.get("gmail")?.accounts?.[0].id).toBe("gmail_aaa");
-    expect(byId.get("gmail")?.accounts?.[0].label).toBe("timi@gmail.com");
-    expect(byId.get("gmail")?.accounts?.[0].healthy).toBe(true);
+		// gmail: alias used as label, one account, healthy.
+		expect(byId.get("gmail")?.connected).toBe(true);
+		expect(byId.get("gmail")?.accountCount).toBe(1);
+		expect(byId.get("gmail")?.accounts?.[0].id).toBe("gmail_aaa");
+		expect(byId.get("gmail")?.accounts?.[0].label).toBe("timi@gmail.com");
+		expect(byId.get("gmail")?.accounts?.[0].healthy).toBe(true);
 
-    // googlecalendar slug must be normalized to google_calendar.
-    expect(byId.get("google_calendar")?.connected).toBe(true);
-    expect(byId.get("google_calendar")?.accountCount).toBe(1);
-    // Falls back to word_id when alias is null.
-    expect(byId.get("google_calendar")?.accounts?.[0].label).toBe(
-      "googlecalendar_walrus-situla",
-    );
+		// googlecalendar slug must be normalized to google_calendar.
+		expect(byId.get("google_calendar")?.connected).toBe(true);
+		expect(byId.get("google_calendar")?.accountCount).toBe(1);
+		// Falls back to word_id when alias is null.
+		expect(byId.get("google_calendar")?.accounts?.[0].label).toBe(
+			"googlecalendar_walrus-situla",
+		);
 
-    // obsidian is local-only — must always come back offline.
-    expect(byId.get("obsidian")?.connected).toBe(false);
-    expect(byId.get("obsidian")?.lastError).toBe("local-only");
+		// obsidian is local-only — must always come back offline.
+		expect(byId.get("obsidian")?.connected).toBe(false);
+		expect(byId.get("obsidian")?.lastError).toBe("local-only");
 
-    // The catalog length is preserved (6 entries).
-    expect(outcome.entries).toHaveLength(6);
+		// The catalog length is preserved (6 entries).
+		expect(outcome.entries).toHaveLength(6);
 
-    // Snapshot was persisted.
-    expect(writeConnectorSnapshot).toHaveBeenCalledTimes(1);
-    // Probe error was NOT persisted — happy path leaves the cache clean.
-    expect(writeProbeError).not.toHaveBeenCalled();
-  });
+		// Snapshot was persisted.
+		expect(writeConnectorSnapshot).toHaveBeenCalledTimes(1);
+		// Probe error was NOT persisted — happy path leaves the cache clean.
+		expect(writeProbeError).not.toHaveBeenCalled();
+	});
 
-  it("filters non-ACTIVE accounts (EXPIRED/FAILED) out of the snapshot", async () => {
-    // `connections list` returns EVERY account the user has ever linked,
-    // including EXPIRED / FAILED — the Loop only cares about ACTIVE.
-    // A toolkit with 2 EXPIRED + 1 ACTIVE should report as "1 connected"
-    // (not "3 accounts, of which 2 are dead").
-    const exec = makeExec([
-      whoamiSuccess,
-      listSuccess({
-        gmail: [
-          {
-            status: "EXPIRED",
-            alias: null,
-            word_id: "gmail_dead-1",
-            permission_group: null,
-          },
-          {
-            status: "EXPIRED",
-            alias: null,
-            word_id: "gmail_dead-2",
-            permission_group: null,
-          },
-          {
-            status: "ACTIVE",
-            alias: "alive@gmail.com",
-            word_id: "gmail_alive",
-            permission_group: null,
-          },
-        ],
-      }),
-    ]);
+	it("filters non-ACTIVE accounts (EXPIRED/FAILED) out of the snapshot", async () => {
+		// `connections list` returns EVERY account the user has ever linked,
+		// including EXPIRED / FAILED — the Loop only cares about ACTIVE.
+		// A toolkit with 2 EXPIRED + 1 ACTIVE should report as "1 connected"
+		// (not "3 accounts, of which 2 are dead").
+		const exec = makeExec([
+			whoamiSuccess,
+			listSuccess({
+				gmail: [
+					{
+						status: "EXPIRED",
+						alias: null,
+						word_id: "gmail_dead-1",
+						permission_group: null,
+					},
+					{
+						status: "EXPIRED",
+						alias: null,
+						word_id: "gmail_dead-2",
+						permission_group: null,
+					},
+					{
+						status: "ACTIVE",
+						alias: "alive@gmail.com",
+						word_id: "gmail_alive",
+						permission_group: null,
+					},
+				],
+			}),
+		]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("ok");
-    if (outcome.kind !== "ok") return;
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("ok");
+		if (outcome.kind !== "ok") return;
 
-    const gmail = outcome.entries.find((e) => e.id === "gmail");
-    expect(gmail?.connected).toBe(true);
-    expect(gmail?.accountCount).toBe(1);
-    expect(gmail?.accounts?.[0].id).toBe("gmail_alive");
-  });
+		const gmail = outcome.entries.find((e) => e.id === "gmail");
+		expect(gmail?.connected).toBe(true);
+		expect(gmail?.accountCount).toBe(1);
+		expect(gmail?.accounts?.[0].id).toBe("gmail_alive");
+	});
 });
 
 // ---------------------------------------------------------------------------
 // CLI missing — binary not on $PATH
 // ---------------------------------------------------------------------------
 describe("probeViaCli when CLI is missing", () => {
-  it("returns cli_not_found and does not persist anything", async () => {
-    const exec = makeExec([enoentError(["whoami"])]);
+	it("returns cli_not_found and does not persist anything", async () => {
+		const exec = makeExec([enoentError(["whoami"])]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("cli_not_found");
-    if (outcome.kind !== "cli_not_found") return;
-    expect(outcome.error).toMatch(/PATH/);
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("cli_not_found");
+		if (outcome.kind !== "cli_not_found") return;
+		expect(outcome.error).toMatch(/PATH/);
 
-    // List call should NOT have been issued — once whoami fails the
-    // list is guaranteed to fail too.
-    expect(writeConnectorSnapshot).not.toHaveBeenCalled();
-    expect(writeProbeError).not.toHaveBeenCalled();
-  });
+		// List call should NOT have been issued — once whoami fails the
+		// list is guaranteed to fail too.
+		expect(writeConnectorSnapshot).not.toHaveBeenCalled();
+		expect(writeProbeError).not.toHaveBeenCalled();
+	});
 });
 
 // ---------------------------------------------------------------------------
 // CLI present but not logged in
 // ---------------------------------------------------------------------------
 describe("probeViaCli when CLI is unauthorized", () => {
-  it("returns cli_unauthorized when whoami stdout is empty + stderr says 'not logged in'", async () => {
-    const exec = makeExec([
-      {
-        match: (c) => c.args[0] === "whoami",
-        resolve: { stdout: "", stderr: "Not logged in. Run `composio login`." },
-      },
-    ]);
+	it("returns cli_unauthorized when whoami stdout is empty + stderr says 'not logged in'", async () => {
+		const exec = makeExec([
+			{
+				match: (c) => c.args[0] === "whoami",
+				resolve: { stdout: "", stderr: "Not logged in. Run `composio login`." },
+			},
+		]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("cli_unauthorized");
-    if (outcome.kind !== "cli_unauthorized") return;
-    expect(outcome.error).toMatch(/Not logged in/);
-  });
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("cli_unauthorized");
+		if (outcome.kind !== "cli_unauthorized") return;
+		expect(outcome.error).toMatch(/Not logged in/);
+	});
 
-  it("returns cli_unauthorized when whoami reports a non-human account type", async () => {
-    const exec = makeExec([
-      {
-        match: (c) => c.args[0] === "whoami",
-        resolve: {
-          stdout: JSON.stringify({ account_type: "agent" }),
-          stderr: "",
-        },
-      },
-    ]);
+	it("returns cli_unauthorized when whoami reports a non-human account type", async () => {
+		const exec = makeExec([
+			{
+				match: (c) => c.args[0] === "whoami",
+				resolve: {
+					stdout: JSON.stringify({ account_type: "agent" }),
+					stderr: "",
+				},
+			},
+		]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("cli_unauthorized");
-  });
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("cli_unauthorized");
+	});
 });
 
 // ---------------------------------------------------------------------------
 // CLI present + authed but list output is malformed
 // ---------------------------------------------------------------------------
 describe("probeViaCli on malformed list output", () => {
-  it("returns cli_malformed when the list stdout isn't JSON", async () => {
-    const exec = makeExec([whoamiSuccess, listMalformed]);
+	it("returns cli_malformed when the list stdout isn't JSON", async () => {
+		const exec = makeExec([whoamiSuccess, listMalformed]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("cli_malformed");
-  });
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("cli_malformed");
+	});
 
-  it("returns cli_malformed when the list stdout is JSON but not an object", async () => {
-    // The new `connections list` shape is a per-toolkit object keyed by
-    // slug, NOT a flat array. An array response (or any non-object) is
-    // a `cli_malformed` outcome.
-    const exec = makeExec([whoamiSuccess, listSuccess([{ not: "an object" }])]);
+	it("returns cli_malformed when the list stdout is JSON but not an object", async () => {
+		// The new `connections list` shape is a per-toolkit object keyed by
+		// slug, NOT a flat array. An array response (or any non-object) is
+		// a `cli_malformed` outcome.
+		const exec = makeExec([whoamiSuccess, listSuccess([{ not: "an object" }])]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("cli_malformed");
-  });
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("cli_malformed");
+	});
 
-  it("silently drops toolkits whose value is not an array (tolerant parse)", async () => {
-    // The parser is tolerant — a malformed value for one toolkit
-    // (e.g. the CLI shipped a string instead of an account array) does
-    // NOT poison the whole snapshot. The toolkit just renders as
-    // disconnected (no accounts) and the rest of the catalog parses
-    // normally. This is by design: a single broken row shouldn't drop
-    // every other connector the user has authorized.
-    const exec = makeExec([
-      whoamiSuccess,
-      listSuccess({
-        gmail: "not an array",
-        slack: [
-          {
-            status: "ACTIVE",
-            alias: null,
-            word_id: "slack_alive",
-            permission_group: null,
-          },
-        ],
-      }),
-    ]);
+	it("silently drops toolkits whose value is not an array (tolerant parse)", async () => {
+		// The parser is tolerant — a malformed value for one toolkit
+		// (e.g. the CLI shipped a string instead of an account array) does
+		// NOT poison the whole snapshot. The toolkit just renders as
+		// disconnected (no accounts) and the rest of the catalog parses
+		// normally. This is by design: a single broken row shouldn't drop
+		// every other connector the user has authorized.
+		const exec = makeExec([
+			whoamiSuccess,
+			listSuccess({
+				gmail: "not an array",
+				slack: [
+					{
+						status: "ACTIVE",
+						alias: null,
+						word_id: "slack_alive",
+						permission_group: null,
+					},
+				],
+			}),
+		]);
 
-    const outcome = await probeViaCli({ execImpl: exec });
-    expect(outcome.kind).toBe("ok");
-    if (outcome.kind !== "ok") return;
+		const outcome = await probeViaCli({ execImpl: exec });
+		expect(outcome.kind).toBe("ok");
+		if (outcome.kind !== "ok") return;
 
-    const gmail = outcome.entries.find((e) => e.id === "gmail");
-    expect(gmail?.connected).toBe(false);
-    expect(gmail?.accountCount).toBe(0);
+		const gmail = outcome.entries.find((e) => e.id === "gmail");
+		expect(gmail?.connected).toBe(false);
+		expect(gmail?.accountCount).toBe(0);
 
-    const slack = outcome.entries.find((e) => e.id === "slack");
-    expect(slack?.connected).toBe(true);
-    expect(slack?.accountCount).toBe(1);
-    expect(slack?.accounts?.[0].id).toBe("slack_alive");
-  });
+		const slack = outcome.entries.find((e) => e.id === "slack");
+		expect(slack?.connected).toBe(true);
+		expect(slack?.accountCount).toBe(1);
+		expect(slack?.accounts?.[0].id).toBe("slack_alive");
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -467,15 +467,15 @@ describe("probeViaCli on malformed list output", () => {
 // (a successful agentic fallback overwrites the cache anyway).
 // ---------------------------------------------------------------------------
 describe("probeViaCli diagnostic-write contract", () => {
-  it("never writes lastProbeError — only the caller (probeConnectorState) decides", async () => {
-    // Force a `cli_malformed` outcome (CLI + auth works, list returns
-    // something the parser can't read). This pins that the CLI probe
-    // never persists a diagnostic of its own — the caller's
-    // `probeConnectorState` decides what to write.
-    const exec = makeExec([whoamiSuccess, listMalformed]);
-    await probeViaCli({ execImpl: exec });
-    expect(writeProbeError).not.toHaveBeenCalled();
-  });
+	it("never writes lastProbeError — only the caller (probeConnectorState) decides", async () => {
+		// Force a `cli_malformed` outcome (CLI + auth works, list returns
+		// something the parser can't read). This pins that the CLI probe
+		// never persists a diagnostic of its own — the caller's
+		// `probeConnectorState` decides what to write.
+		const exec = makeExec([whoamiSuccess, listMalformed]);
+		await probeViaCli({ execImpl: exec });
+		expect(writeProbeError).not.toHaveBeenCalled();
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -485,30 +485,30 @@ describe("probeViaCli diagnostic-write contract", () => {
 // truth for cache shape.
 // ---------------------------------------------------------------------------
 describe("probeViaCli file-write seam", () => {
-  it("only writes via writeConnectorSnapshot — never directly to disk", async () => {
-    const exec = makeExec([
-      whoamiSuccess,
-      listSuccess({
-        gmail: [
-          {
-            status: "ACTIVE",
-            alias: null,
-            word_id: "gmail_a",
-            permission_group: null,
-          },
-        ],
-      }),
-    ]);
-    await probeViaCli({ execImpl: exec });
+	it("only writes via writeConnectorSnapshot — never directly to disk", async () => {
+		const exec = makeExec([
+			whoamiSuccess,
+			listSuccess({
+				gmail: [
+					{
+						status: "ACTIVE",
+						alias: null,
+						word_id: "gmail_a",
+						permission_group: null,
+					},
+				],
+			}),
+		]);
+		await probeViaCli({ execImpl: exec });
 
-    // The real on-disk path shouldn't exist — writeConnectorSnapshot
-    // was mocked, so nothing actually landed at CONNECTORS_PATH.
-    expect(existsSync(CONNECTORS_PATH)).toBe(false);
-    // And the mock was hit exactly once.
-    expect(writeConnectorSnapshot).toHaveBeenCalledTimes(1);
+		// The real on-disk path shouldn't exist — writeConnectorSnapshot
+		// was mocked, so nothing actually landed at CONNECTORS_PATH.
+		expect(existsSync(CONNECTORS_PATH)).toBe(false);
+		// And the mock was hit exactly once.
+		expect(writeConnectorSnapshot).toHaveBeenCalledTimes(1);
 
-    // Reading the real (nonexistent) file would error — guard against
-    // regressions that bypass the mock.
-    expect(() => readFileSync(CONNECTORS_PATH, "utf8")).toThrow();
-  });
+		// Reading the real (nonexistent) file would error — guard against
+		// regressions that bypass the mock.
+		expect(() => readFileSync(CONNECTORS_PATH, "utf8")).toThrow();
+	});
 });
