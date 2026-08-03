@@ -45,30 +45,14 @@ vi.mock("@/lib/ai", () => ({
 	clearAIUserContext: clearAIUserContextMock,
 }));
 
-let buildInsightCompactionBucketKey: typeof import(
-	"@/lib/insights/compaction",
-).buildInsightCompactionBucketKey;
-let buildSeedCompactedInsightPayload: typeof import(
-	"@/lib/insights/compaction",
-).buildSeedCompactedInsightPayload;
-let archiveLegacyPendingDeletionInsights: typeof import(
-	"@/lib/insights/compaction",
-).archiveLegacyPendingDeletionInsights;
-let groupInsightsForCompaction: typeof import(
-	"@/lib/insights/compaction",
-).groupInsightsForCompaction;
-let isInsightCompactable: typeof import(
-	"@/lib/insights/compaction",
-).isInsightCompactable;
-let mergeCompactedInsightPayload: typeof import(
-	"@/lib/insights/compaction",
-).mergeCompactedInsightPayload;
-let previewInsightCompaction: typeof import(
-	"@/lib/insights/compaction",
-).previewInsightCompaction;
-let runInsightCompaction: typeof import(
-	"@/lib/insights/compaction",
-).runInsightCompaction;
+let buildInsightCompactionBucketKey: typeof import("@/lib/insights/compaction").buildInsightCompactionBucketKey;
+let buildSeedCompactedInsightPayload: typeof import("@/lib/insights/compaction").buildSeedCompactedInsightPayload;
+let archiveLegacyPendingDeletionInsights: typeof import("@/lib/insights/compaction").archiveLegacyPendingDeletionInsights;
+let groupInsightsForCompaction: typeof import("@/lib/insights/compaction").groupInsightsForCompaction;
+let isInsightCompactable: typeof import("@/lib/insights/compaction").isInsightCompactable;
+let mergeCompactedInsightPayload: typeof import("@/lib/insights/compaction").mergeCompactedInsightPayload;
+let previewInsightCompaction: typeof import("@/lib/insights/compaction").previewInsightCompaction;
+let runInsightCompaction: typeof import("@/lib/insights/compaction").runInsightCompaction;
 
 beforeAll(async () => {
 	const mod = await import("@/lib/insights/compaction");
