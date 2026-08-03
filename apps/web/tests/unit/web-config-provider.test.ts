@@ -16,14 +16,8 @@ vi.mock("@/lib/utils/path", () => ({
 }));
 
 describe("WebConfigProvider", () => {
-	let WebConfigProvider: typeof import(
-		"@/lib/integrations/providers/config-provider",
-	).WebConfigProvider;
-	let provider: InstanceType<
-		typeof import(
-			"@/lib/integrations/providers/config-provider",
-		).WebConfigProvider
-	>;
+	let WebConfigProvider: typeof import("@/lib/integrations/providers/config-provider").WebConfigProvider;
+	let provider: InstanceType<typeof import("@/lib/integrations/providers/config-provider").WebConfigProvider>;
 
 	beforeEach(async () => {
 		vi.resetModules();
