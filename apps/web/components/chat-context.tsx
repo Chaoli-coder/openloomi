@@ -31,7 +31,7 @@ import { useTranslation } from "react-i18next";
 import { saveMessagesToDatabase } from "@/lib/ai/chat/save-messages";
 import { getAuthToken } from "@/lib/auth/token-manager";
 import { uploadImageTUS } from "@/lib/files/tus-upload";
-import type { ImageAttachment } from "@openloomi/ai/agent/types";
+import type { ImageAttachment as AgentImageAttachment } from "@openloomi/ai/agent/types";
 import { DEFAULT_AI_MODEL, AI_PROXY_BASE_URL } from "@/lib/env/constants";
 import {
   artifactPathBasename,
@@ -41,7 +41,16 @@ import {
 import { formatAgentStreamErrorForUser } from "@/lib/ai/runtime/format-error";
 import { parseCodexInterruptedError } from "@/lib/ai/extensions/agent/codex/interrupt-marker";
 import { createCodexTransportStatusController } from "@/lib/ai/extensions/agent/codex/transport-status";
-import { detectLifestyleImageTrigger } from "@/lib/ai/image-generation/lifestyle-trigger";
+import {
+  createLifestyleImageSkillFallbackRoute,
+  isLifestyleImageSkillRouteResult,
+  shouldGenerateLifestyleImageFromClassifierFallback,
+  type LifestyleImageSkillRouteResult,
+} from "@/lib/ai/image-generation/lifestyle-skill-router";
+import {
+  buildLifestyleReferenceImages,
+  type LifestyleReferenceImagePayload,
+} from "@/lib/ai/image-generation/lifestyle-reference-images";
 
 // Max retry attempts for stream errors
 const MAX_STREAM_RETRY_ATTEMPTS = 3;
@@ -116,6 +125,7 @@ export interface ChatContextValue {
     chatId: string;
     assistantMessageId: string;
     prompt: string;
+    referenceImages?: LifestyleReferenceImagePayload[];
   }) => Promise<void>;
   declineLifestyleImageGeneration: (input: {
     chatId: string;
@@ -214,6 +224,64 @@ function getLifestyleImageUrl(
     (response.b64Json ? `data:${mimeType};base64,${response.b64Json}` : null);
 
   return url ? { url, mediaType: mimeType } : null;
+}
+
+function messageHasImageAttachment(message: unknown): boolean {
+  if (!message || typeof message !== "object") return false;
+  const parts = (message as { parts?: unknown }).parts;
+  if (!Array.isArray(parts)) return false;
+
+  return parts.some((part) => {
+    if (!part || typeof part !== "object") return false;
+    const mediaType = (part as { mediaType?: unknown }).mediaType;
+    return typeof mediaType === "string" && mediaType.startsWith("image/");
+  });
+}
+
+async function requestLifestyleImageSkillRoute(input: {
+  message: string;
+  hasReferenceImage: boolean;
+  model: string;
+}): Promise<LifestyleImageSkillRouteResult> {
+  try {
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+    let authToken: string | null = null;
+    try {
+      authToken = getAuthToken();
+    } catch (error) {
+      console.error("[LifestyleImageIntent] Failed to read auth token", error);
+    }
+    if (authToken) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch("/api/ai/v1/images/lifestyle/intent", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      return createLifestyleImageSkillFallbackRoute("classifier_error");
+    }
+
+    const data = (await response.json().catch(() => null)) as {
+      route?: unknown;
+    } | null;
+    if (!isLifestyleImageSkillRouteResult(data?.route)) {
+      return createLifestyleImageSkillFallbackRoute("invalid_schema");
+    }
+
+    return data.route;
+  } catch (error) {
+    console.error(
+      "[LifestyleImageIntent] Failed to resolve skill route",
+      error,
+    );
+    return createLifestyleImageSkillFallbackRoute("classifier_error");
+  }
 }
 
 export function ChatContextProvider({ children }: { children: ReactNode }) {
@@ -339,8 +407,229 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
   // 400KB stays well under Vercel's 4.5MB body limit and protects small images too.
   const TUS_SIZE_THRESHOLD = 400 * 1024;
 
-  function isImageFile(mediaType?: string): boolean {
-    return mediaType?.startsWith("image/") ?? false;
+  function isImageFile(mediaType?: unknown): boolean {
+    return typeof mediaType === "string" && mediaType.startsWith("image/");
+  }
+
+  type ImageMessagePart = {
+    type?: unknown;
+    name?: unknown;
+    mediaType?: unknown;
+    file?: unknown;
+    downloadUrl?: unknown;
+    url?: unknown;
+    blobPath?: unknown;
+  };
+
+  type AgentImageDataInput = Pick<AgentImageAttachment, "mimeType"> & {
+    data: string;
+    url?: never;
+  };
+
+  function isBrowserFile(value: unknown): value is File {
+    return typeof File !== "undefined" && value instanceof File;
+  }
+
+  function normalizeImageMimeType(
+    value: unknown,
+    fallback = "image/png",
+  ): string {
+    return typeof value === "string" && value.startsWith("image/")
+      ? value
+      : fallback;
+  }
+
+  function base64FromDataUrl(dataUrl: string): string | undefined {
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex === -1) return undefined;
+    const data = dataUrl.slice(commaIndex + 1);
+    return data.length > 0 ? data : undefined;
+  }
+
+  function mimeTypeFromDataUrl(dataUrl: string): string | undefined {
+    const match = dataUrl.match(/^data:([^;,]+)[;,]/);
+    return match?.[1]?.startsWith("image/") ? match[1] : undefined;
+  }
+
+  async function readBlobAsBase64(blob: Blob): Promise<string | undefined> {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+          return;
+        }
+        reject(new Error("Failed to read image data"));
+      };
+      reader.onerror = () =>
+        reject(reader.error ?? new Error("Failed to read image data"));
+      reader.readAsDataURL(blob);
+    });
+
+    return base64FromDataUrl(dataUrl);
+  }
+
+  function localDownloadUrlFromBlobPath(blobPath: unknown): string | undefined {
+    if (typeof blobPath !== "string") return undefined;
+    const trimmed = blobPath.trim();
+    if (!trimmed) return undefined;
+    if (
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      trimmed.startsWith("/")
+    ) {
+      return trimmed;
+    }
+    return `/api/files/download?path=${encodeURIComponent(trimmed)}`;
+  }
+
+  function stringSource(value: unknown): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  async function fetchImageSourceAsBase64(
+    source: string,
+    fallbackMimeType: string,
+  ): Promise<AgentImageDataInput | undefined> {
+    if (source.startsWith("data:image/")) {
+      const data = base64FromDataUrl(source);
+      if (!data) return undefined;
+      return {
+        data,
+        mimeType: mimeTypeFromDataUrl(source) ?? fallbackMimeType,
+      };
+    }
+
+    try {
+      const response = await fetch(source);
+      if (!response.ok) {
+        console.error("[safeSendMessage] image fetch failed:", {
+          source,
+          status: response.status,
+        });
+        return undefined;
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (contentType && !contentType.startsWith("image/")) {
+        console.error("[safeSendMessage] source did not return image:", {
+          source,
+          contentType,
+        });
+        return undefined;
+      }
+
+      const blob = await response.blob();
+      const data = await readBlobAsBase64(blob);
+      if (!data) return undefined;
+
+      return {
+        data,
+        mimeType: contentType?.startsWith("image/")
+          ? contentType
+          : fallbackMimeType,
+      };
+    } catch (error) {
+      console.error("[safeSendMessage] image fetch error:", {
+        source,
+        error,
+      });
+      return undefined;
+    }
+  }
+
+  async function resolveImagePartToBase64(
+    part: ImageMessagePart,
+    messageObject: unknown,
+  ): Promise<AgentImageDataInput | undefined> {
+    const fallbackMimeType = normalizeImageMimeType(part.mediaType);
+
+    if (isBrowserFile(part.file)) {
+      const data = await readBlobAsBase64(part.file);
+      if (data) {
+        return {
+          data,
+          mimeType: normalizeImageMimeType(part.file.type, fallbackMimeType),
+        };
+      }
+    }
+
+    const messageFiles =
+      messageObject &&
+      typeof messageObject === "object" &&
+      Array.isArray((messageObject as { files?: unknown }).files)
+        ? ((messageObject as { files: unknown[] }).files ?? [])
+        : [];
+    const matchingFile = messageFiles.find(
+      (file) =>
+        isBrowserFile(file) &&
+        (typeof part.name !== "string" || file.name === part.name),
+    );
+    if (isBrowserFile(matchingFile)) {
+      const data = await readBlobAsBase64(matchingFile);
+      if (data) {
+        return {
+          data,
+          mimeType: normalizeImageMimeType(matchingFile.type, fallbackMimeType),
+        };
+      }
+    }
+
+    const candidates = [
+      stringSource(part.downloadUrl),
+      stringSource(part.url),
+      localDownloadUrlFromBlobPath(part.blobPath),
+    ].filter((value): value is string => Boolean(value));
+
+    for (const source of [...new Set(candidates)]) {
+      const resolved = await fetchImageSourceAsBase64(source, fallbackMimeType);
+      if (resolved) return resolved;
+    }
+
+    return undefined;
+  }
+
+  async function collectLifestyleReferenceImages(
+    messageObject: unknown,
+  ): Promise<LifestyleReferenceImagePayload[]> {
+    const parts =
+      messageObject &&
+      typeof messageObject === "object" &&
+      Array.isArray((messageObject as { parts?: unknown }).parts)
+        ? ((messageObject as { parts: unknown[] }).parts ?? [])
+        : [];
+    if (parts.length === 0) return [];
+
+    const sources: Array<{ data: string; mimeType: string; role: "style" }> =
+      [];
+    for (const part of parts) {
+      if (!part || typeof part !== "object") continue;
+      const imagePart = part as ImageMessagePart;
+      if (imagePart.type !== "file" || !isImageFile(imagePart.mediaType)) {
+        continue;
+      }
+
+      try {
+        const image = await resolveImagePartToBase64(imagePart, messageObject);
+        if (image) {
+          sources.push({
+            data: image.data,
+            mimeType: image.mimeType,
+            role: "style",
+          });
+        }
+      } catch (error) {
+        console.error(
+          "[LifestyleImage] Failed to resolve reference image:",
+          imagePart.name,
+          error,
+        );
+      }
+    }
+
+    return buildLifestyleReferenceImages(sources);
   }
 
   // Set isAgentRunning for a specific chatId (used by stream callbacks to clear lock for correct chat)
@@ -430,11 +719,13 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
       prompt,
       assistantMessageId,
       sourceUserMessageId,
+      referenceImages,
     }: {
       chatId: string;
       prompt: string;
       assistantMessageId?: string;
       sourceUserMessageId?: string;
+      referenceImages?: LifestyleReferenceImagePayload[];
     }) => {
       const replyId = assistantMessageId || generateUUID();
       const replyCreatedAt = new Date();
@@ -496,6 +787,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             outputFormat: "png",
             responseFormat: "data_url",
             imageCount: 1,
+            ...(referenceImages?.length
+              ? {
+                  referenceImages,
+                  passReferenceImagesToProvider: true,
+                }
+              : {}),
           }),
         });
         const data = (await response
@@ -637,12 +934,13 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
   const confirmLifestyleImageGeneration = useCallback<
     ChatContextValue["confirmLifestyleImageGeneration"]
   >(
-    async ({ chatId, assistantMessageId, prompt }) => {
+    async ({ chatId, assistantMessageId, prompt, referenceImages }) => {
       acceptLifestyleImageConsent();
       await generateLifestyleImageReply({
         chatId,
         prompt,
         assistantMessageId,
+        referenceImages,
       });
     },
     [generateLifestyleImageReply],
@@ -766,12 +1064,31 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
               metadata?: Record<string, unknown>;
             })
           : null;
-      const lifestyleTrigger = detectLifestyleImageTrigger(messageContent);
+      const hasLifestyleReferenceImage =
+        messageHasImageAttachment(triggerMessageObject);
+      const shouldSkipLifestyleImageSkill =
+        triggerMessageObject?.metadata?.skipLifestyleImageTrigger === true;
+      const lifestyleSkillRoute = shouldSkipLifestyleImageSkill
+        ? createLifestyleImageSkillFallbackRoute("intent_not_matched")
+        : await requestLifestyleImageSkillRoute({
+            message: messageContent,
+            hasReferenceImage: hasLifestyleReferenceImage,
+            model:
+              selectedModel === "default" ? DEFAULT_AI_MODEL : selectedModel,
+          });
+      const lifestyleSkillDecision = lifestyleSkillRoute.decision;
+      const shouldGenerateFromClassifierFallback =
+        shouldGenerateLifestyleImageFromClassifierFallback({
+          route: lifestyleSkillRoute,
+          message: messageContent,
+          hasReferenceImage: hasLifestyleReferenceImage,
+        });
       if (
-        lifestyleTrigger.matched &&
-        lifestyleTrigger.confidence === "high" &&
-        triggerMessageObject?.metadata?.skipLifestyleImageTrigger !== true
+        (lifestyleSkillRoute.shouldGenerate && lifestyleSkillDecision) ||
+        shouldGenerateFromClassifierFallback
       ) {
+        const generationPrompt =
+          lifestyleSkillDecision?.refinedPrompt || messageContent;
         const userMessageCreatedAt = new Date();
         const userMessage = {
           role: "user" as const,
@@ -784,8 +1101,14 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
             ...triggerMessageObject?.metadata,
             createdAt: userMessageCreatedAt.toISOString(),
             lifestyleImageTrigger: {
-              kind: lifestyleTrigger.kind,
-              reason: lifestyleTrigger.reason,
+              kind: lifestyleSkillDecision
+                ? "skill_lifestyle_image_request"
+                : "classifier_fallback_lifestyle_image_request",
+              reason:
+                lifestyleSkillDecision?.reason ||
+                lifestyleSkillRoute.fallbackReason,
+              confidence: lifestyleSkillDecision?.confidence || "low",
+              hasReferenceImage: hasLifestyleReferenceImage,
             },
           },
           id: generateUUID(),
@@ -793,6 +1116,9 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
         setMessages((prev) => [...prev, userMessage], chatIdForMessages);
         await saveUserMessageAndUpdateHistory(userMessage, chatIdForMessages);
 
+        const referenceImages = hasLifestyleReferenceImage
+          ? await collectLifestyleReferenceImages(triggerMessageObject)
+          : [];
         if (!hasAcceptedLifestyleImageConsent()) {
           const consentMessageId = generateUUID();
           const consentCreatedAt = new Date(userMessageCreatedAt.getTime() + 1);
@@ -806,9 +1132,12 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 type: "data-lifestyleImageConsent" as const,
                 data: {
                   id: consentMessageId,
-                  prompt: messageContent,
-                  reason: lifestyleTrigger.reason,
+                  prompt: generationPrompt,
+                  reason:
+                    lifestyleSkillDecision?.reason ||
+                    lifestyleSkillRoute.fallbackReason,
                   createdAt: new Date().toISOString(),
+                  ...(referenceImages.length ? { referenceImages } : {}),
                 },
               },
             ],
@@ -828,14 +1157,15 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
 
         await generateLifestyleImageReply({
           chatId: chatIdForMessages,
-          prompt: messageContent,
+          prompt: generationPrompt,
           sourceUserMessageId: userMessage.id,
+          referenceImages,
         });
         return Promise.resolve();
       }
 
       // Extract image attachments, file attachments, RAG documents and focused insights from message
-      const images: ImageAttachment[] = [];
+      const images: AgentImageDataInput[] = [];
       const fileAttachments: Array<{
         name: string;
         data: string;
@@ -853,138 +1183,18 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
       }> = [];
 
       if (message && typeof message === "object") {
-        // Extract image attachments - read directly from local file, not via URL
+        // Extract image attachments as base64-only agent inputs. URLs remain
+        // UI/download references and are resolved before crossing this boundary.
         if ((message as any).parts && Array.isArray((message as any).parts)) {
           for (const part of (message as any).parts) {
             if (part.type === "file" && part.mediaType?.startsWith("image/")) {
               // Image attachment - check if there is an original file object
               try {
-                let base64Data: string | undefined;
-
-                // Method 1: If imageUrl is set (TUS-uploaded to cloud), use it directly as image URL
-                if ((part as any).serverImageTUSUrl) {
-                  images.push({
-                    url: (part as any).serverImageTUSUrl,
-                    mimeType: part.mediaType,
-                  });
-                }
-                // Method 2: If blobPath is set (local path), fetch and convert to base64
-                else if (part.blobPath) {
-                  try {
-                    const resp = await fetch(part.blobPath);
-                    if (!resp.ok) {
-                      console.error(
-                        "[safeSendMessage] ✗ blobPath fetch failed:",
-                        resp.status,
-                      );
-                    } else {
-                      const blob = await resp.blob();
-                      const base64 = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () =>
-                          resolve(reader.result as string);
-                        reader.readAsDataURL(blob);
-                      });
-                      base64Data = base64.split(",")[1];
-                    }
-                  } catch (err) {
-                    console.error(
-                      "[safeSendMessage] ✗ blobPath fetch error:",
-                      err,
-                    );
-                  }
-                }
-                // Method 2: Prefer checking if part has original file object (fallback upload)
-                else if (part.file && part.file instanceof File) {
-                  // All images are processed locally via FileReader → base64.
-                  // We previously routed large files through uploadImageTUS(),
-                  // but /api/ai/v1/upload does not exist and we no longer need
-                  // a separate server hop just to read the bytes back.
-                  const file = part.file as File;
-                  const base64 = await new Promise<string>(
-                    (resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onloadend = () => resolve(reader.result as string);
-                      reader.onerror = reject;
-                      reader.readAsDataURL(file);
-                    },
-                  );
-                  base64Data = base64.split(",")[1];
-                }
-                // Method 2: Check message.files array
-                else if (
-                  (message as any).files &&
-                  Array.isArray((message as any).files)
-                ) {
-                  const file = (message as any).files.find(
-                    (f: any) => f.name === part.name,
-                  );
-                  if (file && file instanceof File) {
-                    // Read directly as base64 — see sibling block above for rationale.
-                    const base64 = await new Promise<string>(
-                      (resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () =>
-                          resolve(reader.result as string);
-                        reader.onerror = reject;
-                        reader.readAsDataURL(file);
-                      },
-                    );
-                    base64Data = base64.split(",")[1];
-                  }
-                }
-                // Method 3: Get via downloadUrl (with validation)
-                else if (part.downloadUrl) {
-                  const response = await fetch(part.downloadUrl);
-
-                  const contentType = response.headers.get("content-type");
-                  if (!contentType?.startsWith("image/")) {
-                    console.error(
-                      "[safeSendMessage] ✗ downloadUrl did not return image:",
-                      contentType,
-                    );
-                    continue; // Skip this image
-                  }
-
-                  const blob = await response.blob();
-                  const base64 = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                  });
-                  base64Data = base64.split(",")[1];
-                }
-                // Method 4: Try normal URL (last resort)
-                else if (part.url) {
-                  const response = await fetch(part.url);
-
-                  const contentType = response.headers.get("content-type");
-                  if (!contentType?.startsWith("image/")) {
-                    console.error(
-                      "[safeSendMessage] ✗ url did not return image:",
-                      contentType,
-                    );
-                    continue; // Skip this image
-                  }
-
-                  const blob = await response.blob();
-                  const base64 = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                  });
-                  base64Data = base64.split(",")[1];
-                }
-
-                if (base64Data) {
-                  images.push({
-                    data: base64Data,
-                    mimeType: part.mediaType,
-                  });
-                }
+                const image = await resolveImagePartToBase64(part, message);
+                if (image) images.push(image);
               } catch (error) {
                 console.error(
-                  "[safeSendMessage] ✗ Exception loading image:",
+                  "[safeSendMessage] Exception loading image:",
                   part.name,
                   error,
                 );
@@ -1121,7 +1331,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
                 }
               } catch (error) {
                 console.error(
-                  "[safeSendMessage] ✗ Exception loading file attachment:",
+                  "[safeSendMessage] 閴?Exception loading file attachment:",
                   part.name,
                   error,
                 );
@@ -1707,7 +1917,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
               // informational notice.
               if (!handledCodexTransportStatus) {
                 const retryMessage =
-                  data.content || data.message || "Agent is retrying…";
+                  data.content || data.message || "Agent is retrying...";
                 toast({
                   type: "info",
                   description: retryMessage,
@@ -1735,7 +1945,7 @@ export function ChatContextProvider({ children }: { children: ReactNode }) {
               // so the chat UI can render an explicit Continue action that
               // reuses the preserved workspace. We deliberately skip the
               // stream-level auto-retry path (handled in onError) by tagging
-              // the part with an interruption payload — see issue #356.
+              // the part with an interruption payload 閳?see issue #356.
               const interruption = parseCodexInterruptedError(errorMessage);
               if (interruption?.canResume) {
                 parts.push({

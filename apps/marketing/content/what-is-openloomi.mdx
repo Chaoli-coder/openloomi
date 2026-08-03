@@ -6,6 +6,10 @@ icon: "FaRocket"
 
 # What is OpenLoomi?
 
+> **Your agent can read the update. OpenLoomi helps it understand what changed, what still matters, and what should happen next.**
+>
+> Open-source, local-first, model-agnostic context runtime. Plugs into Claude Code, Codex, OpenCode, Hermes, and OpenClaw — no need to replace your model or your agent.
+
 **The Attention Agent that runs across every Agent Runtime**
 
 OpenLoomi is the open-source, local-first Attention Agent for developers and small teams building long-lived working agents on Claude Code, Codex, OpenCode, Hermes, and OpenClaw.
@@ -34,7 +38,7 @@ It turns the day's scattered signals into real decisions, and keeps orchestratin
 
 OpenLoomi gives you a desktop assistant for any Agent framework — Claude Code, Codex, OpenCode, Hermes, and OpenClaw all plug into the same resident desktop.
 
-- **Stop dropping commitments.** Overdue replies, creeping deadlines, "I'll send that follow-up Friday" — the desktop bubble nudges you, and you can extend the signals and decisions it watches for.
+- **Stop dropping commitments.** Overdue replies, creeping deadlines, "I'll send that follow-up Friday" — and, more importantly, the follow-up three days later that quietly supersedes it. The desktop bubble nudges you, but the system underneath is doing more than recall: it maintains the **current state** of every commitment, with the original message and every transition still auditable. You can extend the signals and decisions it watches for.
 - **Find anything from your work life in seconds.** "What did I decide about pricing last quarter?", "Who owns design on Acorn?", "What was I working on before vacation?" — memory spans tools and channels, no more digging through Slack, Gmail, or Notion.
 - **Get a morning brief and an end-of-day recap instead of opening nine apps.** The key info lands in one place.
 - **Ask AI for work help right inside your chat.** Draft a reply, summarize a long thread, schedule a follow-up — directly in Telegram, WhatsApp, iMessage, QQ, or Lark/Feishu.
@@ -60,12 +64,22 @@ See the [Attention Agent](/docs/attention-agent) doc for the always-on companion
 
 **OpenLoomi is open-source and neutral.** Instead of locking you into a single vendor's agent, it integrates with any Agent Runtime — Claude Code, Codex, OpenCode, Hermes, OpenClaw — and brings a shared, cross-agent layer to all of them: a resident desktop **attention agent**, **holistic context memory**, **platform connectors**, and **proactive tasks**. Whichever agent you run, OpenLoomi watches the door, remembers what matters, and surfaces only the decisions worth your time — so you spend your attention on the work, not on chasing it.
 
-| Compared with...           | OpenLoomi adds                                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Claude Cowork-style agents | an open-source, local-first AI coworker and workspace with source evidence and approval                           |
-| Codex / Claude Code        | workspace context beyond the repo: people, product decisions, launch context, issues, and follow-ups              |
-| OpenClaw / Hermes          | context before and after the action: why it matters, what source was used, what changed, what remains open        |
-| RAG / knowledge bases      | work state, not just document retrieval: what changed, what is still true, and what should affect the next action |
+Explicit, on the record — so the framing is clear before you read the rest of the page:
+
+- **Not an LLM.** OpenLoomi doesn't ship a model. It routes prompts to your existing Claude / OpenAI / local runtime. See [Getting Started → AI Configuration](/docs/getting-started#ai-configuration).
+- **Not a replacement for Claude, Codex, or any other agent.** OpenLoomi is a context runtime that sits behind them as a [plugin or skill](/docs/plugins). Your agent stays in charge.
+- **Not another agent framework.** It doesn't compete with Claude Code, Codex CLI, OpenCode, Hermes, or OpenClaw — it complements them. See [Agent Runtimes](/docs/reference/agent-runtimes).
+- **Not a RAG library.** Retrieval-augmented generation finds similar text. OpenLoomi maintains the **current state** of your work and surfaces transitions, not just similar documents. See [Memory → How this differs from RAG, vector memory, and chat history](/docs/memory#how-this-differs-from-rag-vector-memory-and-chat-history).
+- **Not a knowledge graph in the classical sense.** There is no upfront schema, no ontology to maintain. Connections emerge from use (Hebbian-style) and decay when unused. See [Memory → Spatial Dimension: Hebbian Memory Connections](/docs/memory#spatial-dimension-hebbian-memory-connections).
+- **Not chat-history memory.** A flat log of past turns can't tell you that "pushing to next week" superseded "I'll have it Friday" — and a tracker that holds both as facts is worse than no tracker. OpenLoomi models commitments as a [state machine with supersession](/docs/memory#commitment-lifecycle).
+- **Not a generic automation or notification tool.** It does not "remind you of things." It surfaces [decision cards](/docs/loop) backed by attributable evidence and waits for your Approve before any external action.
+
+| Compared with...                            | OpenLoomi adds                                                                                                                                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code / Codex / OpenClaw / Hermes** | a **state-aware context runtime** that plugs into your existing agent shell — no model swap, no framework lock-in. See [Memory → Commitment Lifecycle](/docs/memory#commitment-lifecycle) for what "state-aware" means. |
+| RAG / knowledge bases                       | work state, not just document retrieval: what changed, what is still true, and what should affect the next action                                                                                                       |
+| Chat-history memory                         | attributable, time-bounded, **supersedable** state with source evidence — not just a flat log of past turns. See [Connectors → Trust Ladder](/docs/connectors#trust-ladder-how-access-is-earned) for the access model.  |
+| Claude Cowork-style agents                  | the open-source, local-first counterpart that **maintains the state** of commitments (not just their memory), with explicit supersession and Approve-before-action. [Learn more →](/docs/attention-agent)               |
 
 ---
 

@@ -67,6 +67,34 @@ The table below compares what each connector supports across key capabilities. U
 | Gmail     | ✅            | ✅           | ❌               | ✅             | ✅           | ✅            | App Password |
 | Outlook   | ✅            | ✅           | ❌               | ✅             | ✅           | ✅            | App Password |
 
+## Trust Ladder: How Access Is Earned
+
+OpenLoomi does not ask you to connect every system before it has earned the right to. The default is **narrow**: one integration, read-only, observation mode, with every extracted commitment or state transition shown alongside its source. Additional sources and write actions are unlocked only after the system has been demonstrably correct on the narrow surface.
+
+```
+Read one source
+   ↓
+Explain every extraction (commitment, decision, supersession)
+   ↓
+User corrects mistakes
+   ↓
+Observe reliability for two weeks
+   ↓
+Add another source
+   ↓
+Enable limited write actions (create task, sync deadline, send reply)
+```
+
+The three rules that make this work in practice:
+
+1. **Narrow by default.** Onboarding starts with the single source you trust most — often one Slack workspace or one GitHub repository. Other connectors are off until you turn them on.
+2. **Show the work, not just the conclusion.** Every extracted commitment is presented with the original message, the supersession evidence (if any), and a confidence score. If the system isn't sure a later message supersedes an earlier one, it asks you to confirm rather than silently updating state.
+3. **Permissions are state, not just an OAuth click.** OpenLoomi tracks which source a memory came from, which workspace or project it can travel into, and when the grant was made. Revoking a connector immediately stops new ingestion; previously synced data is retained until you explicitly delete it.
+
+> 💡 A trustworthy AI co-worker should be able to answer, for any claim it makes: _what it knows, where it learned it, what changed, and what it is not allowed to access._ See [Memory → Commitment Lifecycle](/docs/memory#commitment-lifecycle) for how this surfaces in the data model.
+
+---
+
 ## Authorization Modes Explained
 
 OpenLoomi supports two distinct authorization modes for messaging platforms. Understanding the difference helps you choose the right platform for your workflow.

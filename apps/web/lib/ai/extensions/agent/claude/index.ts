@@ -82,6 +82,7 @@ import {
 import {
   claudeAgentSdkTransport,
   ClaudeRuntimeSession,
+  resolveAuthenticatedGoalRuntimeOwnerId,
   startClaudeGoalRuntimeSession,
 } from "./runtime";
 import {
@@ -1763,6 +1764,9 @@ ${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
       settings: settingsConfig,
       agentOptions: options,
       supplementalInput: claudeRuntime.liveInputSource,
+      toolObserver: resolveAuthenticatedGoalRuntimeOwnerId(options?.session)
+        ? claudeRuntime
+        : undefined,
       permissionMode: options?.permissionMode,
       abortController: session.abortController,
       env: envConfig,
@@ -1961,8 +1965,13 @@ ${formattedMessages}${truncationNotice}\n\n---\n## Current Request\n`;
         };
       }
     } finally {
-      goalRuntimeRegistration?.release();
-      await claudeRuntime.close();
+      try {
+        await claudeRuntime.close();
+      } finally {
+        // Keep a closing Query registered until it can no longer accept Goal
+        // commands or emit old-epoch events.
+        goalRuntimeRegistration?.release();
+      }
       this.sessions.delete(session.id);
       // Windows cleanup prevents skill files generated for this session from
       // leaking into the next Claude Code run.
