@@ -16,9 +16,9 @@ import { describe, expect, it } from "vitest";
 import { isBoilerplate, stripQuotedText } from "@/lib/integrations/email";
 
 describe("Email Processing Logic", () => {
-	describe("stripQuotedText", () => {
-		it("should preserve inline replies", () => {
-			const input = `
+  describe("stripQuotedText", () => {
+    it("should preserve inline replies", () => {
+      const input = `
 Hi there,
 
 On 2023-01-01, User wrote:
@@ -31,7 +31,7 @@ Yes, I love them.
 They are okay too.
       `.trim();
 
-			const expected = `
+      const expected = `
 Hi there,
 
 Yes, I love them.
@@ -39,11 +39,11 @@ Yes, I love them.
 They are okay too.
       `.trim();
 
-			expect(stripQuotedText(input)).toBe(expected);
-		});
+      expect(stripQuotedText(input)).toBe(expected);
+    });
 
-		it("should strip standard Gmail reply", () => {
-			const input = `
+    it("should strip standard Gmail reply", () => {
+      const input = `
 This is my reply.
 
 On Mon, Jan 1, 2023 at 10:00 AM User <user@example.com> wrote:
@@ -51,11 +51,11 @@ On Mon, Jan 1, 2023 at 10:00 AM User <user@example.com> wrote:
 > And another line.
       `.trim();
 
-			expect(stripQuotedText(input)).toBe("This is my reply.");
-		});
+      expect(stripQuotedText(input)).toBe("This is my reply.");
+    });
 
-		it("should truncate Legacy/Outlook reply", () => {
-			const input = `
+    it("should truncate Legacy/Outlook reply", () => {
+      const input = `
 This is the top message.
 
 From: Old User
@@ -66,35 +66,35 @@ Subject: Re: Hello
 This is the old message content.
        `.trim();
 
-			expect(stripQuotedText(input)).toBe("This is the top message.");
-		});
+      expect(stripQuotedText(input)).toBe("This is the top message.");
+    });
 
-		it('should handle "Original Message" separator', () => {
-			const input = `
+    it('should handle "Original Message" separator', () => {
+      const input = `
 Reply text.
 
 -----Original Message-----
 From: ...
         `.trim();
-			expect(stripQuotedText(input)).toBe("Reply text.");
-		});
-	});
+      expect(stripQuotedText(input)).toBe("Reply text.");
+    });
+  });
 
-	describe("isBoilerplate", () => {
-		it("should detect unsubscribe links", () => {
-			expect(isBoilerplate("Unsubscribe")).toBe(true);
-			expect(isBoilerplate("Safe Unsubscribe")).toBe(true);
-			expect(isBoilerplate("Click here to unsubscribe")).toBe(true);
-		});
+  describe("isBoilerplate", () => {
+    it("should detect unsubscribe links", () => {
+      expect(isBoilerplate("Unsubscribe")).toBe(true);
+      expect(isBoilerplate("Safe Unsubscribe")).toBe(true);
+      expect(isBoilerplate("Click here to unsubscribe")).toBe(true);
+    });
 
-		it("should detect navigation footers", () => {
-			expect(isBoilerplate("Home | About | Contact")).toBe(true);
-			expect(isBoilerplate("Privacy Policy · Terms")).toBe(true);
-		});
+    it("should detect navigation footers", () => {
+      expect(isBoilerplate("Home | About | Contact")).toBe(true);
+      expect(isBoilerplate("Privacy Policy · Terms")).toBe(true);
+    });
 
-		it("should not flag legitimate short sentences", () => {
-			expect(isBoilerplate("See you soon.")).toBe(false);
-			expect(isBoilerplate("Thanks!")).toBe(false);
-		});
-	});
+    it("should not flag legitimate short sentences", () => {
+      expect(isBoilerplate("See you soon.")).toBe(false);
+      expect(isBoilerplate("Thanks!")).toBe(false);
+    });
+  });
 });

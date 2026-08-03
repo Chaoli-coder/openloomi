@@ -23,29 +23,29 @@ import type { Mock } from "vitest";
 // The mock returns an SWR-shaped object so the hook's destructure
 // (`{ data, error, isLoading, isValidating, mutate }`) doesn't blow up.
 const useSWRMock: Mock = vi.fn(() => ({
-	data: undefined,
-	error: undefined,
-	isLoading: false,
-	isValidating: false,
-	mutate: vi.fn(),
+  data: undefined,
+  error: undefined,
+  isLoading: false,
+  isValidating: false,
+  mutate: vi.fn(),
 }));
 vi.mock("swr", () => {
-	const stub = (...args: unknown[]) => useSWRMock(...args);
-	return {
-		default: stub,
-		useSWR: stub,
-	};
+  const stub = (...args: unknown[]) => useSWRMock(...args);
+  return {
+    default: stub,
+    useSWR: stub,
+  };
 });
 
 // Token manager is a no-op in node — replace with a stub that yields
 // nothing so the hook's `typeof window !== "undefined"` guard is the
 // only thing shaping the headers it builds.
 vi.mock("@/lib/auth/token-manager", () => ({
-	getAuthToken: () => undefined,
+  getAuthToken: () => undefined,
 }));
 
 afterEach(() => {
-	vi.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 /**
@@ -55,105 +55,105 @@ afterEach(() => {
  * any synthetic server payload.
  */
 async function loadFetcher(): Promise<(url: string) => Promise<unknown>> {
-	useSWRMock.mockClear();
-	vi.resetModules();
-	const { useLoopConnectors } = await import("@/hooks/use-loop-connectors");
-	useLoopConnectors();
-	const calls = useSWRMock.mock.calls as unknown[][];
-	const fetcher = calls[0]?.[1] as
-		| ((url: string) => Promise<unknown>)
-		| undefined;
-	if (!fetcher) {
-		throw new Error("useSWR was not called with a fetcher");
-	}
-	return fetcher;
+  useSWRMock.mockClear();
+  vi.resetModules();
+  const { useLoopConnectors } = await import("@/hooks/use-loop-connectors");
+  useLoopConnectors();
+  const calls = useSWRMock.mock.calls as unknown[][];
+  const fetcher = calls[0]?.[1] as
+    | ((url: string) => Promise<unknown>)
+    | undefined;
+  if (!fetcher) {
+    throw new Error("useSWR was not called with a fetcher");
+  }
+  return fetcher;
 }
 
 function stubFetch(payload: unknown): ReturnType<typeof vi.spyOn> {
-	return vi.spyOn(globalThis, "fetch").mockResolvedValue(
-		new Response(JSON.stringify(payload), {
-			status: 200,
-			headers: { "Content-Type": "application/json" },
-		}),
-	);
+  return vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
 }
 
 describe("useLoopConnectors lastProbeError (#412)", () => {
-	it("preserves the structured {kind, message, at} shape — does not collapse to a string", async () => {
-		// Reproduce the previous bug: a server payload with all three
-		// fields must reach the fetcher's caller as `ProbeErrorInfo`, not
-		// `string`. The kind is the load-bearing field for the per-kind
-		// callout.
-		const fetcher = await loadFetcher();
-		const stub = stubFetch({
-			items: [],
-			lastProbeError: {
-				kind: "cli_not_found",
-				message: "composio: command not found",
-				at: "2026-07-21T12:34:56.000Z",
-			},
-		});
+  it("preserves the structured {kind, message, at} shape — does not collapse to a string", async () => {
+    // Reproduce the previous bug: a server payload with all three
+    // fields must reach the fetcher's caller as `ProbeErrorInfo`, not
+    // `string`. The kind is the load-bearing field for the per-kind
+    // callout.
+    const fetcher = await loadFetcher();
+    const stub = stubFetch({
+      items: [],
+      lastProbeError: {
+        kind: "cli_not_found",
+        message: "composio: command not found",
+        at: "2026-07-21T12:34:56.000Z",
+      },
+    });
 
-		const result = (await fetcher("/api/loop/connectors")) as {
-			lastProbeError: unknown;
-		};
-		expect(result.lastProbeError).toEqual({
-			kind: "cli_not_found",
-			message: "composio: command not found",
-			at: "2026-07-21T12:34:56.000Z",
-		});
-		expect(typeof result.lastProbeError).not.toBe("string");
+    const result = (await fetcher("/api/loop/connectors")) as {
+      lastProbeError: unknown;
+    };
+    expect(result.lastProbeError).toEqual({
+      kind: "cli_not_found",
+      message: "composio: command not found",
+      at: "2026-07-21T12:34:56.000Z",
+    });
+    expect(typeof result.lastProbeError).not.toBe("string");
 
-		stub.mockRestore();
-	});
+    stub.mockRestore();
+  });
 
-	it("drops the diagnostic when any required field is missing (malformed server payload)", async () => {
-		const fetcher = await loadFetcher();
-		const stub = stubFetch({
-			items: [],
-			// Missing `at` — server sent a partial blob.
-			lastProbeError: {
-				kind: "timeout",
-				message: "probe exceeded 600000ms",
-			},
-		});
+  it("drops the diagnostic when any required field is missing (malformed server payload)", async () => {
+    const fetcher = await loadFetcher();
+    const stub = stubFetch({
+      items: [],
+      // Missing `at` — server sent a partial blob.
+      lastProbeError: {
+        kind: "timeout",
+        message: "probe exceeded 600000ms",
+      },
+    });
 
-		const result = (await fetcher("/api/loop/connectors")) as {
-			lastProbeError: unknown;
-		};
-		expect(result.lastProbeError).toBeNull();
+    const result = (await fetcher("/api/loop/connectors")) as {
+      lastProbeError: unknown;
+    };
+    expect(result.lastProbeError).toBeNull();
 
-		stub.mockRestore();
-	});
+    stub.mockRestore();
+  });
 
-	it("rejects unknown kinds rather than passing them through as a structural ProbeErrorKind", async () => {
-		const fetcher = await loadFetcher();
-		const stub = stubFetch({
-			items: [],
-			lastProbeError: {
-				kind: "totally_made_up",
-				message: "x",
-				at: "2026-07-21T12:34:56.000Z",
-			},
-		});
+  it("rejects unknown kinds rather than passing them through as a structural ProbeErrorKind", async () => {
+    const fetcher = await loadFetcher();
+    const stub = stubFetch({
+      items: [],
+      lastProbeError: {
+        kind: "totally_made_up",
+        message: "x",
+        at: "2026-07-21T12:34:56.000Z",
+      },
+    });
 
-		const result = (await fetcher("/api/loop/connectors")) as {
-			lastProbeError: unknown;
-		};
-		expect(result.lastProbeError).toBeNull();
+    const result = (await fetcher("/api/loop/connectors")) as {
+      lastProbeError: unknown;
+    };
+    expect(result.lastProbeError).toBeNull();
 
-		stub.mockRestore();
-	});
+    stub.mockRestore();
+  });
 
-	it("returns lastProbeError=null on the happy path (no error blob in the payload)", async () => {
-		const fetcher = await loadFetcher();
-		const stub = stubFetch({ items: [] });
+  it("returns lastProbeError=null on the happy path (no error blob in the payload)", async () => {
+    const fetcher = await loadFetcher();
+    const stub = stubFetch({ items: [] });
 
-		const result = (await fetcher("/api/loop/connectors")) as {
-			lastProbeError: unknown;
-		};
-		expect(result.lastProbeError).toBeNull();
+    const result = (await fetcher("/api/loop/connectors")) as {
+      lastProbeError: unknown;
+    };
+    expect(result.lastProbeError).toBeNull();
 
-		stub.mockRestore();
-	});
+    stub.mockRestore();
+  });
 });

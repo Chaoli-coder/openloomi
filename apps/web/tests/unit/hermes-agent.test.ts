@@ -10,387 +10,387 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-	while (tempDirs.length > 0) {
-		const tempDir = tempDirs.pop();
-		if (tempDir) {
-			await rm(tempDir, { recursive: true, force: true });
-		}
-	}
+  while (tempDirs.length > 0) {
+    const tempDir = tempDirs.pop();
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  }
 });
 
 describe("Hermes ACP command builder", () => {
-	it("builds hermes acp without yolo flags", () => {
-		const command = buildHermesAcpCommand({
-			hermesPath: "hermes-bin",
-			profile: "coding",
-			extraArgs: ["--yolo"],
-			yolo: true,
-			env: { HERMES_YOLO_MODE: "1" },
-		});
+  it("builds hermes acp without yolo flags", () => {
+    const command = buildHermesAcpCommand({
+      hermesPath: "hermes-bin",
+      profile: "coding",
+      extraArgs: ["--yolo"],
+      yolo: true,
+      env: { HERMES_YOLO_MODE: "1" },
+    });
 
-		expect(command.command).toBe("hermes-bin");
-		expect(command.args).toEqual(["--profile", "coding", "acp"]);
-		expect(command.args).not.toContain("--yolo");
-	});
+    expect(command.command).toBe("hermes-bin");
+    expect(command.args).toEqual(["--profile", "coding", "acp"]);
+    expect(command.args).not.toContain("--yolo");
+  });
 });
 
 describe("HermesAgent", () => {
-	it("runs initialize/session/new/session/prompt and maps ACP updates", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("runs initialize/session/new/session/prompt and maps ACP updates", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(agent.run("normal run"));
+    const messages = await collectMessages(agent.run("normal run"));
 
-		expect(messages).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ type: "session" }),
-				expect.objectContaining({ type: "text", content: "hello" }),
-				expect.objectContaining({ type: "reasoning", content: "thinking" }),
-				expect.objectContaining({
-					type: "tool_use",
-					id: "tool-1",
-					name: "Run command",
-					input: { command: "pwd" },
-				}),
-				expect.objectContaining({
-					type: "tool_result",
-					toolUseId: "tool-1",
-					output: "tool output",
-					isError: false,
-				}),
-				expect.objectContaining({
-					type: "result",
-					content: "end_turn",
-					usage: { inputTokens: 3, outputTokens: 4 },
-				}),
-			]),
-		);
-		expect(countDone(messages)).toBe(1);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "session" }),
+        expect.objectContaining({ type: "text", content: "hello" }),
+        expect.objectContaining({ type: "reasoning", content: "thinking" }),
+        expect.objectContaining({
+          type: "tool_use",
+          id: "tool-1",
+          name: "Run command",
+          input: { command: "pwd" },
+        }),
+        expect.objectContaining({
+          type: "tool_result",
+          toolUseId: "tool-1",
+          output: "tool output",
+          isError: false,
+        }),
+        expect.objectContaining({
+          type: "result",
+          content: "end_turn",
+          usage: { inputTokens: 3, outputTokens: 4 },
+        }),
+      ]),
+    );
+    expect(countDone(messages)).toBe(1);
 
-		const calls = await readJsonLines(join(workDir, "calls.jsonl"));
-		expect(calls.map((call) => call.method)).toEqual([
-			"initialize",
-			"session/new",
-			"session/prompt",
-		]);
-		const initializeParams = calls[0].params as Record<string, unknown>;
-		const newSessionParams = calls[1].params as Record<string, unknown>;
-		expect(initializeParams).toMatchObject({
-			protocolVersion: expect.any(Number),
-			clientInfo: { name: "openloomi", version: expect.any(String) },
-		});
-		expect(initializeParams.clientCapabilities).not.toHaveProperty("terminal");
-		expect(newSessionParams).toMatchObject({
-			cwd: workDir,
-			mcpServers: [],
-		});
-	});
+    const calls = await readJsonLines(join(workDir, "calls.jsonl"));
+    expect(calls.map((call) => call.method)).toEqual([
+      "initialize",
+      "session/new",
+      "session/prompt",
+    ]);
+    const initializeParams = calls[0].params as Record<string, unknown>;
+    const newSessionParams = calls[1].params as Record<string, unknown>;
+    expect(initializeParams).toMatchObject({
+      protocolVersion: expect.any(Number),
+      clientInfo: { name: "openloomi", version: expect.any(String) },
+    });
+    expect(initializeParams.clientCapabilities).not.toHaveProperty("terminal");
+    expect(newSessionParams).toMatchObject({
+      cwd: workDir,
+      mcpServers: [],
+    });
+  });
 
-	it("applies an explicitly configured model to the new ACP session", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(
-			workDir,
-			{},
-			"openrouter:anthropic/claude-sonnet-4.6",
-		);
+  it("applies an explicitly configured model to the new ACP session", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(
+      workDir,
+      {},
+      "openrouter:anthropic/claude-sonnet-4.6",
+    );
 
-		await collectMessages(agent.run("normal run"));
+    await collectMessages(agent.run("normal run"));
 
-		const calls = await readJsonLines(join(workDir, "calls.jsonl"));
-		expect(calls.map((call) => call.method)).toEqual([
-			"initialize",
-			"session/new",
-			"session/set_model",
-			"session/prompt",
-		]);
-		expect(calls[2].params).toEqual({
-			sessionId: "hermes-session-1",
-			modelId: "openrouter:anthropic/claude-sonnet-4.6",
-		});
-	});
+    const calls = await readJsonLines(join(workDir, "calls.jsonl"));
+    expect(calls.map((call) => call.method)).toEqual([
+      "initialize",
+      "session/new",
+      "session/set_model",
+      "session/prompt",
+    ]);
+    expect(calls[2].params).toEqual({
+      sessionId: "hermes-session-1",
+      modelId: "openrouter:anthropic/claude-sonnet-4.6",
+    });
+  });
 
-	it("turns JSON-RPC prompt errors into one error and exactly one done", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("turns JSON-RPC prompt errors into one error and exactly one done", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(agent.run("jsonrpc-error"));
+    const messages = await collectMessages(agent.run("jsonrpc-error"));
 
-		expect(messages.find((message) => message.type === "error")).toMatchObject({
-			type: "error",
-			message: expect.stringContaining("fake prompt failure"),
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages.find((message) => message.type === "error")).toMatchObject({
+      type: "error",
+      message: expect.stringContaining("fake prompt failure"),
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("rejects pending RPC calls when Hermes exits cleanly without responding", async () => {
-		const workDir = await createFakeHermesWorkDir(`
+  it("rejects pending RPC calls when Hermes exits cleanly without responding", async () => {
+    const workDir = await createFakeHermesWorkDir(`
 process.stdin.once("data", () => process.exit(0));
 `);
-		const agent = createAgent(workDir);
+    const agent = createAgent(workDir);
 
-		const messages = await withTimeout(
-			collectMessages(agent.run("exit before initialize response")),
-			5000,
-		);
+    const messages = await withTimeout(
+      collectMessages(agent.run("exit before initialize response")),
+      5000,
+    );
 
-		expect(messages.find((message) => message.type === "error")).toMatchObject({
-			type: "error",
-			message: expect.stringContaining(
-				"exited before responding to pending request(s): initialize",
-			),
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages.find((message) => message.type === "error")).toMatchObject({
+      type: "error",
+      message: expect.stringContaining(
+        "exited before responding to pending request(s): initialize",
+      ),
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("times out, kills the ACP process, and yields exactly one done", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir, { timeoutMs: 100 });
+  it("times out, kills the ACP process, and yields exactly one done", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir, { timeoutMs: 100 });
 
-		const messages = await withTimeout(
-			collectMessages(agent.run("hang forever")),
-			5000,
-		);
+    const messages = await withTimeout(
+      collectMessages(agent.run("hang forever")),
+      5000,
+    );
 
-		expect(messages).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({ type: "text", content: "started" }),
-				expect.objectContaining({
-					type: "error",
-					message: expect.stringContaining("Hermes ACP timed out after 100ms"),
-				}),
-			]),
-		);
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "text", content: "started" }),
+        expect.objectContaining({
+          type: "error",
+          message: expect.stringContaining("Hermes ACP timed out after 100ms"),
+        }),
+      ]),
+    );
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("returns a clear error when the Hermes executable is missing", async () => {
-		const workDir = await mkdtemp(join(tmpdir(), "openloomi-hermes-test-"));
-		tempDirs.push(workDir);
-		const agent = new HermesAgent({
-			provider: "hermes",
-			workDir,
-			providerConfig: {
-				hermesPath: "definitely-not-openloomi-hermes",
-			},
-		});
+  it("returns a clear error when the Hermes executable is missing", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "openloomi-hermes-test-"));
+    tempDirs.push(workDir);
+    const agent = new HermesAgent({
+      provider: "hermes",
+      workDir,
+      providerConfig: {
+        hermesPath: "definitely-not-openloomi-hermes",
+      },
+    });
 
-		const messages = await collectMessages(agent.run("do work"));
+    const messages = await collectMessages(agent.run("do work"));
 
-		expect(messages.find((message) => message.type === "error")).toMatchObject({
-			type: "error",
-			message: expect.stringContaining("Hermes ACP executable not found"),
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages.find((message) => message.type === "error")).toMatchObject({
+      type: "error",
+      message: expect.stringContaining("Hermes ACP executable not found"),
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("maps permission allow decisions to an existing allow_once option id", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
-		const onPermissionRequest = vi.fn(
-			async (): Promise<{ behavior: "allow" }> => ({ behavior: "allow" }),
-		);
+  it("maps permission allow decisions to an existing allow_once option id", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
+    const onPermissionRequest = vi.fn(
+      async (): Promise<{ behavior: "allow" }> => ({ behavior: "allow" }),
+    );
 
-		const messages = await collectMessages(
-			agent.run("permission allow", { onPermissionRequest }),
-		);
+    const messages = await collectMessages(
+      agent.run("permission allow", { onPermissionRequest }),
+    );
 
-		expect(onPermissionRequest).toHaveBeenCalledWith(
-			expect.objectContaining({
-				toolName: "Run command",
-				toolInput: { command: "rm -rf /tmp/example" },
-				toolUseID: "tool-2",
-			}),
-		);
-		expect(messages).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					type: "text",
-					content: "permission:allow-once",
-				}),
-			]),
-		);
-		const permissions = await readJsonLines(
-			join(workDir, "permission-responses.jsonl"),
-		);
-		expect(permissions.at(-1)?.result).toEqual({
-			outcome: { outcome: "selected", optionId: "allow-once" },
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(onPermissionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "Run command",
+        toolInput: { command: "rm -rf /tmp/example" },
+        toolUseID: "tool-2",
+      }),
+    );
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          content: "permission:allow-once",
+        }),
+      ]),
+    );
+    const permissions = await readJsonLines(
+      join(workDir, "permission-responses.jsonl"),
+    );
+    expect(permissions.at(-1)?.result).toEqual({
+      outcome: { outcome: "selected", optionId: "allow-once" },
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("maps permission deny decisions to an existing reject option id", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("maps permission deny decisions to an existing reject option id", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(
-			agent.run("permission deny", {
-				onPermissionRequest: async () => ({ behavior: "deny" }),
-			}),
-		);
+    const messages = await collectMessages(
+      agent.run("permission deny", {
+        onPermissionRequest: async () => ({ behavior: "deny" }),
+      }),
+    );
 
-		expect(messages).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					type: "text",
-					content: "permission:reject-once",
-				}),
-			]),
-		);
-		const permissions = await readJsonLines(
-			join(workDir, "permission-responses.jsonl"),
-		);
-		expect(permissions.at(-1)?.result).toEqual({
-			outcome: { outcome: "selected", optionId: "reject-once" },
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          content: "permission:reject-once",
+        }),
+      ]),
+    );
+    const permissions = await readJsonLines(
+      join(workDir, "permission-responses.jsonl"),
+    );
+    expect(permissions.at(-1)?.result).toEqual({
+      outcome: { outcome: "selected", optionId: "reject-once" },
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("denies permission requests when no handler is configured", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("denies permission requests when no handler is configured", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(agent.run("permission no handler"));
+    const messages = await collectMessages(agent.run("permission no handler"));
 
-		expect(messages).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					type: "text",
-					content: "permission:reject-once",
-				}),
-			]),
-		);
-		expect(countDone(messages)).toBe(1);
-	});
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          content: "permission:reject-once",
+        }),
+      ]),
+    );
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("cancels pending permissions and sends session/cancel on stop", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
-		const generator = agent.run("permission wait", {
-			onPermissionRequest: async () => new Promise(() => {}),
-		});
+  it("cancels pending permissions and sends session/cancel on stop", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
+    const generator = agent.run("permission wait", {
+      onPermissionRequest: async () => new Promise(() => {}),
+    });
 
-		const sessionMessage = (await generator.next()).value as AgentMessage;
-		expect(sessionMessage.type).toBe("session");
-		if (!sessionMessage.sessionId) {
-			throw new Error("Expected Hermes run to yield a session id");
-		}
+    const sessionMessage = (await generator.next()).value as AgentMessage;
+    expect(sessionMessage.type).toBe("session");
+    if (!sessionMessage.sessionId) {
+      throw new Error("Expected Hermes run to yield a session id");
+    }
 
-		const remainingMessagesPromise = collectMessages(generator);
-		await waitForFile(join(workDir, "permission-requests.jsonl"));
-		await agent.stop(sessionMessage.sessionId);
-		const messages = await withTimeout(remainingMessagesPromise, 5000);
+    const remainingMessagesPromise = collectMessages(generator);
+    await waitForFile(join(workDir, "permission-requests.jsonl"));
+    await agent.stop(sessionMessage.sessionId);
+    const messages = await withTimeout(remainingMessagesPromise, 5000);
 
-		const cancels = await readJsonLines(join(workDir, "cancels.jsonl"));
-		const permissions = await readJsonLines(
-			join(workDir, "permission-responses.jsonl"),
-		);
-		expect(cancels.at(-1)?.params).toEqual({ sessionId: "hermes-session-1" });
-		expect(permissions.at(-1)?.result).toEqual({
-			outcome: { outcome: "cancelled" },
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    const cancels = await readJsonLines(join(workDir, "cancels.jsonl"));
+    const permissions = await readJsonLines(
+      join(workDir, "permission-responses.jsonl"),
+    );
+    expect(cancels.at(-1)?.params).toEqual({ sessionId: "hermes-session-1" });
+    expect(permissions.at(-1)?.result).toEqual({
+      outcome: { outcome: "cancelled" },
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("denies permission requests during planning", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("denies permission requests during planning", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(agent.plan("permission plan"));
+    const messages = await collectMessages(agent.plan("permission plan"));
 
-		const permissions = await readJsonLines(
-			join(workDir, "permission-responses.jsonl"),
-		);
-		expect(permissions.at(-1)?.result).toEqual({
-			outcome: { outcome: "selected", optionId: "reject-once" },
-		});
-		expect(messages.find((message) => message.type === "plan")).toBeUndefined();
-		expect(countDone(messages)).toBe(1);
-	});
+    const permissions = await readJsonLines(
+      join(workDir, "permission-responses.jsonl"),
+    );
+    expect(permissions.at(-1)?.result).toEqual({
+      outcome: { outcome: "selected", optionId: "reject-once" },
+    });
+    expect(messages.find((message) => message.type === "plan")).toBeUndefined();
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("returns method-not-found for unsupported agent-to-client requests", async () => {
-		const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("returns method-not-found for unsupported agent-to-client requests", async () => {
+    const workDir = await createFakeHermesWorkDir(defaultFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const messages = await collectMessages(agent.run("unsupported request"));
+    const messages = await collectMessages(agent.run("unsupported request"));
 
-		const unsupported = await readJsonLines(join(workDir, "unsupported.jsonl"));
-		expect(unsupported.at(-1)?.error).toMatchObject({
-			code: -32601,
-			message: expect.stringContaining("Unsupported Hermes ACP client method"),
-		});
-		expect(messages.find((message) => message.type === "error")).toMatchObject({
-			type: "error",
-			message: expect.stringContaining("Unsupported Hermes ACP client method"),
-		});
-		expect(countDone(messages)).toBe(1);
-	});
+    const unsupported = await readJsonLines(join(workDir, "unsupported.jsonl"));
+    expect(unsupported.at(-1)?.error).toMatchObject({
+      code: -32601,
+      message: expect.stringContaining("Unsupported Hermes ACP client method"),
+    });
+    expect(messages.find((message) => message.type === "error")).toMatchObject({
+      type: "error",
+      message: expect.stringContaining("Unsupported Hermes ACP client method"),
+    });
+    expect(countDone(messages)).toBe(1);
+  });
 
-	it("stores plans and deletes them only after successful execution", async () => {
-		const workDir = await createFakeHermesWorkDir(planFakeAcpScript());
-		const agent = createAgent(workDir);
+  it("stores plans and deletes them only after successful execution", async () => {
+    const workDir = await createFakeHermesWorkDir(planFakeAcpScript());
+    const agent = createAgent(workDir);
 
-		const planMessages = await collectMessages(agent.plan("plan the work"));
-		const plan = planMessages.find((message) => message.type === "plan")
-			?.plan as TaskPlan | undefined;
-		expect(plan).toBeDefined();
-		if (!plan) {
-			throw new Error("Expected Hermes planning to produce a plan");
-		}
-		expect(agent.getPlan(plan.id)).toBe(plan);
+    const planMessages = await collectMessages(agent.plan("plan the work"));
+    const plan = planMessages.find((message) => message.type === "plan")
+      ?.plan as TaskPlan | undefined;
+    expect(plan).toBeDefined();
+    if (!plan) {
+      throw new Error("Expected Hermes planning to produce a plan");
+    }
+    expect(agent.getPlan(plan.id)).toBe(plan);
 
-		await writeFakeHermesScript(workDir, errorFakeAcpScript());
-		const failedMessages = await collectMessages(
-			agent.execute({ planId: plan.id, originalPrompt: "do work" }),
-		);
+    await writeFakeHermesScript(workDir, errorFakeAcpScript());
+    const failedMessages = await collectMessages(
+      agent.execute({ planId: plan.id, originalPrompt: "do work" }),
+    );
 
-		expect(
-			failedMessages.find((message) => message.type === "error"),
-		).toMatchObject({
-			type: "error",
-			message: expect.stringContaining("execution failed"),
-		});
-		expect(agent.getPlan(plan.id)).toBe(plan);
-		expect(countDone(failedMessages)).toBe(1);
+    expect(
+      failedMessages.find((message) => message.type === "error"),
+    ).toMatchObject({
+      type: "error",
+      message: expect.stringContaining("execution failed"),
+    });
+    expect(agent.getPlan(plan.id)).toBe(plan);
+    expect(countDone(failedMessages)).toBe(1);
 
-		await writeFakeHermesScript(workDir, successFakeAcpScript());
-		const successMessages = await collectMessages(
-			agent.execute({ planId: plan.id, originalPrompt: "do work" }),
-		);
+    await writeFakeHermesScript(workDir, successFakeAcpScript());
+    const successMessages = await collectMessages(
+      agent.execute({ planId: plan.id, originalPrompt: "do work" }),
+    );
 
-		expect(agent.getPlan(plan.id)).toBeUndefined();
-		expect(countDone(successMessages)).toBe(1);
-	});
+    expect(agent.getPlan(plan.id)).toBeUndefined();
+    expect(countDone(successMessages)).toBe(1);
+  });
 });
 
 function createAgent(
-	workDir: string,
-	providerConfig: Record<string, unknown> = {},
-	model?: string,
+  workDir: string,
+  providerConfig: Record<string, unknown> = {},
+  model?: string,
 ) {
-	return new HermesAgent({
-		provider: "hermes",
-		workDir,
-		model,
-		providerConfig: {
-			hermesPath: process.execPath,
-			...providerConfig,
-		},
-	});
+  return new HermesAgent({
+    provider: "hermes",
+    workDir,
+    model,
+    providerConfig: {
+      hermesPath: process.execPath,
+      ...providerConfig,
+    },
+  });
 }
 
 async function createFakeHermesWorkDir(script: string) {
-	const workDir = await mkdtemp(join(tmpdir(), "openloomi-hermes-test-"));
-	tempDirs.push(workDir);
-	await writeFakeHermesScript(workDir, script);
-	return workDir;
+  const workDir = await mkdtemp(join(tmpdir(), "openloomi-hermes-test-"));
+  tempDirs.push(workDir);
+  await writeFakeHermesScript(workDir, script);
+  return workDir;
 }
 
 async function writeFakeHermesScript(workDir: string, script: string) {
-	await writeFile(join(workDir, "acp"), script, "utf8");
+  await writeFile(join(workDir, "acp"), script, "utf8");
 }
 
 function defaultFakeAcpScript() {
-	return `
+  return `
 const fs = require("node:fs");
 const readline = require("node:readline");
 
@@ -557,7 +557,7 @@ rl.on("close", () => process.exit(0));
 }
 
 function planFakeAcpScript() {
-	return `
+  return `
 const readline = require("node:readline");
 function send(value) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\\n");
@@ -593,7 +593,7 @@ rl.on("line", (line) => {
 }
 
 function errorFakeAcpScript() {
-	return `
+  return `
 const readline = require("node:readline");
 function send(value) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\\n");
@@ -613,7 +613,7 @@ rl.on("line", (line) => {
 }
 
 function successFakeAcpScript() {
-	return `
+  return `
 const readline = require("node:readline");
 function send(value) {
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\\n");
@@ -643,55 +643,55 @@ rl.on("line", (line) => {
 }
 
 async function collectMessages(
-	generator: AsyncGenerator<AgentMessage>,
+  generator: AsyncGenerator<AgentMessage>,
 ): Promise<AgentMessage[]> {
-	const messages: AgentMessage[] = [];
-	for await (const message of generator) {
-		messages.push(message);
-	}
-	return messages;
+  const messages: AgentMessage[] = [];
+  for await (const message of generator) {
+    messages.push(message);
+  }
+  return messages;
 }
 
 function countDone(messages: AgentMessage[]) {
-	return messages.filter((message) => message.type === "done").length;
+  return messages.filter((message) => message.type === "done").length;
 }
 
 async function readJsonLines(filePath: string) {
-	const text = await readFile(filePath, "utf8");
-	return text
-		.split(/\r?\n/)
-		.filter(Boolean)
-		.map((line) => JSON.parse(line) as Record<string, unknown>);
+  const text = await readFile(filePath, "utf8");
+  return text
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 async function waitForFile(filePath: string, timeoutMs = 5000) {
-	const start = Date.now();
-	while (Date.now() - start < timeoutMs) {
-		try {
-			await readFile(filePath, "utf8");
-			return;
-		} catch {
-			await new Promise((resolve) => setTimeout(resolve, 25));
-		}
-	}
-	throw new Error(`Timed out waiting for ${filePath}`);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await readFile(filePath, "utf8");
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  throw new Error(`Timed out waiting for ${filePath}`);
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-	let timeout: ReturnType<typeof setTimeout> | undefined;
-	try {
-		return await Promise.race([
-			promise,
-			new Promise<T>((_resolve, reject) => {
-				timeout = setTimeout(
-					() => reject(new Error(`Timed out after ${timeoutMs}ms`)),
-					timeoutMs,
-				);
-			}),
-		]);
-	} finally {
-		if (timeout) {
-			clearTimeout(timeout);
-		}
-	}
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
