@@ -1,20 +1,20 @@
-# CL-bench 续跑脚本
+# CL-bench Resume Scripts
 
-`scripts/` 目录里提供了两个等价的"清理失败 checkpoint + 续跑"脚本：
+The `scripts/` directory provides two equivalent "clean up failed checkpoints + resume" scripts:
 
-| 脚本 | 平台 | 解释器 |
-|---|---|---|
-| [`resume_clbench.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.sh) | Linux / macOS / WSL / Git Bash | bash + python（已检测） |
+| Script | Platform | Interpreter |
+| --- | --- | --- |
+| [`resume_clbench.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.sh) | Linux / macOS / WSL / Git Bash | bash + python (already detected) |
 | [`resume_clbench.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.ps1) | Windows PowerShell | PowerShell 5+ |
 
-两个脚本行为完全一致：
+Both scripts behave identically:
 
-1. 扫描 `$CHECKPOINT_DIR`（默认 `D:\openloomi_val_results\clbench\checkpoints\clbench`）下所有 `.json` checkpoint
-2. 对每个 checkpoint 用 JSON 解析后看 `response` 字段是否以 `Error:` 或 `ERROR:` 开头（agent API 调用失败、timeout、terminated 等不可抗力失败）
-3. 把这些失败 checkpoint **移动**到一个时间戳备份目录 `<parent>/_trash_resumed_<YYYYMMDD_HHMMSS>/`（不删除，留底）
-4. 调用 `pnpm benchmark -- ...` 启动续跑——已 checkpoint 的 44 个有效任务被 resume 复用，剩下 994 条会被重新评估
+1. Scan every `.json` checkpoint under `$CHECKPOINT_DIR` (default `D:\openloomi_val_results\clbench\checkpoints\clbench`).
+2. Parse each checkpoint and check whether its `response` field starts with `Error:` or `ERROR:` (covering agent API failures, timeouts, terminated exits, and other force-majeure failures).
+3. **Move** those failed checkpoints into a timestamped backup directory `<parent>/_trash_resumed_<YYYYMMDD_HHMMSS>/` (the files are kept, not deleted).
+4. Invoke `pnpm benchmark -- ...` to resume — the already-checkpointed valid tasks are reused, and the remaining 994 entries are re-evaluated.
 
-## 使用方法
+## Usage
 
 ### Windows PowerShell
 
@@ -30,20 +30,20 @@ cd /d/openloomi3/openloomi/benchmark/clbench
 bash scripts/resume_clbench.sh
 ```
 
-## 环境变量覆盖
+## Environment Variable Overrides
 
-所有路径都可以用环境变量覆盖，默认值见下表：
+All paths can be overridden by environment variables. The defaults are:
 
-| 变量 | 默认值（clbench） | 含义 |
-|---|---|---|
-| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench\checkpoints\clbench` | checkpoint 目录 |
-| `DATASET` | `<package>/dataset/clbench.jsonl` | JSONL 数据集路径 |
-| `BENCHMARK_TYPE` | `clbench` | benchmark 类型 |
-| `OUTPUT` | `D:\openloomi_val_results\clbench\results\clbench_result_resumed.json` | 汇总结果输出路径 |
+| Variable | Default (clbench) | Meaning |
+| --- | --- | --- |
+| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench\checkpoints\clbench` | Checkpoint directory |
+| `DATASET` | `<package>/dataset/clbench.jsonl` | JSONL dataset path |
+| `BENCHMARK_TYPE` | `clbench` | Benchmark type |
+| `OUTPUT` | `D:\openloomi_val_results\clbench\results\clbench_result_resumed.json` | Aggregated result output path |
 
-> ⚠️ **clbench-life 用法**：把上面 4 个变量改成 life 的路径再跑一次即可。脚本本身不区分 clbench / clbench-life，只看路径。
+> **clbench-life usage**: change the four variables above to the life paths and run the same script. The script itself does not distinguish clbench from clbench-life; it only looks at the paths.
 
-clbench-life 的等价环境变量示例：
+Equivalent environment variables for the clbench-life variant:
 
 ```bash
 # Git Bash / WSL
@@ -63,9 +63,9 @@ $env:OUTPUT         = "D:\openloomi_val_results\clbench_life\results\clbench_lif
 powershell -ExecutionPolicy Bypass -File scripts\resume_clbench.ps1
 ```
 
-## 失败 checkpoint 识别规则
+## Failed-Checkpoint Detection Rule
 
-脚本判断"失败"的标准**严格**匹配 [`evaluator.ts#L36-42`](file:///d:/openloomi3/openloomi/benchmark/clbench/src/evaluator.ts#L36-L42)：
+The script's notion of "failed" matches [`evaluator.ts#L36-42`](file:///d:/openloomi3/openloomi/benchmark/clbench/src/evaluator.ts#L36-L42) exactly:
 
 ```ts
 function isErrorResponse(response: string): boolean {
@@ -77,53 +77,53 @@ function isErrorResponse(response: string): boolean {
 }
 ```
 
-即只有以下三种前缀/子串的 checkpoint 会被移动：
+Only checkpoints whose `response` field matches one of the following prefixes or substrings are moved:
 
-- `Error:`（含 `Error: fetch failed`、`Error: timeout`、`Error: terminated` 等）
-- `Failed to authenticate`（理论上不应出现，但兜底）
+- `Error:` (including `Error: fetch failed`, `Error: timeout`, `Error: terminated`, etc.)
+- `Failed to authenticate` (kept as a defensive fallback — should not normally appear)
 - `API Error`
 
-**正常响应中提到 "Error" 但不是错误的情况不会被误判**——只匹配字段值。
+**Normal responses that happen to mention the word "Error" are not falsely flagged** — the match is anchored to the field value.
 
-## 备份目录
+## Backup Directory
 
-每次跑都会创建一个新的备份目录：
+Each run creates a fresh backup directory:
 
 ```
 <checkpoint_dir>/../_trash_resumed_<YYYYMMDD_HHMMSS>/
 ```
 
-里面是所有被移动的失败 checkpoint。**不要主动删除**——如果续跑后还有问题，可以从备份目录把对应 task_id 的文件放回去重跑。
+It contains every failed checkpoint that was moved. **Do not delete it manually** — if anything is still wrong after the resume, you can copy the corresponding `task_id` file back from the backup directory and re-run.
 
-## 故障排查
+## Troubleshooting
 
-### 提示 "pnpm not found in PATH"
+### "pnpm not found in PATH"
 
-需要先安装 pnpm：
+Install pnpm first:
 
 ```bash
 npm install -g pnpm
 ```
 
-### 提示 "checkpoint dir not found"
+### "checkpoint dir not found"
 
-确认 OpenLoomi 跑过至少一次，checkpoints 应该写到 `D:\openloomi_val_results\clbench\checkpoints\clbench`（或 `clbench_life/checkpoints/clbench-life`）。如果路径不一样，覆盖 `CHECKPOINT_DIR` 环境变量。
+Confirm that OpenLoomi has run at least once; checkpoints should be at `D:\openloomi_val_results\clbench\checkpoints\clbench` (or `clbench_life/checkpoints/clbench-life`). If your path differs, override the `CHECKPOINT_DIR` environment variable.
 
-### 跑了脚本后 `pnpm benchmark` 立即退出
+### `pnpm benchmark` exits immediately after the script runs
 
-通常是 OpenLoomi server 没起或不在 3515。脚本不会去启动 server，需要你提前确认：
+Usually the OpenLoomi server is not running or is not on port 3515. The script does not start the server itself; verify in advance:
 
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 3515
 ```
 
-### 续跑后又出现新的 `Error: fetch failed`
+### New `Error: fetch failed` entries appear after the resume
 
-这是 OpenLoomi server 端的问题（端口死了、provider 限流、auth token 失效等），与脚本无关。检查 server 日志或重启 server 后重跑脚本。
+This is an OpenLoomi-side issue (the port died, the provider is rate-limited, the auth token expired, etc.) and is unrelated to the script. Check the server logs, or restart the server and re-run the script.
 
-## 完整跑批流程（推荐）
+## Recommended Full Batch Flow
 
-第一次跑：
+First run:
 
 ```powershell
 $env:CLBENCH_CHECKPOINT_DIR = "D:\openloomi_val_results\clbench\checkpoints\clbench"
@@ -131,14 +131,14 @@ cd D:\openloomi3\openloomi\benchmark\clbench
 pnpm benchmark -- --dataset dataset\clbench.jsonl --benchmark clbench --output results\clbench_result.json
 ```
 
-中断或失败后，从 `pnpm benchmark` 这一行开始重新跑——`--resume`（默认开启）会自动跳过已完成 checkpoint。
+After an interruption or failure, simply re-run the `pnpm benchmark` invocation above — `--resume` (enabled by default) automatically skips already-checkpointed entries.
 
-如果想"先清掉失败 checkpoint 再续跑"，就用本目录的 `resume_clbench.ps1` / `resume_clbench.sh`。
+If you want to "clear failed checkpoints first, then resume", use the `resume_clbench.ps1` / `resume_clbench.sh` scripts in this directory.
 
 ## Requirements
 
 - Node.js 18+
 - pnpm
-- Python 3（仅 .sh 脚本需要）
-- OpenLoomi server 运行在 3515 端口
-- OpenRouter API key（rubric 评判需要）
+- Python 3 (only required by the `.sh` script)
+- An OpenLoomi server running on port 3515
+- An OpenRouter API key (rubric scoring requires it)

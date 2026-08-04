@@ -1,28 +1,28 @@
-# CL-bench-Life 续跑脚本
+# CL-bench-Life Resume Scripts
 
-`scripts/` 目录里提供了两个等价的"清理失败 checkpoint + 续跑"脚本，专用于 **CL-bench-Life**（405 条日常生活任务，high reasoning effort）：
+The `scripts/` directory contains two equivalent "clean up failed checkpoints + resume" scripts dedicated to **CL-bench-Life** (405 everyday-life tasks, high reasoning effort):
 
-| 脚本 | 平台 | 解释器 |
-|---|---|---|
+| Script | Platform | Interpreter |
+| --- | --- | --- |
 | [`resume_clbench_life.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.sh) | Linux / macOS / WSL / Git Bash | bash + python |
 | [`resume_clbench_life.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.ps1) | Windows PowerShell | PowerShell 5+ |
 
-两个脚本行为完全一致：
+Both scripts behave identically:
 
-1. 扫描 `$CHECKPOINT_DIR`（默认 `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life`）下所有 `.json` checkpoint
-2. 对每个 checkpoint 用 JSON 解析后看 `response` 字段是否以 `Error:` 或 `ERROR:` 开头（agent API 调用失败、timeout、orchestrator 数据错误等**不可抗力失败**）
-3. 把这些失败 checkpoint **移动**到一个时间戳备份目录 `<parent>/_trash_resumed_<YYYYMMDD_HHMMSS>/`（不删除，留底）
-4. 调用 `pnpm benchmark -- ...` 启动续跑——已 checkpoint 的有效任务被 resume 复用，剩下未完成的会被重新评估
+1. Scan every `.json` checkpoint under `$CHECKPOINT_DIR` (default `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life`).
+2. Parse each checkpoint and check whether its `response` field starts with `Error:` or `ERROR:` (covering agent API failures, timeouts, orchestrator data errors, and other **force-majeure** failures).
+3. **Move** those failed checkpoints into a timestamped backup directory `<parent>/_trash_resumed_<YYYYMMDD_HHMMSS>/` (the files are kept, not deleted).
+4. Invoke `pnpm benchmark -- ...` to resume — valid checkpointed tasks are reused, and only the remaining tasks are re-evaluated.
 
-> 📝 **关于"不可抗力"**：脚本**只**清理 response 字段以 `Error:` / `ERROR:` 开头的 checkpoint。这些通常代表：
-> - OpenLoomi agent API 调用失败（`Error: fetch failed`）
-> - 单条任务超时（`Error: The operation was aborted due to timeout`）
-> - OpenLoomi 内部被中止（`Error: terminated`）
-> - Orchestrator 返回无效数据（`ERROR: ...`）
+> **A note on "force-majeure failures".** The scripts **only** clean up checkpoints whose `response` field starts with `Error:` / `ERROR:`. These typically represent:
+> - An OpenLoomi agent API failure (`Error: fetch failed`).
+> - A single-task timeout (`Error: The operation was aborted due to timeout`).
+> - An OpenLoomi-internal abort (`Error: terminated`).
+> - Invalid data returned by the orchestrator (`ERROR: ...`).
 >
-> 其它情况（正常 response 但答错、rubric 评判 JSON 解析失败）**不会被清理**——保留下来作为最终结果的一部分。
+> Other cases (a normal response that happens to be wrong, or a rubric-scoring JSON parse failure) are **not** cleaned up — they remain part of the final results.
 
-## 使用方法
+## Usage
 
 ### Windows PowerShell
 
@@ -38,20 +38,20 @@ cd /d/openloomi3/openloomi/benchmark/clbench_life
 bash scripts/resume_clbench_life.sh
 ```
 
-## 环境变量覆盖
+## Environment Variable Overrides
 
-所有路径都可以用环境变量覆盖，默认值见下表：
+All paths can be overridden by environment variables. The defaults are:
 
-| 变量 | 默认值（clbench-life） | 含义 |
-|---|---|---|
-| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life` | checkpoint 目录 |
-| `DATASET` | `<package>/dataset/clbench-life.jsonl` | JSONL 数据集路径 |
-| `BENCHMARK_TYPE` | `clbench-life` | benchmark 类型 |
-| `OUTPUT` | `D:\openloomi_val_results\clbench_life\results\clbench_life_result_resumed.json` | 汇总结果输出路径 |
+| Variable | Default (clbench-life) | Meaning |
+| --- | --- | --- |
+| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life` | Checkpoint directory |
+| `DATASET` | `<package>/dataset/clbench-life.jsonl` | JSONL dataset path |
+| `BENCHMARK_TYPE` | `clbench-life` | Benchmark type |
+| `OUTPUT` | `D:\openloomi_val_results\clbench_life\results\clbench_life_result_resumed.json` | Aggregated result output path |
 
-## 失败 checkpoint 识别规则
+## Failed-Checkpoint Detection Rule
 
-脚本判断"失败"的标准**严格**匹配 [`evaluator.ts#L36-42`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/src/evaluator.ts#L36-L42)：
+The script's notion of "failed" matches [`evaluator.ts#L36-42`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/src/evaluator.ts#L36-L42) exactly:
 
 ```ts
 function isErrorResponse(response: string): boolean {
@@ -63,53 +63,53 @@ function isErrorResponse(response: string): boolean {
 }
 ```
 
-即只有以下三种前缀/子串的 checkpoint 会被移动：
+Only checkpoints whose `response` field matches one of the following prefixes or substrings are moved:
 
-- `Error:`（含 `Error: fetch failed`、`Error: timeout`、`Error: terminated` 等）
-- `Failed to authenticate`（理论上不应出现，但兜底）
+- `Error:` (including `Error: fetch failed`, `Error: timeout`, `Error: terminated`, etc.)
+- `Failed to authenticate` (kept as a defensive fallback — should not normally appear)
 - `API Error`
 
-**正常响应中提到 "Error" 但不是错误的情况不会被误判**——只匹配字段值开头。
+**Normal responses that happen to mention the word "Error" are not falsely flagged** — the match is anchored to the start of the field value.
 
-## 备份目录
+## Backup Directory
 
-每次跑都会创建一个新的备份目录：
+Each run creates a fresh backup directory:
 
 ```
 <checkpoint_dir>/../_trash_resumed_<YYYYMMDD_HHMMSS>/
 ```
 
-里面是所有被移动的失败 checkpoint。**不要主动删除**——如果续跑后还有问题，可以从备份目录把对应 task_id 的文件放回去重跑。
+It contains every failed checkpoint that was moved. **Do not delete it manually** — if anything is still wrong after the resume, you can copy the corresponding `task_id` file back from the backup directory and re-run.
 
-## 故障排查
+## Troubleshooting
 
-### 提示 "pnpm not found in PATH"
+### "pnpm not found in PATH"
 
-需要先安装 pnpm：
+Install pnpm first:
 
 ```bash
 npm install -g pnpm
 ```
 
-### 提示 "checkpoint dir not found"
+### "checkpoint dir not found"
 
-确认 OpenLoomi 跑过至少一次，checkpoints 应该写到 `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life`。如果路径不一样，覆盖 `CHECKPOINT_DIR` 环境变量。
+Confirm that OpenLoomi has run at least once; checkpoints should be at `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life`. If your path differs, override the `CHECKPOINT_DIR` environment variable.
 
-### 跑了脚本后 `pnpm benchmark` 立即退出
+### `pnpm benchmark` exits immediately after the script runs
 
-通常是 OpenLoomi server 没起或不在 3515。脚本不会去启动 server，需要你提前确认：
+Usually the OpenLoomi server is not running or is not on port 3515. The script does not start the server itself; verify in advance:
 
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 3515
 ```
 
-### 续跑后又出现新的 `Error: fetch failed`
+### New `Error: fetch failed` entries appear after the resume
 
-这是 OpenLoomi server 端的问题（端口死了、provider 限流、auth token 失效等），与脚本无关。检查 server 日志或重启 server 后重跑脚本。
+This is an OpenLoomi-side issue (the port died, the provider is rate-limited, the auth token expired, etc.) and is unrelated to the script. Check the server logs, or restart the server and re-run the script.
 
-## 完整跑批流程（推荐）
+## Recommended Full Batch Flow
 
-第一次跑：
+First run:
 
 ```powershell
 $env:CLBENCH_CHECKPOINT_DIR = "D:\openloomi_val_results\clbench_life\checkpoints\clbench-life"
@@ -120,19 +120,19 @@ pnpm benchmark -- `
   --output D:\openloomi_val_results\clbench_life\results\clbench_life_result.json
 ```
 
-中断或失败后，从 `pnpm benchmark` 这一行开始重新跑——`--resume`（默认开启）会自动跳过已完成 checkpoint。
+After an interruption or failure, simply re-run the `pnpm benchmark` invocation above — `--resume` (enabled by default) automatically skips already-checkpointed entries.
 
-如果想"先清掉失败 checkpoint 再续跑"，就用本目录的 `resume_clbench_life.ps1` / `resume_clbench_life.sh`。
+If you want to "clear failed checkpoints first, then resume", use the `resume_clbench_life.ps1` / `resume_clbench_life.sh` scripts in this directory.
 
 ## Requirements
 
 - Node.js 18+
 - pnpm
-- Python 3（仅 .sh 脚本需要）
-- OpenLoomi server 运行在 3515 端口
-- OpenRouter API key（rubric 评判需要）
+- Python 3 (only required by the `.sh` script)
+- An OpenLoomi server running on port 3515
+- An OpenRouter API key (rubric scoring requires it)
 
-## 相关文档
+## Related Documents
 
-- [`clbench/scripts/README.md`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/README.md) —— CL-bench（1899 条专业任务，low reasoning effort）版本的脚本
-- [`D:\openloomi3\openloomi\benchmark\clbench_life\README.md`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/README.md) —— clbench_life 包说明
+- [`clbench/scripts/README.md`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/README.md) — sibling script for the **CL-bench** (1,899 professional tasks, low reasoning effort) variant.
+- [`D:\openloomi3\openloomi\benchmark\clbench_life\README.md`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/README.md) — the `clbench_life` package description.
