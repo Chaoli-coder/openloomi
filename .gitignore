@@ -146,3 +146,6 @@ benchmark/longmemeval/dataset/*.json
 # on disk. Keep this section in case future per-user file artifacts are
 # reintroduced, but the line itself is currently a no-op.
 apps/web/data/
+
+# Benchmark results
+benchmark/clbench/results/

@@ -12,13 +12,13 @@ to drive each task and captures the real file deliverables.
 
 ## How this fits the GDPval-AA v2 pipeline
 
-| Stage | Official | This package |
-|---|---|---|
-| Task submission | Stirrup harness + 5 tools (Web Fetch / Web Search / View Image / Run Shell / Finish) + E2B sandbox | OpenLoomi `/api/native/agent` + 4 v2 tools (WebFetch / WebSearch / ViewImage / Bash) + per-task workDir. Finish / AbandonTask are emulated via a `<<<FINISH>>>` / `<<<ABANDON>>>` text protocol. |
-| Deliverable capture | `finish` tool + saved output files in `/home/user/` | SSE `tool_result.fileSnapshots` **plus** the v2 finish text protocol — both are merged and copied into `results/artifacts/<task_id>/`. |
-| Reference files | Auto-injected into the E2B sandbox per task | Pre-fetched into `../dataset/reference_files/<task_id>/` and forwarded to OpenLoomi via `fileAttachments` (which writes them into workDir verbatim). |
-| Pairwise grading | Gemini 3 Pro | Reuse `../grader/GDPVal_EVal/gdpval/grading/pairwise_grader.py` (or AA's `evals.openai.com` if you have access). |
-| Elo fit | Bradley-Terry MLE, GPT-5.1 = 1000 (v1) / human expert = 1000 (v2) | Same algorithm, see `../grader/GDPVal_EVal/gdpval/elo/`. |
+| Stage               | Official                                                                                           | This package                                                                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Task submission     | Stirrup harness + 5 tools (Web Fetch / Web Search / View Image / Run Shell / Finish) + E2B sandbox | OpenLoomi `/api/native/agent` + 4 v2 tools (WebFetch / WebSearch / ViewImage / Bash) + per-task workDir. Finish / AbandonTask are emulated via a `<<<FINISH>>>` / `<<<ABANDON>>>` text protocol. |
+| Deliverable capture | `finish` tool + saved output files in `/home/user/`                                                | SSE `tool_result.fileSnapshots` **plus** the v2 finish text protocol — both are merged and copied into `results/artifacts/<task_id>/`.                                                           |
+| Reference files     | Auto-injected into the E2B sandbox per task                                                        | Pre-fetched into `../dataset/reference_files/<task_id>/` and forwarded to OpenLoomi via `fileAttachments` (which writes them into workDir verbatim).                                             |
+| Pairwise grading    | Gemini 3 Pro                                                                                       | Reuse `../grader/GDPVal_EVal/gdpval/grading/pairwise_grader.py` (or AA's `evals.openai.com` if you have access).                                                                                 |
+| Elo fit             | Bradley-Terry MLE, GPT-5.1 = 1000 (v1) / human expert = 1000 (v2)                                  | Same algorithm, see `../grader/GDPVal_EVal/gdpval/elo/`.                                                                                                                                         |
 
 The dataset is the official `openai/gdpval` gold subset (220 tasks, 44
 occupations, 9 US-GDP-contributing industries), already downloaded to
@@ -134,14 +134,14 @@ pnpm --filter @openloomi/benchmark-gdpval-aa-v2 benchmark -- `
 
 Useful flags:
 
-| Flag | Effect |
-|---|---|
-| `--quick N` | only run the first N tasks |
-| `--no-resume` | start from scratch (deletes prior run summary) |
-| `--provider codex --model gpt-5-codex` | switch agent runtime + model |
-| `--timeout-ms 3600000` | raise the per-task wall-clock budget |
-| `--allowed-tools "WebFetch,WebSearch,ViewImage,Bash,Write,Read"` | override the default v2 tool set |
-| `--no-official-prompts` | debug: skip the Python prompt builder |
+| Flag                                                             | Effect                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| `--quick N`                                                      | only run the first N tasks                     |
+| `--no-resume`                                                    | start from scratch (deletes prior run summary) |
+| `--provider codex --model gpt-5-codex`                           | switch agent runtime + model                   |
+| `--timeout-ms 3600000`                                           | raise the per-task wall-clock budget           |
+| `--allowed-tools "WebFetch,WebSearch,ViewImage,Bash,Write,Read"` | override the default v2 tool set               |
+| `--no-official-prompts`                                          | debug: skip the Python prompt builder          |
 
 ### Switching model / provider
 
@@ -257,8 +257,7 @@ python -m gdpval.elo.bradley_terry --matches matches.jsonl --anchor 1000
   does not mean "failed" — a model that writes `chart.png` and never
   speaks a word is still a successful submission.
 - **Auth token.** The runner reads `~/.openloomi/token` by default. If
-  the server's been restarted, refresh it; otherwise requests return
-  401.
+  the server's been restarted, refresh it; otherwise requests return 401.
 - **Reference files.** The runner downloads the task's reference files
   via `fetch_reference_files.py` (8 concurrent) and stages them in
   `workDir` via `fileAttachments`. Models see them as if they were

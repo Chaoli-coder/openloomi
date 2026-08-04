@@ -39,7 +39,8 @@ async function main() {
     "task_prompt includes the v2 'Runtime' section",
   );
   assert(
-    task_prompt.includes("data.csv") && task_prompt.includes("Population v2.xlsx"),
+    task_prompt.includes("data.csv") &&
+      task_prompt.includes("Population v2.xlsx"),
     "task_prompt lists reference files",
   );
   assert(

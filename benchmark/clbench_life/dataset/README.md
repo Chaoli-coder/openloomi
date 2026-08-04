@@ -1,17 +1,17 @@
 ---
 language:
-- en
+  - en
 license: other
 task_categories:
-- text-generation
+  - text-generation
 pretty_name: CL-bench Life
 size_categories:
-- n<1K
+  - n<1K
 tags:
-- context-learning
-- long-context
-- benchmark
-- real-life
+  - context-learning
+  - long-context
+  - benchmark
+  - real-life
 ---
 
 # CL-bench Life: Can Language Models Learn from Real-Life Context?
@@ -33,17 +33,16 @@ CL-bench Life is part of the **CL-bench family** of benchmarks for context learn
 
 Visit [www.clbench.com](https://www.clbench.com) for the full leaderboard and latest results!
 
-
 ## Dataset Structure
 
 ### Data Fields
 
 Each sample in the dataset contains the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `messages` | list | Multi-turn conversation in OpenAI chat format |
-| `rubrics` | list | List of evaluation criteria (strings) |
+| Field      | Type | Description                                                   |
+| ---------- | ---- | ------------------------------------------------------------- |
+| `messages` | list | Multi-turn conversation in OpenAI chat format                 |
+| `rubrics`  | list | List of evaluation criteria (strings)                         |
 | `metadata` | dict | Contains `task_id`, `context_category`, `context_subcategory` |
 
 #### `messages` Field
@@ -54,25 +53,24 @@ The `messages` field follows the standard OpenAI chat format:
 - **Multi-turn**: The task is the final user message; earlier turns provide context.
 
 Single-turn example:
+
 ```json
-[
-  {"role": "user", "content": "<context>\n<|TASK|> <task>"}
-]
+[{ "role": "user", "content": "<context>\n<|TASK|> <task>" }]
 ```
 
 Multi-turn example:
+
 ```json
 [
-  {"role": "user", "content": "context and task"},
-  {"role": "assistant", "content": "..."},
-  {"role": "user", "content": "task"}
+  { "role": "user", "content": "context and task" },
+  { "role": "assistant", "content": "..." },
+  { "role": "user", "content": "task" }
 ]
 ```
 
 #### `rubrics` Field
 
 A list of strings, each describing a specific evaluation rubric.
-
 
 #### `metadata` Field
 
@@ -90,20 +88,17 @@ A list of strings, each describing a specific evaluation rubric.
 
 ### Context Categories
 
-| Category | Sub-categories | Tasks |
-|----------|---------------|-------|
-| **Communication & Social Interactions** | Group Conversations & Meeting Transcripts, Private Conversations, Community Interactions | 135 |
-| **Fragmented Information & Revisions** | Personal Information Fragments, Public Information Fragments, Creation & Revision Histories | 135 |
-| **Behavioral Records & Activity Trails** | Game Logs, Digital Footprints & Daily-Life Records, Self-Tracking Trajectories | 135 |
-
+| Category                                 | Sub-categories                                                                              | Tasks |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ----- |
+| **Communication & Social Interactions**  | Group Conversations & Meeting Transcripts, Private Conversations, Community Interactions    | 135   |
+| **Fragmented Information & Revisions**   | Personal Information Fragments, Public Information Fragments, Creation & Revision Histories | 135   |
+| **Behavioral Records & Activity Trails** | Game Logs, Digital Footprints & Daily-Life Records, Self-Tracking Trajectories              | 135   |
 
 ## Usage
 
 Please see our **GitHub repository**: [github.com/Tencent-Hunyuan/CL-bench](https://github.com/Tencent-Hunyuan/CL-bench)
 
-
 ## License
-
 
 CL-Bench is released under a **custom evaluation-only license**.
 
@@ -113,7 +108,6 @@ The Dataset (or any portion thereof) **must not** be used for training, fine-tun
 
 Please refer to the LICENSE file for the full license text.
 
-
 ## Citation
 
 If you find our work useful, please cite it as follows:
@@ -121,12 +115,12 @@ If you find our work useful, please cite it as follows:
 ```bibtex
 
 @misc{dou2026clbenchbenchmarkcontextlearning,
-      title={CL-bench: A Benchmark for Context Learning}, 
+      title={CL-bench: A Benchmark for Context Learning},
       author={Shihan Dou and Ming Zhang and Zhangyue Yin and Chenhao Huang and Yujiong Shen and Junzhe Wang and Jiayi Chen and Yuchen Ni and Junjie Ye and Cheng Zhang and Huaibing Xie and Jianglu Hu and Shaolei Wang and Weichao Wang and Yanling Xiao and Yiting Liu and Zenan Xu and Zhen Guo and Pluto Zhou and Tao Gui and Zuxuan Wu and Xipeng Qiu and Qi Zhang and Xuanjing Huang and Yu-Gang Jiang and Di Wang and Shunyu Yao},
       year={2026},
       eprint={2602.03587},
       archivePrefix={arXiv},
       primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2602.03587}, 
+      url={https://arxiv.org/abs/2602.03587},
 }
 ```
