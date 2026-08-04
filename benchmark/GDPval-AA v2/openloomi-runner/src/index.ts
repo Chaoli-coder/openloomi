@@ -21,13 +21,7 @@
  */
 
 import "dotenv/config";
-import {
-  copyFile,
-  mkdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import {
@@ -372,7 +366,7 @@ async function main() {
     );
   } else {
     console.log(
-      `[GDPval-AA v2] No reference index available — tasks will run without reference files`,
+      "[GDPval-AA v2] No reference index available — tasks will run without reference files",
     );
   }
 
@@ -530,8 +524,8 @@ async function main() {
       const finishNote = handle.abandoned
         ? ` ABANDONED (${handle.abandon_reason ?? "no reason"})`
         : handle.truncated
-        ? " TRUNCATED (>250 turns)"
-        : "";
+          ? " TRUNCATED (>250 turns)"
+          : "";
       console.log(
         `  -> ${archived.length} deliverable(s) in ` +
           `${(prediction.duration_ms / 1000).toFixed(1)}s ` +

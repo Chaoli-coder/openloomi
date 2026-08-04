@@ -76,16 +76,16 @@ pnpm benchmark -- --dataset dataset/clbench-life.jsonl --benchmark clbench-life
 
 ## CLI Options
 
-| Option | Description |
-| --- | --- |
-| `--dataset <path>` | Path to the JSONL dataset (required) |
-| `--benchmark` | Must be set to `clbench-life` |
-| `--quick <n>` | Only run the first N entries |
-| `--port <n>` | OpenLoomi API port |
-| `--token <path>` | Custom auth token path |
-| `--output <path>` | Write the final aggregated result JSON to the given path |
-| `--resume` | Enable checkpoint resume (default: enabled) |
-| `--no-resume` | Disable resume; re-run every entry from scratch |
+| Option             | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `--dataset <path>` | Path to the JSONL dataset (required)                     |
+| `--benchmark`      | Must be set to `clbench-life`                            |
+| `--quick <n>`      | Only run the first N entries                             |
+| `--port <n>`       | OpenLoomi API port                                       |
+| `--token <path>`   | Custom auth token path                                   |
+| `--output <path>`  | Write the final aggregated result JSON to the given path |
+| `--resume`         | Enable checkpoint resume (default: enabled)              |
+| `--no-resume`      | Disable resume; re-run every entry from scratch          |
 
 ## Requirements
 

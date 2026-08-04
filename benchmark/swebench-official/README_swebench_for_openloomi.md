@@ -28,13 +28,13 @@ Large caches (the 12 cloned upstream repos, per-instance workspaces, and Docker 
 
 ### 1.1 System Requirements
 
-| Item | Requirement |
-| --- | --- |
-| Python | ≥ 3.10 |
-| Docker Desktop | Installed and running; at least 120 GB of free disk and 16 GB of RAM recommended |
-| Node.js | ≥ 22 (required by `openloomi-ctl`) |
-| OpenLoomi Desktop | ≥ 0.8.8, signed in, with the token written to `~/.openloomi/token` |
-| Working disk | `D:\swebench-work\` (the path can be changed, but it must be a separate large disk) |
+| Item              | Requirement                                                                         |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| Python            | ≥ 3.10                                                                              |
+| Docker Desktop    | Installed and running; at least 120 GB of free disk and 16 GB of RAM recommended    |
+| Node.js           | ≥ 22 (required by `openloomi-ctl`)                                                  |
+| OpenLoomi Desktop | ≥ 0.8.8, signed in, with the token written to `~/.openloomi/token`                  |
+| Working disk      | `D:\swebench-work\` (the path can be changed, but it must be a separate large disk) |
 
 ### 1.2 Clone and Install the Official Harness
 
@@ -99,7 +99,11 @@ Expected artifacts:
 
 - `predictions\openloomi-verified.jsonl` gains a new line:
   ```json
-  {"instance_id":"django__django-11099","model_name_or_path":"openloomi-verified","model_patch":"diff --git ..."}
+  {
+    "instance_id": "django__django-11099",
+    "model_name_or_path": "openloomi-verified",
+    "model_patch": "diff --git ..."
+  }
   ```
 - `trajectories\openloomi-verified\django__django-11099\attempt_*.json` is written.
 - `D:\swebench-work\workspaces\django__django-11099\src\` contains real modifications.
@@ -130,7 +134,11 @@ cd D:\openloomi3\openloomi\benchmark\swebench-official
 - The runner is **resumable**: any `instance_id` already written to `predictions/openloomi-verified.jsonl` is skipped automatically. Pass `--force` to re-run.
 - Per-instance predictions are persisted one JSON object per line in `predictions/openloomi-verified.jsonl`:
   ```json
-  {"instance_id":"...","model_name_or_path":"openloomi-verified","model_patch":"diff --git ..."}
+  {
+    "instance_id": "...",
+    "model_name_or_path": "openloomi-verified",
+    "model_patch": "diff --git ..."
+  }
   ```
   This is the format expected by `swebench.harness.run_evaluation --predictions_path`.
 
@@ -152,12 +160,12 @@ cd D:\openloomi3\openloomi\benchmark\swebench-official
 
 ### 2.5 Output Locations
 
-| Path | Contents |
-| --- | --- |
-| `predictions/openloomi-verified.jsonl` | The agent's complete set of patches; the harness reads this file directly |
-| `trajectories/openloomi-verified/<instance_id>/attempt_*.json` | Command, stdout, stderr, exit code, and duration for each attempt |
-| `logs/openloomi_verified_terminal_<timestamp>.log` | Full terminal transcript of the launcher |
-| `logs/openloomi_verified_<model>_<timestamp>.json` | Runner summary: per-instance status and counts |
+| Path                                                           | Contents                                                                  |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `predictions/openloomi-verified.jsonl`                         | The agent's complete set of patches; the harness reads this file directly |
+| `trajectories/openloomi-verified/<instance_id>/attempt_*.json` | Command, stdout, stderr, exit code, and duration for each attempt         |
+| `logs/openloomi_verified_terminal_<timestamp>.log`             | Full terminal transcript of the launcher                                  |
+| `logs/openloomi_verified_<model>_<timestamp>.json`             | Runner summary: per-instance status and counts                            |
 
 ---
 
@@ -240,31 +248,31 @@ The only new artefacts are three files plus four directories:
 
 ## 5. Troubleshooting
 
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| `service_unavailable :3515` | The dev server is not running, or it was killed after a long run | Restart `pnpm tauri:dev`; the runner automatically skips instances that already succeeded |
-| `openloomi-ctl not found` | `OPENLOOMI_CTL` is unset or points to the wrong path | Reset it to `C:\Users\<you>\AppData\Local\Programs\openloomi\cli\openloomi-ctl.exe` |
-| `failed to load saved auth token` | CLI 0.8.8 misinterprets the JWT as Base64 | Explicitly `export OPENLOOMI_AUTH_TOKEN=...` |
-| All instances ran but `model_patch` is empty | The agent modified the wrong directory or did not actually edit files | Inspect `trajectories/.../attempt_*.json` for stdout / stderr |
-| Docker image pull timed out | Network issue or you have not logged in to GHCR | `docker login ghcr.io`; alternatively set `HF_HOME` to reuse the cache |
-| Patch failed to apply | The diff is missing `@@` line numbers or `base_commit` drifted | Reinforce the "must include line numbers" rule in the prompt; the runner already checks out `base_commit` automatically |
-| Disk full | Repo cache and Docker cache piling up | `docker system prune -a`; periodically clean `D:\swebench-work\workspaces\` |
-| Harness timed out on a single instance | The tests themselves are slow | Raise `--timeout`; or reduce `--max-workers` |
+| Symptom                                      | Cause                                                                 | Fix                                                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `service_unavailable :3515`                  | The dev server is not running, or it was killed after a long run      | Restart `pnpm tauri:dev`; the runner automatically skips instances that already succeeded                               |
+| `openloomi-ctl not found`                    | `OPENLOOMI_CTL` is unset or points to the wrong path                  | Reset it to `C:\Users\<you>\AppData\Local\Programs\openloomi\cli\openloomi-ctl.exe`                                     |
+| `failed to load saved auth token`            | CLI 0.8.8 misinterprets the JWT as Base64                             | Explicitly `export OPENLOOMI_AUTH_TOKEN=...`                                                                            |
+| All instances ran but `model_patch` is empty | The agent modified the wrong directory or did not actually edit files | Inspect `trajectories/.../attempt_*.json` for stdout / stderr                                                           |
+| Docker image pull timed out                  | Network issue or you have not logged in to GHCR                       | `docker login ghcr.io`; alternatively set `HF_HOME` to reuse the cache                                                  |
+| Patch failed to apply                        | The diff is missing `@@` line numbers or `base_commit` drifted        | Reinforce the "must include line numbers" rule in the prompt; the runner already checks out `base_commit` automatically |
+| Disk full                                    | Repo cache and Docker cache piling up                                 | `docker system prune -a`; periodically clean `D:\swebench-work\workspaces\`                                             |
+| Harness timed out on a single instance       | The tests themselves are slow                                         | Raise `--timeout`; or reduce `--max-workers`                                                                            |
 
 ---
 
 ## 6. Differences from the Official JobBench Runner
 
-| Dimension | JobBench | SWE-bench Verified |
-| --- | --- | --- |
-| Task input | A task directory plus a written instruction | `instance_id` / `repo` / `base_commit` / `problem_statement` |
-| Agent workspace | A temporary directory with task materials | A real Git repository checked out at `base_commit` |
-| Agent output | DOCX / XLSX / PDF files, etc. | A unified diff patch |
-| Evaluation | Official LLM-as-judge scoring against rubrics | Official Docker harness running FAIL_TO_PASS plus PASS_TO_PASS |
-| Scale | 65 main tasks | 500 instances |
-| Isolation requirements | Temporary directory | Repository checkout plus Docker container |
-| Per-task duration | Tens of minutes to a few hours | Mostly 5–30 minutes |
-| End-to-end duration | Tens of hours | Tens to about a hundred hours |
+| Dimension              | JobBench                                      | SWE-bench Verified                                             |
+| ---------------------- | --------------------------------------------- | -------------------------------------------------------------- |
+| Task input             | A task directory plus a written instruction   | `instance_id` / `repo` / `base_commit` / `problem_statement`   |
+| Agent workspace        | A temporary directory with task materials     | A real Git repository checked out at `base_commit`             |
+| Agent output           | DOCX / XLSX / PDF files, etc.                 | A unified diff patch                                           |
+| Evaluation             | Official LLM-as-judge scoring against rubrics | Official Docker harness running FAIL_TO_PASS plus PASS_TO_PASS |
+| Scale                  | 65 main tasks                                 | 500 instances                                                  |
+| Isolation requirements | Temporary directory                           | Repository checkout plus Docker container                      |
+| Per-task duration      | Tens of minutes to a few hours                | Mostly 5–30 minutes                                            |
+| End-to-end duration    | Tens of hours                                 | Tens to about a hundred hours                                  |
 
 ---
 
@@ -291,6 +299,6 @@ Phases [7] and [8] can be split across multiple days; `predictions.jsonl` is alw
 - **Dataset**: [SWE-bench/SWE-bench_Verified](https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified) (500 instances, test split)
 - **Official harness**: [SWE-bench/SWE-bench](https://github.com/SWE-bench/SWE-bench)
 - **Methodology**:
-  - Jimenez et al., *SWE-bench: Can Language Models Resolve Real-World GitHub Issues?* (ICLR 2024 Oral)
-  - OpenAI, *Introducing SWE-bench Verified* (2024-08-13)
+  - Jimenez et al., _SWE-bench: Can Language Models Resolve Real-World GitHub Issues?_ (ICLR 2024 Oral)
+  - OpenAI, _Introducing SWE-bench Verified_ (2024-08-13)
 - **Baseline reference**: swebench.com Verified leaderboard

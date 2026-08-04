@@ -2,10 +2,10 @@
 
 The `scripts/` directory provides two equivalent "clean up failed checkpoints + resume" scripts:
 
-| Script | Platform | Interpreter |
-| --- | --- | --- |
-| [`resume_clbench.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.sh) | Linux / macOS / WSL / Git Bash | bash + python (already detected) |
-| [`resume_clbench.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.ps1) | Windows PowerShell | PowerShell 5+ |
+| Script                                                                                               | Platform                       | Interpreter                      |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------- |
+| [`resume_clbench.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.sh)   | Linux / macOS / WSL / Git Bash | bash + python (already detected) |
+| [`resume_clbench.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench/scripts/resume_clbench.ps1) | Windows PowerShell             | PowerShell 5+                    |
 
 Both scripts behave identically:
 
@@ -34,12 +34,12 @@ bash scripts/resume_clbench.sh
 
 All paths can be overridden by environment variables. The defaults are:
 
-| Variable | Default (clbench) | Meaning |
-| --- | --- | --- |
-| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench\checkpoints\clbench` | Checkpoint directory |
-| `DATASET` | `<package>/dataset/clbench.jsonl` | JSONL dataset path |
-| `BENCHMARK_TYPE` | `clbench` | Benchmark type |
-| `OUTPUT` | `D:\openloomi_val_results\clbench\results\clbench_result_resumed.json` | Aggregated result output path |
+| Variable         | Default (clbench)                                                      | Meaning                       |
+| ---------------- | ---------------------------------------------------------------------- | ----------------------------- |
+| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench\checkpoints\clbench`                 | Checkpoint directory          |
+| `DATASET`        | `<package>/dataset/clbench.jsonl`                                      | JSONL dataset path            |
+| `BENCHMARK_TYPE` | `clbench`                                                              | Benchmark type                |
+| `OUTPUT`         | `D:\openloomi_val_results\clbench\results\clbench_result_resumed.json` | Aggregated result output path |
 
 > **clbench-life usage**: change the four variables above to the life paths and run the same script. The script itself does not distinguish clbench from clbench-life; it only looks at the paths.
 

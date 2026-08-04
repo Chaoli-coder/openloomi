@@ -8,8 +8,8 @@
     "benchmark": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
     "build-submissions": "python scripts/evaluate.py",
-    "lint": "node ../../node_modules/@biomejs/biome/bin/biome lint",
-    "lint:fix": "node ../../node_modules/@biomejs/biome/bin/biome lint --write --unsafe"
+    "lint": "node ../../../node_modules/@biomejs/biome/bin/biome lint",
+    "lint:fix": "node ../../../node_modules/@biomejs/biome/bin/biome lint --write --unsafe"
   },
   "dependencies": {
     "dotenv": "^16.6.1"

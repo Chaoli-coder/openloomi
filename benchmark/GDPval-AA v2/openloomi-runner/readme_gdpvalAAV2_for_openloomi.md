@@ -6,21 +6,21 @@ This is the **submission-side runner** for the GDPval-AA v2 evaluation. It uses 
 
 ## How the runner aligns with the v2 spec
 
-| v2 spec element | How this runner covers it | Status |
-| --- | --- | --- |
-| Dataset (`openai/gdpval` gold, 220 tasks) | `../dataset/gdpval_gold.jsonl` (pre-downloaded) | Supported |
-| Reference files (up to ~17 per task) | Pre-fetched into `../dataset/reference_files/<task_id>/`, injected via `fileAttachments` | Supported |
-| System prompt ("AI agent … 250 steps … finish … abandon_task_finish") | `scripts/prompts/prompt_builder.py` (verbatim) | Supported |
-| Task prompt (runtime, env, reference-files block, finish instructions) | Same builder, verbatim | Supported |
-| Tool set (WebFetch / WebSearch / ViewImage / CodeExec / Finish / Abandon) | OpenLoomi has no native Finish/Abandon tools — emulated via a text protocol. Tools are restricted to the four v2 tools. | Supported (with emulation) |
-| Turn cap = 250 | Enforced client-side; auto-aborts at the 251st `tool_use` event | Supported |
-| 70% context summarization | Provided by the agent runtime; not explicitly enforced | Runtime-level |
-| Temperature 0 / 0.6 | Not set here; controlled by the agent runtime (configurable in OpenLoomi Settings → AI) | Runtime-level |
-| Max output tokens | Same as above — runtime-controlled | Runtime-level |
-| Sandbox (E2B) | Real local filesystem (workDir per task) | Behaviour may differ from the E2B image |
-| Finish protocol ("absolute paths in finish call") | Text protocol: `<<<FINISH>>>` + summary + paths | Supported |
-| Abandon protocol | Text protocol: `<<<ABANDON>>>` + reason | Supported |
-| Pair-wise judging + Elo (anchor = human experts 1000) | Out of scope here — use `../grader/GDPVal_EVal` or `evals.openai.com` | Out of scope |
+| v2 spec element                                                           | How this runner covers it                                                                                               | Status                                  |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Dataset (`openai/gdpval` gold, 220 tasks)                                 | `../dataset/gdpval_gold.jsonl` (pre-downloaded)                                                                         | Supported                               |
+| Reference files (up to ~17 per task)                                      | Pre-fetched into `../dataset/reference_files/<task_id>/`, injected via `fileAttachments`                                | Supported                               |
+| System prompt ("AI agent … 250 steps … finish … abandon_task_finish")     | `scripts/prompts/prompt_builder.py` (verbatim)                                                                          | Supported                               |
+| Task prompt (runtime, env, reference-files block, finish instructions)    | Same builder, verbatim                                                                                                  | Supported                               |
+| Tool set (WebFetch / WebSearch / ViewImage / CodeExec / Finish / Abandon) | OpenLoomi has no native Finish/Abandon tools — emulated via a text protocol. Tools are restricted to the four v2 tools. | Supported (with emulation)              |
+| Turn cap = 250                                                            | Enforced client-side; auto-aborts at the 251st `tool_use` event                                                         | Supported                               |
+| 70% context summarization                                                 | Provided by the agent runtime; not explicitly enforced                                                                  | Runtime-level                           |
+| Temperature 0 / 0.6                                                       | Not set here; controlled by the agent runtime (configurable in OpenLoomi Settings → AI)                                 | Runtime-level                           |
+| Max output tokens                                                         | Same as above — runtime-controlled                                                                                      | Runtime-level                           |
+| Sandbox (E2B)                                                             | Real local filesystem (workDir per task)                                                                                | Behaviour may differ from the E2B image |
+| Finish protocol ("absolute paths in finish call")                         | Text protocol: `<<<FINISH>>>` + summary + paths                                                                         | Supported                               |
+| Abandon protocol                                                          | Text protocol: `<<<ABANDON>>>` + reason                                                                                 | Supported                               |
+| Pair-wise judging + Elo (anchor = human experts 1000)                     | Out of scope here — use `../grader/GDPVal_EVal` or `evals.openai.com`                                                   | Out of scope                            |
 
 ## Layout
 
@@ -107,14 +107,14 @@ pnpm --filter @openloomi/benchmark-gdpval-aa-v2 benchmark -- `
 
 Useful flags:
 
-| Flag | Effect |
-| --- | --- |
-| `--quick N` | Only run the first N tasks. |
-| `--no-resume` | Start from scratch (deletes the prior run summary). |
-| `--provider codex --model gpt-5-codex` | Switch the agent runtime and model. |
-| `--timeout-ms 3600000` | Raise the per-task wall-clock budget. |
-| `--allowed-tools "WebFetch,WebSearch,ViewImage,Bash,Write,Read"` | Override the default v2 tool set. |
-| `--no-official-prompts` | Debug: skip the Python prompt builder. |
+| Flag                                                             | Effect                                              |
+| ---------------------------------------------------------------- | --------------------------------------------------- |
+| `--quick N`                                                      | Only run the first N tasks.                         |
+| `--no-resume`                                                    | Start from scratch (deletes the prior run summary). |
+| `--provider codex --model gpt-5-codex`                           | Switch the agent runtime and model.                 |
+| `--timeout-ms 3600000`                                           | Raise the per-task wall-clock budget.               |
+| `--allowed-tools "WebFetch,WebSearch,ViewImage,Bash,Write,Read"` | Override the default v2 tool set.                   |
+| `--no-official-prompts`                                          | Debug: skip the Python prompt builder.              |
 
 ## The v2 finish text protocol
 

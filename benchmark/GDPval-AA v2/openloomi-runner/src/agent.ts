@@ -33,10 +33,7 @@ import { homedir } from "node:os";
 import { dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
 import net from "node:net";
 
-import type {
-  GDPvalAADeliverable,
-  GDPvalAAPrediction,
-} from "./types";
+import type { GDPvalAADeliverable, GDPvalAAPrediction } from "./types";
 
 export const DEFAULT_PORTS = [3515];
 export const DEFAULT_HOST = "127.0.0.1";
@@ -112,8 +109,7 @@ export async function findAvailablePort(
     if (taken) return port;
   }
   throw new Error(
-    `No OpenLoomi API server found on ports ${ports.join(", ")}. ` +
-      "Start `pnpm tauri:dev` (or the web dev server) first.",
+    `No OpenLoomi API server found on ports ${ports.join(", ")}. Start \`pnpm tauri:dev\` (or the web dev server) first.`,
   );
 }
 
@@ -151,7 +147,8 @@ function guessMimeType(extension: string): string {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx":
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsx":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".csv": "text/csv",
     ".txt": "text/plain",
     ".md": "text/markdown",
@@ -315,8 +312,8 @@ export async function callOpenLoomiAgent(
       buffer += decoder.decode(value, { stream: true });
 
       // Split on SSE record boundaries.
-      let sep: number;
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const sep = buffer.indexOf("\n\n");
+      while (sep !== -1) {
         const record = buffer.slice(0, sep);
         buffer = buffer.slice(sep + 2);
         const events = parseSSERecord(record);
@@ -518,7 +515,7 @@ function _fileURLToPathShim(url: string): string {
   // folder named "GDPval-AA v2" becomes "GDPval-AA%20v2"); decode them
   // before the path is passed to anything that needs a real filesystem
   // path.
-  let rest = (() => {
+  const rest = (() => {
     try {
       return decodeURIComponent(url.slice("file://".length));
     } catch {

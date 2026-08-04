@@ -8,7 +8,9 @@ import type { GDPvalAATask } from "./types";
  * task schema (`{task_id, prompt, metadata, raw}`); see
  * `../dataset/download_gdpval.py` for the converter.
  */
-export async function loadGDPvalAADataset(path: string): Promise<GDPvalAATask[]> {
+export async function loadGDPvalAADataset(
+  path: string,
+): Promise<GDPvalAATask[]> {
   const text = await readFile(path, "utf-8");
   const tasks: GDPvalAATask[] = [];
 
@@ -22,7 +24,8 @@ export async function loadGDPvalAADataset(path: string): Promise<GDPvalAATask[]>
       );
     }
     tasks.push({
-      task_id: parsed.task_id || `gdpval_aa_${index.toString().padStart(4, "0")}`,
+      task_id:
+        parsed.task_id || `gdpval_aa_${index.toString().padStart(4, "0")}`,
       prompt: parsed.prompt,
       metadata: parsed.metadata,
       raw: parsed.raw,

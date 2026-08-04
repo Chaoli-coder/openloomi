@@ -79,18 +79,18 @@ python -m gdpval.elo.bradley_terry --matches matches.jsonl --anchor 1000
 
 ## Leaderboard Snapshot (as of 2026-08-04)
 
-| Rank | Model | Elo |
-| --- | --- | --- |
-| 1 | Claude Opus 5 (Adaptive Reasoning, Max Effort) | 1852 |
-| 2 | Claude Opus 5 (Adaptive Reasoning, Xhigh Effort) | 1819 |
-| 3 | Claude Fable 5 | 1743 |
-| 4 | Claude Opus 5 (Adaptive Reasoning, High Effort) | 1735 |
-| 5 | GPT-5.6 Sol (max) | 1730 |
-| 6 | Kimi K3 (max) | 1685 |
-| 7 | GPT-5.6 Sol (xhigh) | 1683 |
-| 8 | Claude Opus 5 (Adaptive Reasoning, Medium Effort) | 1628 |
-| 9 | GPT-5.6 Sol (high) | 1623 |
-| 10 | Claude Sonnet 5 (Adaptive Reasoning, Max Effort) | 1600 |
+| Rank | Model                                             | Elo  |
+| ---- | ------------------------------------------------- | ---- |
+| 1    | Claude Opus 5 (Adaptive Reasoning, Max Effort)    | 1852 |
+| 2    | Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)  | 1819 |
+| 3    | Claude Fable 5                                    | 1743 |
+| 4    | Claude Opus 5 (Adaptive Reasoning, High Effort)   | 1735 |
+| 5    | GPT-5.6 Sol (max)                                 | 1730 |
+| 6    | Kimi K3 (max)                                     | 1685 |
+| 7    | GPT-5.6 Sol (xhigh)                               | 1683 |
+| 8    | Claude Opus 5 (Adaptive Reasoning, Medium Effort) | 1628 |
+| 9    | GPT-5.6 Sol (high)                                | 1623 |
+| 10   | Claude Sonnet 5 (Adaptive Reasoning, Max Effort)  | 1600 |
 
 `MiniMax-M3` currently sits at rank 33 (1389 Elo, CI ±15).
 

@@ -2,10 +2,10 @@
 
 The `scripts/` directory contains two equivalent "clean up failed checkpoints + resume" scripts dedicated to **CL-bench-Life** (405 everyday-life tasks, high reasoning effort):
 
-| Script | Platform | Interpreter |
-| --- | --- | --- |
-| [`resume_clbench_life.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.sh) | Linux / macOS / WSL / Git Bash | bash + python |
-| [`resume_clbench_life.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.ps1) | Windows PowerShell | PowerShell 5+ |
+| Script                                                                                                              | Platform                       | Interpreter   |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ------------- |
+| [`resume_clbench_life.sh`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.sh)   | Linux / macOS / WSL / Git Bash | bash + python |
+| [`resume_clbench_life.ps1`](file:///d:/openloomi3/openloomi/benchmark/clbench_life/scripts/resume_clbench_life.ps1) | Windows PowerShell             | PowerShell 5+ |
 
 Both scripts behave identically:
 
@@ -15,6 +15,7 @@ Both scripts behave identically:
 4. Invoke `pnpm benchmark -- ...` to resume — valid checkpointed tasks are reused, and only the remaining tasks are re-evaluated.
 
 > **A note on "force-majeure failures".** The scripts **only** clean up checkpoints whose `response` field starts with `Error:` / `ERROR:`. These typically represent:
+>
 > - An OpenLoomi agent API failure (`Error: fetch failed`).
 > - A single-task timeout (`Error: The operation was aborted due to timeout`).
 > - An OpenLoomi-internal abort (`Error: terminated`).
@@ -42,12 +43,12 @@ bash scripts/resume_clbench_life.sh
 
 All paths can be overridden by environment variables. The defaults are:
 
-| Variable | Default (clbench-life) | Meaning |
-| --- | --- | --- |
-| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life` | Checkpoint directory |
-| `DATASET` | `<package>/dataset/clbench-life.jsonl` | JSONL dataset path |
-| `BENCHMARK_TYPE` | `clbench-life` | Benchmark type |
-| `OUTPUT` | `D:\openloomi_val_results\clbench_life\results\clbench_life_result_resumed.json` | Aggregated result output path |
+| Variable         | Default (clbench-life)                                                           | Meaning                       |
+| ---------------- | -------------------------------------------------------------------------------- | ----------------------------- |
+| `CHECKPOINT_DIR` | `D:\openloomi_val_results\clbench_life\checkpoints\clbench-life`                 | Checkpoint directory          |
+| `DATASET`        | `<package>/dataset/clbench-life.jsonl`                                           | JSONL dataset path            |
+| `BENCHMARK_TYPE` | `clbench-life`                                                                   | Benchmark type                |
+| `OUTPUT`         | `D:\openloomi_val_results\clbench_life\results\clbench_life_result_resumed.json` | Aggregated result output path |
 
 ## Failed-Checkpoint Detection Rule
 
