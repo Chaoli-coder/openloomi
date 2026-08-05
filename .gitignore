@@ -148,4 +148,6 @@ benchmark/longmemeval/dataset/*.json
 apps/web/data/
 
 # Benchmark results
+benchmark/clbench/results/*.json
+# Benchmark results
 benchmark/clbench/results/
