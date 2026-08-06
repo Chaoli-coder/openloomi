@@ -202,6 +202,27 @@ benchmark/GDPval-AA v2/grader/GDPVal_Eval/results/
 # Paper PDFs (fetched separately)
 *.pdf
 
+# Local handoff / debug notes (contain environment-specific info)
+HANDOFF*.md
+HANDOFF_SUMMAR*.md
+*_handoff.md
+
+# Vendor: continual-learning-bench (vendored pgasawa/continual-learning-bench)
+# Top-level venv, datasets and run artifacts must never enter the repo.
+benchmark/continual-learning-bench/.venv/
+benchmark/continual-learning-bench/data/
+benchmark/continual-learning-bench/results/
+benchmark/continual-learning-bench/final_results/
+benchmark/continual-learning-bench/scratchpad/
+benchmark/continual-learning-bench/tmp/
+benchmark/continual-learning-bench/cl_benchmark.egg-info/
+benchmark/continual-learning-bench/.env
+benchmark/continual-learning-bench/.env.*
+!.env.example
+!.env.openloomi.example
+benchmark/continual-learning-bench/assets/
+benchmark/continual-learning-bench/web_app/
+
 # Override jobbench-official nested .gitignore (submodule boundary hides it)
 benchmark/jobbench-official/eval/logs/
 benchmark/jobbench-official/eval/.judge_tmp/
